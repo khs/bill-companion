@@ -2,9 +2,9 @@
 
 Drop in a bill — PDF or raw text — and read it beside the law it actually touches.
 
-Built by [Keller Scholl](https://kellerscholl.com). MIT licensed — see
-[`LICENSE`](LICENSE), which also covers the vendored pdf.js (Apache 2.0) and the
-bill texts (works of the U.S. Government, not subject to copyright).
+Built by [Keller Scholl](https://kellerscholl.com). MIT licensed
+([`LICENSE`](LICENSE)); the vendored pdf.js is Apache 2.0 and the bill texts are
+works of the U.S. Government, not subject to copyright — see [`NOTICE`](NOTICE).
 
 Left pane: the bill, with every citation it makes turned into a chip you can click.
 Right pane: the provision that citation points at, **shown with the levels above it**,

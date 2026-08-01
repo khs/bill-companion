@@ -19,21 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-Third-party and public-domain material bundled with this repository, which the
-licence above does not cover:
-
-  vendor/pdf.min.mjs, vendor/pdf.worker.min.mjs
-      pdf.js — Copyright 2024 Mozilla Foundation, licensed under the Apache
-      License, Version 2.0. See http://www.apache.org/licenses/LICENSE-2.0
-
-  samples/*
-      Texts and prints of bills of the United States Congress. Works of the
-      United States Government are not subject to copyright protection in the
-      United States (17 U.S.C. § 105).
-
-  data/usc/* (generated, not distributed here)
-      The United States Code, ingested from uscode.house.gov. Likewise a work
-      of the United States Government.
