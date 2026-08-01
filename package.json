@@ -1,0 +1,9 @@
+{
+  "name": "bill-companion",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only manifest. The app itself has zero runtime dependencies and no build step; linkedom exists solely so tools/rendertest.mjs has a DOM. This file is gitignored.",
+  "devDependencies": {
+    "linkedom": "^0.18.13"
+  }
+}

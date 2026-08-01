@@ -9,6 +9,18 @@
 // internal numbering differs from its codified numbering (Social Security Act
 // § 1861 is 42 U.S.C. 1395x, not 42 U.S.C. 1861), `offsetNote` explains the gap
 // so the UI can warn instead of silently resolving to the wrong provision.
+//
+// `enactedAs` closes that gap rather than describing it. It is the Act as its
+// own sections' source credits name it — "Aug. 14, 1935, ch. 531" for the SSA —
+// and it is the key into `data/usc/acts/`, the Act-section → Code-section table
+// the ingester derives from those credits. With it, "Section 1861 of the Social
+// Security Act" resolves to 42 U.S.C. 1395x; without it the citation still lands
+// on the head of the Act, carrying `offsetNote` as before.
+//
+// It must be spelled exactly as the Code spells it, EN DASH and all — the value
+// is slugged, so "Pub. L. 89–10" and "Pub. L. 89-10" agree, but a wrong date or
+// chapter number silently indexes nothing. Verify a new one against a shard's
+// `sourceCredit` before adding it.
 
 export const POPULAR_NAMES = [
   {
@@ -17,6 +29,7 @@ export const POPULAR_NAMES = [
     title: '42',
     section: '301',
     range: '301 et seq.',
+    enactedAs: 'Aug. 14, 1935, ch. 531',
     offsetNote:
       'Social Security Act section numbers do NOT match their 42 U.S.C. numbers ' +
       '(e.g. SSA § 1861 = 42 U.S.C. 1395x). Use the parenthetical U.S.C. cite in the bill.',
@@ -42,10 +55,10 @@ export const POPULAR_NAMES = [
   { name: 'Securities Act of 1933', pattern: 'Securities\\s+Act\\s+of\\s+1933', title: '15', section: '77a', range: '77a et seq.' },
   { name: 'Communications Act of 1934', pattern: 'Communications\\s+Act\\s+of\\s+1934', title: '47', section: '151', range: '151 et seq.' },
   { name: 'Federal Food, Drug, and Cosmetic Act', pattern: 'Federal\\s+Food,?\\s+Drug,?\\s+and\\s+Cosmetic\\s+Act', title: '21', section: '301', range: '301 et seq.' },
-  { name: 'Public Health Service Act', pattern: 'Public\\s+Health\\s+Service\\s+Act', title: '42', section: '201', range: '201 et seq.', offsetNote: 'PHSA section numbers differ from their 42 U.S.C. numbers (e.g. PHSA § 330 = 42 U.S.C. 254b).' },
+  { name: 'Public Health Service Act', pattern: 'Public\\s+Health\\s+Service\\s+Act', title: '42', section: '201', range: '201 et seq.', enactedAs: 'July 1, 1944, ch. 373', offsetNote: 'PHSA section numbers differ from their 42 U.S.C. numbers (e.g. PHSA § 330 = 42 U.S.C. 254b).' },
   { name: 'Higher Education Act of 1965', pattern: 'Higher\\s+Education\\s+Act(?:\\s+of\\s+1965)?', title: '20', section: '1001', range: '1001 et seq.' },
   { name: 'Elementary and Secondary Education Act of 1965', pattern: 'Elementary\\s+and\\s+Secondary\\s+Education\\s+Act(?:\\s+of\\s+1965)?', title: '20', section: '6301', range: '6301 et seq.' },
-  { name: 'Immigration and Nationality Act', pattern: 'Immigration\\s+and\\s+Nationality\\s+Act', title: '8', section: '1101', range: '1101 et seq.', offsetNote: 'INA section numbers differ from 8 U.S.C. numbers (e.g. INA § 212 = 8 U.S.C. 1182).' },
+  { name: 'Immigration and Nationality Act', pattern: 'Immigration\\s+and\\s+Nationality\\s+Act', title: '8', section: '1101', range: '1101 et seq.', enactedAs: 'June 27, 1952, ch. 477', offsetNote: 'INA section numbers differ from 8 U.S.C. numbers (e.g. INA § 212 = 8 U.S.C. 1182).' },
   { name: 'National Labor Relations Act', pattern: 'National\\s+Labor\\s+Relations\\s+Act', title: '29', section: '151', range: '151 et seq.' },
   { name: 'Energy Policy Act of 2005', pattern: 'Energy\\s+Policy\\s+Act\\s+of\\s+2005', title: '42', section: '15801' },
   { name: 'Federal Advisory Committee Act', pattern: 'Federal\\s+Advisory\\s+Committee\\s+Act', title: '5', section: '1001', range: 'ch. 10' },
@@ -93,6 +106,7 @@ export const POPULAR_NAMES = [
     title: '7',
     section: '1',
     range: '1 et seq.',
+    enactedAs: 'Sept. 21, 1922, ch. 369',
     offsetNote:
       'Commodity Exchange Act section numbers do NOT match their 7 U.S.C. numbers ' +
       '(e.g. CEA § 4 = 7 U.S.C. 6, CEA § 5 = 7 U.S.C. 7). Use the parenthetical U.S.C. cite in the bill.',

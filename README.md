@@ -15,7 +15,7 @@ There is no build step and no server-side application. It is plain ES modules an
 static files — open it and it runs.
 
 ```
-python tools/ingest_usc.py --titles common    # one-time, ~15 min, ~1 GB
+python tools/ingest_usc.py --titles common    # one-time, a few minutes
 python tools/serve.py                         # → http://localhost:8000
 ```
 
@@ -102,9 +102,30 @@ instruction.
 
 **Reads the IRC by section number.** `section 45K(c)(3) of the Internal Revenue
 Code of 1986` opens **26 U.S.C. 45K(c)(3)**, because the IRC's own section
-numbers are the Code's. It is the only Act in the table flagged that way — for
-the Social Security Act, PHSA and INA the numbering diverges, and those still
-resolve to the Act with a caveat rather than to a confidently wrong section.
+numbers are the Code's. It is the only Act whose numbering can be *assumed* that
+way.
+
+**And reads the Acts whose numbering doesn't match, by looking it up.** Social
+Security Act § 1861 is 42 U.S.C. 1395x; PHSA § 330 is 42 U.S.C. 254b; Commodity
+Exchange Act § 4 is 7 U.S.C. 6. There is no offset and no rule — Congress
+codifies a section wherever it fits — so `section 1861 of the Social Security
+Act` used to resolve only to the head of the Act, and the provision the bill was
+actually changing stayed out of reach.
+
+It is a lookup table, and the Code supplies it. Every section prints a source
+credit naming the Act that enacted it and the number that Act gave it:
+
+> 42 U.S.C. 1395x — *(Aug. 14, 1935, ch. 531, title XVIII, § 1861, as added …)*
+
+The ingester inverts those credits into `data/usc/acts/`, so the lookup is a
+single static GET like every other. The pane shows the derivation rather than
+asserting it — what the bill wrote, where it is codified, and the credit that
+says so — because landing on a section with a different number looks like an
+error until you can see why it isn't.
+
+Only Acts explicitly bound to their enacting credit resolve this way, and a miss
+is never guessed at: a section repealed out of the Code, or one that two Code
+sections both claim, resolves to nothing and keeps the numbering caveat.
 
 **Goes up sub-levels.** The context pane's ladder (`§ 1395x` · `(s)` · `(s)(2)` · `(s)(2)(B)`)
 widens the view one level at a time. Above that sits the structural breadcrumb —
@@ -130,6 +151,27 @@ Marks land only in the provision the instruction actually walked to. `in
 subsection (d) — in paragraph (2) — in subparagraph (A), by striking ``or'' at
 the end` strikes an "or" in (d)(2)(A) and nowhere else; searching the whole
 section instead drew a line through a sentence three subsections away.
+
+**Shows the law a bill adds.** The commonest thing a bill does is not edit an
+existing sentence but write a new provision onto the end of one:
+
+> Section 4c(a) of the Commodity Exchange Act (7 U.S.C. 6c(a)) is amended—
+>   (1) in paragraph (3)—
+>     (C) by adding at the end the following:
+> "(D) a contract of sale of a digital commodity."
+
+The new subparagraph (D) is read out of the bill and drawn into the law in the
+right-hand pane, after (A), (B) and (C) — in the insertion colour, keeping the
+outline the drafter wrote. Where it goes is decided by its own marker rather than
+by where the instruction's walk happened to stop: `(D)` is a subparagraph, so it
+joins the subparagraphs of paragraph (3) instead of being tucked inside
+subparagraph (C), which is merely the last provision the instruction mentioned. A
+new `(iv)` lands beside clause (iii); a new `(f)` lands at the end of the section.
+
+Added blocks run from a single sentence to a whole new chapter — the largest in
+the test corpus is a 59,000-character section — and all four quote conventions
+are read. Where the block can't be delimited, the pane says an addition happens
+without claiming to know what it says.
 
 An instruction whose language can't be placed is *listed and labelled*, never
 guessed at: either the bill named no position, or it named one whose anchor text
@@ -208,14 +250,20 @@ ingester is for.
 python tools/ingest_usc.py --titles 42          # one title
 python tools/ingest_usc.py --titles 42,26,29    # several
 python tools/ingest_usc.py --titles common      # 17 most-amended titles (default)
-python tools/ingest_usc.py --titles all         # all 53 (~1.5 GB, slow)
+python tools/ingest_usc.py --titles all         # all 53 — 60,436 sections, 322 MB, ~5 min
 ```
 
 It auto-detects the current release point, writes one JSON file per section
 (`data/usc/t42/s7401.json`), and skips titles already present unless `--force`.
 A lookup in the browser is then a single static GET with no index to load first.
 
-Roughly 11 titles ≈ 24,000 sections ≈ 150 MB on disk.
+It then reads every shard's source credit back and writes `data/usc/acts/` —
+2,730 files, 0.7 MB — the Act-section → Code-section index described above.
+`--acts-only` rebuilds just that, from shards already on disk, downloading
+nothing.
+
+Roughly 11 titles ≈ 24,000 sections ≈ 130 MB on disk; all 53 is 60,436 sections
+and 322 MB, and took about five minutes on a 2026 desktop.
 
 Citing an un-ingested title isn't an error — the pane says so, shows the exact
 command to fix it, and still gives you the outbound links.
@@ -257,24 +305,31 @@ tools/
   measure.mjs           the metric definitions impact and corpus share
   impact.mjs            end-to-end report: what a bill actually parses to
   corpus.mjs            regression corpus: many bills, diffed against a baseline
-corpus/                 corpus.json + baseline.json tracked; files/ neither
-                        tracked nor served
+corpus/                 corpus.json + baseline.json, and files/ — the bills
 vendor/                 pdf.js, vendored so the app works offline
-data/usc/               generated; gitignored
+data/usc/               the ingested Code: 60,436 sections + acts/, generated
+.nojekyll               tells GitHub Pages to serve the tree as-is
 ```
+
+Everything except `node_modules/` is committed, including the 322 MB of ingested
+Code. It is generated, but it is also *the site* — a deploy without it resolves
+nothing — so it lives here rather than being fetched at build time.
 
 ## Tests
 
 ```bash
-bun tools/selftest.mjs        # 248 checks: parsing, PDF extraction, citations, tree, share links, live eCFR, local data
-bun add -d linkedom           # once, for the DOM tests
-bun tools/rendertest.mjs      # 132 checks: both panes, the redline, resolvers, fallback states, wiring
-bun tools/corpus.mjs          # 30 real bills, every metric diffed against a recorded baseline
-bun tools/impact.mjs          # not a test: prints what one bill parses to, resolution included
+node tools/selftest.mjs       # 286 checks: parsing, PDF extraction, citations, tree, share links, live eCFR, local data
+npm i -D linkedom             # once, for the DOM tests
+node tools/rendertest.mjs     # 155 checks: both panes, the redline, additions, resolvers, fallback states, wiring
+node tools/corpus.mjs         # 30 real bills, every metric diffed against a recorded baseline
+node tools/impact.mjs         # not a test: prints what one bill parses to, resolution included
 ```
 
-(`node` works too; `bun` is just what was already installed here. `linkedom` is a
-dev-only dependency — the app itself has none.)
+(`bun` should work too — `bun add -d linkedom`, `bun tools/selftest.mjs` — though
+only Node has been run since the last portability fix. Node on Windows needed
+that fix: its ESM loader rejects a bare `C:\…` path in a dynamic `import()`,
+which bun accepts, so three of the four tools ran only under bun. `linkedom` is
+a dev-only dependency — the app itself has none.)
 
 The DOM tests earn their keep. They catch an element id in `main.js` that doesn't
 exist in `index.html` — otherwise a blank page on load — and they bound the
@@ -316,23 +371,37 @@ Its question is not "is this right?" but "did that change do anything I didn't
 intend?", on bills nobody wrote assertions for. It earned its place on the first
 run, turning up 93 amendatory instructions that were being silently skipped
 across four bills; three systematic causes accounted for 77 of them. The bills
-live in `corpus/files/`, which is gitignored and which the dev server refuses to
-serve, so none of it is part of the site.
+live in `corpus/files/`. The dev server refuses to serve them, and nothing in the
+app links to them; they are committed so a fresh checkout can run the corpus
+without a fetch step first.
 
 ---
 
 ## Known limits
 
-- **Act section numbers ≠ codified section numbers.** Social Security Act § 1861 is
-  42 U.S.C. 1395x. Where a bill gives only the Act-relative number and no parenthetical
-  U.S.C. cite, the target can't be resolved automatically — the pane says so rather
-  than guessing. Acts with this mismatch (SSA, PHSA, INA) carry an explicit caveat.
+- **Act section numbers ≠ codified section numbers**, and only some Acts are
+  mapped. Four are — the Social Security Act, the Public Health Service Act, the
+  Immigration and Nationality Act and the Commodity Exchange Act — via the
+  source-credit index described above. For every other Act, a bill that gives
+  only the Act-relative number and no parenthetical U.S.C. cite still resolves
+  to the head of the Act, with a caveat rather than a guess. Adding one is a
+  single `enactedAs` field in `app/resolve/popular-names.js`, but it has to be
+  the Act as the Code's credits spell it, checked against a real shard.
 - **Scanned PDFs need OCR first.** Text extraction requires a text layer.
 - **A hyphenated heading stays broken.** Body text rejoins across a line break
   (`environ-` + `mental`) because the continuation is lowercase. Headings are set
   in caps, where that signal is gone and `COST-` + `EFFECTIVE` is indistinguishable
   from `CAT-` + `ASTROPHIC`, so headings are left as typeset — H.R. 9925's § 8
   reads `EMERGENCY ORDERS ADDRESSING IMMINENT CAT-`.
+- **An added block that closes twice is read only as far as its first close.**
+  A bill adding several provisions at once normally opens each paragraph with a
+  quote mark and closes once at the very end; a few write each added
+  subparagraph as its own closed quote instead, and only the first is shown. Two
+  cases in 3,253 across the test corpus — it shows less than the bill adds,
+  rather than something the bill doesn't say.
+- **An addition is drawn only when the provision it follows is on screen.** A new
+  subparagraph of paragraph (3) needs paragraph (3) in view; otherwise it is
+  listed in the panel with a note rather than drawn.
 - **CFR part views are capped at 40 sections** to keep rendering responsive.
 - **Popular-name coverage is ~46 Acts**, not the full OLRC popular-names table.
 - **A few unusual amendatory phrasings are still missed** — 16 across the nine

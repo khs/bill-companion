@@ -1,18 +1,29 @@
-# Ingested U.S. Code shards — regenerate with: python tools/ingest_usc.py
-data/usc/t*/
-data/usc/manifest.json
+# The ingested U.S. Code and the regression corpus are BOTH tracked.
+#
+# They used to be ignored, as large regenerable artifacts. They are tracked now
+# because the site is deployed from this repo to GitHub Pages, and the shards are
+# the site: ignore them and the deploy is an app that resolves nothing, telling
+# strangers to run a Python script. ~63,000 files and 322 MB of U.S. Code, plus
+# 34 MB of corpus bills. Both are works of the U.S. Government and not subject to
+# copyright (see NOTICE).
+#
+# Regenerate rather than hand-edit:
+#   python tools/ingest_usc.py --titles all   # data/usc/
+#   python tools/ingest_usc.py --acts-only    # just data/usc/acts/
+#   node tools/corpus.mjs fetch               # corpus/files/
 
-# Regression corpus: whole bills, fetched with `bun tools/corpus.mjs fetch`.
-# corpus.json and baseline.json ARE tracked — they are the shared definition of
-# the corpus and are small. The bills themselves are not, and are not served.
-corpus/files/
-
-# Dev-only dependency for tools/rendertest.mjs (the app itself has none)
+# Dev-only dependency for tools/rendertest.mjs (the app itself has none).
+# package.json IS tracked: without one, `npm i -D linkedom` walks up and installs
+# into the parent directory's package.json, which on a fresh machine meant the
+# user's home folder.
 node_modules/
 bun.lock
 bun.lockb
-package-lock.json
-package.json
+
+# Python bytecode. tools/ is imported directly by ad-hoc probe scripts when
+# checking how source credits parse, which drops a __pycache__ next to it.
+__pycache__/
+*.pyc
 
 # Stray screenshots dropped in the working tree
 Screenshot*.png

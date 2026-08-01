@@ -9,8 +9,7 @@
 // citation with working outbound links and tell the user how to add the title.
 
 import { buildTree, findNode, pathChain } from './provision-tree.js';
-
-const DATA = 'data/usc';
+import { DATA, isLocalCheckout } from './data-base.js';
 
 let manifestPromise = null;
 const sectionCache = new Map();
@@ -89,12 +88,23 @@ export async function resolveUsc(cite) {
       // with the second sent someone looking for missing data that was sitting
       // on disk the whole time: the dev server was simply not running, so the
       // index never loaded and every title looked un-ingested.
+      // Three different failures, three different fixes — and the fix depends on
+      // who is reading. A visitor to a deployed page has no checkout to ingest
+      // into and no server to start, so a shell command is not a remedy, it is
+      // noise that reads like the site is broken. They still get the outbound
+      // links, which are the actual way forward for them.
       reason: mf.unreachable
-        ? `Couldn't load the U.S. Code index at ${DATA}/manifest.json, so nothing can be resolved locally. The shards are fetched over HTTP — this is what it looks like when the dev server isn't running, or when index.html was opened as a file:// URL.`
+        ? isLocalCheckout()
+          ? `Couldn't load the U.S. Code index at ${DATA}/manifest.json, so nothing can be resolved locally. The shards are fetched over HTTP — this is what it looks like when the dev server isn't running, or when index.html was opened as a file:// URL.`
+          : `Couldn't load the U.S. Code index at ${DATA}/manifest.json. The site is there but its copy of the Code isn't answering, so nothing can be resolved locally right now.`
         : ingested
         ? `Title ${title} is ingested, but section ${section} isn't in it. The citation may be to a section that was repealed, renumbered, or never existed.`
-        : `Title ${title} of the U.S. Code hasn't been ingested yet.`,
-      remedy: mf.unreachable
+        : isLocalCheckout()
+        ? `Title ${title} of the U.S. Code hasn't been ingested yet.`
+        : `This copy of the site doesn't include Title ${title} of the U.S. Code.`,
+      remedy: !isLocalCheckout()
+        ? null
+        : mf.unreachable
         ? 'python tools/serve.py'
         : ingested
         ? null

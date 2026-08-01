@@ -3,6 +3,7 @@
 import { resolveCfr, resolveCfrPart, cfrLinks } from './cfr.js';
 import { resolveUsc, uscLinks } from './usc.js';
 import { findAct } from './popular-names.js';
+import { resolveActSection } from './act-sections.js';
 
 const cache = new Map();
 
@@ -23,7 +24,12 @@ export async function resolve(cite) {
 }
 
 function cacheKey(c) {
-  return [c.kind, c.title, c.part, c.section, c.subsection, c.congress, c.law, c.volume, c.page, c.act && c.act.name]
+  // `actSection` is load-bearing: without it "section 1861 of the Social
+  // Security Act" and "section 1862 of the Social Security Act" key alike — same
+  // kind, same Act, no `section` of their own — and the second citation would be
+  // served the first one's provision out of the cache.
+  return [c.kind, c.title, c.part, c.section, c.subsection, c.congress, c.law, c.volume, c.page,
+          c.act && c.act.name, c.actSection]
     .filter(Boolean)
     .join('|');
 }
@@ -38,6 +44,36 @@ async function dispatch(cite) {
 
     case 'act': {
       const act = cite.act;
+
+      // "Section 1861 of the Social Security Act" names a provision, not a
+      // range — but in the Act's own numbering, which is not the Code's. The
+      // Act-section table (built by the ingester out of the Code's source
+      // credits) is the only thing that can close that gap; where it answers,
+      // this is an ordinary U.S. Code resolution with its derivation attached,
+      // and where it doesn't we fall through to the head of the Act exactly as
+      // before. A miss is common and is never guessed at: the section may have
+      // been repealed out of the Code, or two sections may have claimed it.
+      if (cite.actSection) {
+        const at = await resolveActSection(act, cite.actSection);
+        if (at) {
+          const res = await resolveUsc({
+            title: at.title,
+            section: at.section,
+            subsection: cite.subsection || '',
+          });
+          return {
+            ...res,
+            actName: act.name,
+            viaActSection: {
+              act: act.name,
+              actSection: cite.actSection,
+              enactedAs: act.enactedAs,
+              codified: `${at.title} U.S.C. ${at.section}`,
+            },
+          };
+        }
+      }
+
       // An Act name on its own points at a range, not a provision. Resolve the
       // Act's first codified section so the pane has something concrete, but
       // label it clearly as the start of the Act rather than "the" provision.

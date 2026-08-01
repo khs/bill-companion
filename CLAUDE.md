@@ -8,13 +8,16 @@ and is written for a user; this file is for changing it. Read both.
 ## Run / test / ingest
 
 ```bash
-python tools/serve.py                    # http://localhost:8000  (NOT file://)
-bun tools/selftest.mjs                   # 248 checks, no dependencies
-bun tools/rendertest.mjs                 # 132 checks, needs `bun add -d linkedom`
-bun tools/corpus.mjs                     # 30 real bills, diffed against a baseline
-bun tools/impact.mjs                     # not a test — prints what one bill parses to
-python tools/ingest_usc.py --titles all  # ~11 min; skips titles already present
+python tools/serve.py                     # http://localhost:8000  (NOT file://)
+node tools/selftest.mjs                   # 286 checks, no dependencies
+node tools/rendertest.mjs                 # 155 checks, needs `npm i -D linkedom`
+node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
+node tools/impact.mjs                     # not a test — prints what one bill parses to
+python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
 ```
+
+`bun` should be interchangeable with `node` for all four `.mjs` tools — but only
+`node` has been run since the portability fix. See **Which runtime** below.
 
 On a machine that has never run this, four of the above are prerequisites rather
 than commands you reach for — see **Notes for future Claude** below.
@@ -31,8 +34,13 @@ Three different jobs, and they are not interchangeable:
   each accounted for to the unit (`+8 amendments = 2 instructions × 4 listed
   provisions`) before the baseline was touched. `bun tools/corpus.mjs fetch`
   downloads the bills; `bun tools/corpus.mjs <id>` prints one in detail.
-  `corpus/files/` is gitignored and `serve.py` 404s `/corpus/`, so none of it
-  reaches the site.
+  `corpus/files/` is **tracked** now, and `serve.py` still 404s `/corpus/` — so
+  it is out of the way locally but a Pages deploy does serve it, since Pages
+  serves whatever is in the repo. That is a deliberate trade for a
+  self-contained repo: the bills are U.S. Government works and not copyrighted,
+  and nothing in the app links to them. If that ever needs reversing, the fix is
+  to move the corpus out of the published tree, not to re-ignore it — an ignored
+  corpus is one a fresh machine silently runs zero bills against.
 - **`tools/impact.mjs`** is the impact script: one bill, everything about it,
   including U.S. Code resolution (which corpus deliberately excludes, since
   those numbers move whenever the Code is re-ingested). `--misses` lists what
@@ -42,9 +50,34 @@ Three different jobs, and they are not interchangeable:
 way — a metric that means something slightly different in two reports is worse
 than no metric.
 
-- `bun` lives at `C:\Users\kelle\.bun\bin\bun.exe`. **Node is not installed** —
-  don't reach for `npm`/`node`.
+### Which runtime
+
+**Re-derive this; it has been different on all three machines so far.** The
+laptop had `bun` and no Node; this desktop (`C:\Users\Nemo\…`) has Node 24 and
+`npm` and no `bun`. Check before assuming, and don't edit the tools to hard-code
+either one.
+
+Node works now, which was not true until 2026-08-01. Its ESM loader rejects a
+bare Windows path — `import('C:\…')` throws `ERR_UNSUPPORTED_ESM_URL_SCHEME`,
+"Received protocol 'c:'" — while bun accepts one. `rendertest.mjs` already went
+through `pathToFileURL`; `selftest.mjs`, `impact.mjs` and `measure.mjs` did not,
+so three of the four tools ran only under bun while the README claimed "node
+works too". They all use the same `imp()` helper now. Keep it that way, and
+note that `corpus.mjs` inherits the problem through `measure.mjs` rather than
+having any dynamic import of its own.
+
+**The bun path is untested since that change.** A `file://` URL is the portable
+form and bun accepts it, so this should be strictly more compatible, not less —
+but bun is not installed on this machine and nobody has run it. If you are on a
+bun machine, run all four and fix the note rather than trusting it.
+
 - Python 3.13 is on PATH.
+- **`npm install` from a subdirectory walks up.** There is no `package.json` in
+  the repo (it is gitignored), so `npm i -D linkedom` here installed into
+  `C:\Users\Nemo\package.json` — the user's home directory, next to an unrelated
+  dependency of theirs. Create the project-local `package.json` *first*. The one
+  here sets `"type": "module"`, which also silences Node's reparse warning on
+  every `app/**/*.js`.
 - The app itself has **zero runtime dependencies**. `linkedom` is dev-only, for
   the DOM tests. Keep it that way — no build step is a feature here.
 - Not a git repo. `data/usc/` (~300 MB), `corpus/files/` (33 MB) and
@@ -62,8 +95,10 @@ toward 60,809, `is_code_section()` has been weakened.
 
 ## Notes for future Claude
 
-Written on the move from Keller's laptop to his desktop, 2026-08-01. If you are
-reading this on a fresh machine, start here.
+Written on the move from Keller's laptop to his desktop, 2026-08-01, and
+re-verified the same day on a *second* desktop (`C:\Users\Nemo\Documents\Coding\
+bill-companion-main`) — which is where the runtime differences above turned up.
+If you are reading this on a fresh machine, start here.
 
 ### Four things are not in the repo
 
@@ -71,11 +106,20 @@ They are gitignored because they are large and regenerable, and **nothing works
 without them**. In this order:
 
 ```bash
-bun add -d linkedom                      # dev-only; rendertest.mjs needs a DOM
-python tools/ingest_usc.py --titles all  # ~11 min, ~300 MB, 53 titles / 60,436 sections
-bun tools/corpus.mjs fetch               # 26 bills, 33 MB, into corpus/files/
+npm i -D linkedom                        # dev-only; rendertest.mjs needs a DOM
+python tools/ingest_usc.py --titles all  # ~5 min, 322 MB, 53 titles / 60,436 sections
+node tools/corpus.mjs fetch              # 26 bills, 34 MB, into corpus/files/
 python tools/serve.py                    # must be RUNNING; shards are fetched over HTTP
 ```
+
+The ingest also writes `data/usc/acts/` (2,730 files, 0.7 MB), the Act-section →
+Code-section index, by reading every shard's source credit back off disk. That
+pass is ~4 min cold and ~12 s warm, and `--acts-only` runs it alone when the
+shards are already there — which is what to use after changing how credits are
+parsed, since it downloads nothing.
+
+(Or the `bun` equivalents — `bun add -d linkedom`, `bun tools/corpus.mjs fetch`.
+Create `package.json` before the npm one; see **Which runtime** above.)
 
 The ingest is the long one and the app is useless without it — every citation
 resolves to "couldn't load the U.S. Code index". Release point `119-102`; if the
@@ -88,28 +132,34 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-bun tools/selftest.mjs      # all 248 checks passed
-bun tools/rendertest.mjs    # all 132 render checks passed
-bun tools/corpus.mjs        # no deviation from baseline across 30 bills
+node tools/selftest.mjs     # all 286 checks passed
+node tools/rendertest.mjs   # all 155 render checks passed
+node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
 That third line is the real check. `corpus/baseline.json` is tracked, so a clean
 run after a fresh ingest and fetch proves the new machine produces byte-identical
-parses of 35 MB of real bills — not merely that the code runs. If it deviates,
+parses of 34 MB of real bills — not merely that the code runs. If it deviates,
 diff before assuming the move is at fault: the same command reports which metric
-moved on which bill.
+moved on which bill. It came up clean first try on this machine, and the ingest
+reproduced 60,436 sections at `119-102` exactly, with `manifest.sections ==
+len(listdir)` holding for all 53 titles.
 
 ### What in this file is about the old machine
 
 Paths and tooling were the laptop's — `bun` at `C:\Users\kelle\.bun\bin\bun.exe`,
-the project under `C:\Users\kelle\Documents\code\bill-companion`, Python 3.13 on
-PATH. Re-derive rather than assume.
+the project under `C:\Users\kelle\Documents\code\bill-companion`. **Re-derive
+rather than assume**; the third machine matched none of it. Python 3.13 on PATH
+is the only part that has held.
 
-**Re-test the Chrome gotcha below before repeating it.** On the laptop the agent
-tooling could not reach localhost, which is why the note says no one has ever
-seen this UI render except Keller. If Chrome reaches localhost on the desktop,
-that unblocks visual verification — the single largest hole in this project, and
-the source of both of the bugs screenshots have caught so far.
+**The Chrome gotcha is unresolved, for a new reason.** On the laptop the agent
+tooling could not reach localhost. On this machine there is no browser tooling
+available at all — no Chrome, Playwright or screenshot tool in the session — so
+the question could not even be re-tested. `curl` reaches the server fine (`/`
+200, a shard 200, `/corpus/` correctly 404). Visual verification remains the
+single largest hole in this project and the source of both of the bugs
+screenshots have caught. **No one has still ever seen this UI render except
+Keller** — say so rather than implying otherwise.
 
 ### How Keller works, learned the slow way
 
@@ -135,24 +185,71 @@ the source of both of the bugs screenshots have caught so far.
 
 ### Where things stand
 
-The parser is in good shape against 30 real bills, 35 MB, ~5,400 amendments at
+The parser is in good shape against 30 real bills, 34 MB, ~5,400 amendments at
 88% targeted and 3.0% of amendatory verbs unaccounted for. The open items below
-are ranked; items 1–3 are the substantive ones. The largest known *functional*
-gap is not in that list because it is a feature rather than a defect: **`by
-adding at the end the following:` captures no text at all** (2,205 occurrences →
-1,713 ops → 0 carrying the added language), so the commonest way a bill creates
-new law is invisible in the redline. That is the first thing to build.
+are ranked; items 1–3 are the substantive ones.
+
+**`by adding at the end the following:` now carries its language** (2026-08-01).
+This was the largest known functional gap — the commonest way a bill creates new
+law, invisible in the redline because the op recorded that an addition happened
+and nothing about what was added. Across the corpus: 2,601 → 2,851 ops, of which
+**2,850 now carry the added text and 1 declines**, against 0 before. The op count
+rose because a single instruction routinely adds in more than one place and a
+lone boolean collapsed those into one. What was built:
+
+- `readAddedBlock()` in `citations.js` reads the quoted block, in all four
+  conventions, from the *whole bill* rather than the instruction body — an added
+  block is regularly longer than `MAX_AMEND_BODY` on its own.
+- `scopeAdditions()` puts it beside the right siblings. See the invariant below;
+  this was a real bug the counts could not have caught.
+- `redline.js` gained `additionsAt(path)` and `render-context.js` draws the new
+  provision after the last child of the level it joins, with the same
+  already-enacted guard everything else here has.
+
+Still open on this path: an addition is drawn only when the provision it follows
+is on screen, and the `.node.added` block has never been *seen* (see the Chrome
+note). The two-closer case in the invariant below under-captures 2 blocks in
+3,253, and 4 phrases in the House CLARITY print sit outside any parsed
+instruction — that is TODO 2, not this.
+
+**Act section numbers now resolve** (2026-08-01), for four Acts. "Section 1861 of
+the Social Security Act" opens 42 U.S.C. 1395x rather than the head of the Act.
+The README had this listed as an inherent limit and it was not: the mapping is a
+lookup table, and the Code states it on every section in `<sourceCredit>`. The
+ingester inverts 60,436 credits into `data/usc/acts/` — **2,730 Acts**, of which
+four are wired up because each needs its enacting credit bound by hand in
+`popular-names.js` and checked: SSA (557 sections), PHSA (1,243), INA (163), CEA
+(58). Turning on a fifth is one `enactedAs` field.
+
+Across the corpus, **1,998 of 2,032 act-relative citations (98.3%) now reach a
+real provision**, against none before — the ACA alone accounts for 733 of them,
+landing on 199 distinct sections. `impact.mjs` prints this per bill as
+`Act-relative cites`; it lives there rather than in the corpus because it is
+resolution, and corpus metrics are deliberately parse-only.
+
+The corpus did not move at all for this — same citation counts, same kinds, same
+`overlaps: 0` and `badOffsets: 0`. The Act-relative citation simply spans more
+text and carries `actSection`, and `dedupe()` already preferred the longer match
+at equal rank.
+
+Worth knowing before extending it: coverage is 59% of all shards, and the misses
+are mostly Acts codified by a single enacting section (all of title 51 is
+"Pub. L. 111–314, § 3"), which tombstone as ambiguous and *should*. 295 Act
+sections are claimed by two Code sections and are dropped rather than guessed;
+`acts/_conflicts.json` lists them.
 
 ---
 
 ## Environment gotchas (all cost real time already)
 
-- **Chrome cannot reach localhost from the agent tooling here.** `navigate` +
-  `screenshot` returns "Frame is showing error page" while `curl` and PowerShell
-  both get 200, and the server log shows *zero* requests from Chrome. Don't
-  re-litigate this. Verify rendering with `tools/rendertest.mjs` (linkedom) and
-  ask the user for anything genuinely visual. **No one has ever seen this UI
-  render except the user** — say so rather than implying otherwise.
+- **There is no way to look at this app from the agent tooling.** On the laptop
+  Chrome could not reach localhost: `navigate` + `screenshot` returned "Frame is
+  showing error page" while `curl` and PowerShell both got 200 and the server log
+  showed *zero* requests from Chrome. On the second desktop there is no browser
+  tool in the session at all, so that could not even be re-tested. Either way:
+  verify rendering with `tools/rendertest.mjs` (linkedom) and ask the user for
+  anything genuinely visual. **No one has ever seen this UI render except the
+  user** — say so rather than implying otherwise.
 - **PowerShell mangles quotes in `python -c "..."`.** Write a script file to
   `$CLAUDE_JOB_DIR/tmp` and run that.
 - **`/tmp` in the Bash tool is invisible to native Windows Python.** Different
@@ -378,7 +475,87 @@ really are: a few lines up, inside the same quoted block.
 
 **`sectionsMatchCode` belongs to the IRC and nothing else.** IRC § 45K really is
 26 U.S.C. 45K. SSA § 1861 is 42 U.S.C. 1395x — a wrong section is worse than no
-section.
+section. The way to reach SSA § 1861 is `enactedAs` and the Act index below, not
+by widening this flag: the flag *assumes* an equivalence, the index *looks one
+up*, and only one of those can be right about the Social Security Act.
+
+**The Act-section index is derived, never authored.** `data/usc/acts/<slug>.json`
+maps an Act's own section numbers onto the Code's, and every entry comes from the
+`<sourceCredit>` the Code prints on the section itself:
+
+```
+42 U.S.C. 1395x  ->  "(Aug. 14, 1935, ch. 531, title XVIII, § 1861, as added …)"
+```
+
+Three things about reading those credits are load-bearing, and each is a way to
+file a section under the wrong Act:
+
+- **Only the first clause.** What follows a `;` is a later *amending* act. Read
+  those and a section lands under whichever law last touched it.
+- **Only the `§` before `as added`.** "as added Pub. L. 89–97, title I, § 102(a)"
+  is the inserting law's own section number, not the Act-relative one.
+- **A clash is dropped, not resolved.** Two Code sections claiming the same Act
+  section means a renumbering or an ambiguous credit. The ingester tombstones the
+  entry and records it in `acts/_conflicts.json` rather than keeping either —
+  picking one would point a citation at a real but unrelated provision.
+
+**`act_slug()` must agree between `ingest_usc.py` and `act-sections.js`** — the
+same standing hazard as `slug()`, and worse, because it collapses *runs* of
+punctuation to one `_` where `slug()` maps each character. That is what lets the
+EN DASH the Code prints ("Pub. L. 89–10") and the ASCII hyphen everyone writes
+reach the same file. Diverging here 404s every Act silently.
+
+**`resolve()`'s cache key must include `actSection`.** "Section 1861 of the
+Social Security Act" and "Section 1862 of the Social Security Act" are both kind
+`act`, on the same Act, with no `section` of their own — so before `actSection`
+joined the key they hashed alike and the second citation was served the first
+one's provision straight out of the memo. Same family as the shallow-copy rule
+below: a memo keyed on too little is indistinguishable from a resolver bug.
+
+**An addition joins its siblings, not the provision the walk stopped at.**
+`scopeOps` binds every op to the last step written before it, which is right for
+a strike or an insert — those act *on* the provision walked to. An addition does
+not:
+
+```
+(1) in paragraph (3)—
+    (A) in subparagraph (B), by striking ``or'' at the end;
+    (B) in subparagraph (C), by striking the period and inserting ``; or''; and
+    (C) by adding at the end the following:
+``(D) a contract of sale of a digital commodity.'';
+```
+
+The last step written is "in subparagraph (C)", so new subparagraph (D) was
+scoped to `(a)(3)(C)` and drawn *inside* (C) — when (D) is plainly (C)'s sibling
+and belongs at the end of paragraph (3). The bill's own `(C)` there is a list
+marker for the third sub-instruction, which the parser was already right not to
+treat as navigation; the walk simply is not the answer. Every count stayed green.
+`scopeAdditions()` reads the depth off the added block's *own leading marker* —
+the one signal that survives PDF extraction — and truncates the path above it.
+An addition with no leading marker (a flush sentence) has no depth signal and is
+left where the instruction walked to, which is where a flush sentence goes.
+
+**An added block's first closer is its last.** In every convention bills use, a
+multi-paragraph added block opens each paragraph with a quote mark and closes
+only once, at the very end — so there are no intermediate closers to step over,
+and a nested single-quoted term (`` `covered entity' ``) is not one because both
+single conventions take two characters. Measured: correct at 3,251 of 3,253
+sites. The two exceptions write each added subparagraph as its own closed quote,
+where this stops after the first — short of the whole addition rather than wrong
+about it. Note the *pair* matters: `QO`/`QC` are alternations, which is right for
+"find any quoted operand" and wrong here, because a block opened with ``` `` ```
+must be closed by `''` and not by a curly double appearing inside it.
+
+**The gap between the phrase and the block must not cross another instruction.**
+`adding at the end the following new subclause:` is followed by an optional unit
+word, and in a PDF by page furniture — so the reader crosses everything up to the
+next quote opener. In one bill what followed was `(A) in subclause (VI), by
+striking ``and'' at the end;`, and the next opener belonged to the *strike*: the
+word "and", being removed from the statute book, was reported as the new language
+the bill adds. The guard rejects a gap containing `strik|insert|redesignat` —
+the verbs that take a quoted operand. Not `amend`, which appears in a gap
+legitimately ("the following new section (and amending the table of sections
+accordingly):", three real additions a broader guard threw away).
 
 ---
 
@@ -462,7 +639,21 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
 10. **Share links are long** — 117 KB bill → 35 KB URL. Fine in a doc or ticket,
    wraps in chat/mail. Shorter would need a backend, which is a different product.
 11. **No visual verification has ever happened.** Colours, spacing, dark mode, the
-   green/red diff — all unconfirmed by anyone but the user.
+   green/red diff — all unconfirmed by anyone but the user. The `.node.added`
+   block added on 2026-08-01 is the newest thing nobody has looked at, and it is
+   the one most likely to be visually wrong: it is the first *block-level* mark
+   in a pane whose diff has until now been inline only.
+12. **`inserting after subparagraph (C) the following` has the sibling problem
+   `scopeAdditions` just fixed for additions.** Same shape — the new provision is
+   a sibling of the one named, not a child — but insert ops carry anchors and
+   placement metadata that additions don't, so the fix is not the same code and
+   would move more metrics. Left deliberately; do it as its own pass, with the
+   corpus diff explained separately from the add-at-end one.
+13. **An addition is drawn only when the provision it follows is on screen.** An
+   op scoped to `(a)(3)` renders nothing if the pane is showing `(b)`. The panel
+   says "⚠ the provision it follows is not shown", which is honest but is a
+   dead end for the reader — the useful behaviour would be to offer to widen the
+   scope to the level that does contain it.
 
 ---
 

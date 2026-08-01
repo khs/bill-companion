@@ -100,6 +100,19 @@ export function createRedline(ops, fullText) {
     .filter((o) => (o.type === 'strike' || o.type === 'insert') && typeof o.text === 'string')
     .map((o) => ({ ...o, done: false }));
 
+  // Additions are placed structurally rather than woven into a run of text.
+  //
+  // "by adding at the end the following: ``(D) …''" puts a whole new provision
+  // *after the last child* of the one it names — new subparagraph (D) follows
+  // (A), (B) and (C). apply() works inside one passage at a time and cannot see
+  // where a subtree ends, so weaving it in would land the new language directly
+  // after paragraph (3)'s lead-in sentence and before the subparagraphs it is
+  // supposed to follow. The renderer asks for these once it has finished a
+  // node's children instead; see additionsAt().
+  const additions = (ops || [])
+    .filter((o) => o.type === 'add-at-end' && typeof o.text === 'string')
+    .map((o) => ({ ...o, done: false }));
+
   // Has this amendment already happened?
   //
   // The Code we hold is current, so an *enacted* bill has usually already been
@@ -193,12 +206,65 @@ export function createRedline(ops, fullText) {
     return segments(text, dels, inss);
   }
 
+  /**
+   * New language this amendment adds at the end of the provision at `path`.
+   *
+   * Called by the renderer after it has laid out that node's children, so the
+   * addition falls where the bill puts it — after the last existing sibling.
+   *
+   * Subject to the same "has this already happened?" discipline as everything
+   * else here. The Code we hold is current, so an enacted bill's addition is
+   * usually already in it, and drawing it again would show the provision twice
+   * with one copy coloured as new. An amendment whose strikes cannot be found is
+   * stale in full and adds nothing either.
+   */
+  function additionsAt(path) {
+    const out = [];
+    for (const op of additions) {
+      if (op.done || (op.scope || '') !== (path || '')) continue;
+      op.done = true;
+      if (stale) { op.staleSkip = true; continue; }
+      if (alreadyIn(fullText, op.text)) { op.applied = true; continue; }
+      out.push(op);
+    }
+    return out;
+  }
+
   return {
     apply,
+    additionsAt,
     /** Ops that never found a home, for the panel to report honestly. */
     unplaced: () => work.filter((o) => !o.done),
-    placed: () => work.filter((o) => o.done),
+    // Drawn into the law, which is not the same as dealt with: an addition the
+    // law already contains is marked done and deliberately not drawn, and
+    // reporting it as "shown above" would send the reader looking for green text
+    // that isn't there.
+    placed: () => [...work, ...additions.filter((o) => !o.applied && !o.staleSkip)].filter((o) => o.done),
+    /** Additions whose scope names a provision that isn't in the tree shown. */
+    unplacedAdditions: () => additions.filter((o) => !o.done),
+    /** Additions the law already contains — the bill has been enacted. */
+    appliedAdditions: () => additions.filter((o) => o.applied),
   };
+}
+
+/**
+ * Is this added language already in the provision?
+ *
+ * The counterpart to alreadyThere() for a whole added block. An addition has no
+ * anchor text to test, so the test is the language itself: if the opening of the
+ * new provision is already in the law, the bill has been enacted and applied and
+ * there is nothing to draw. Compared on the fold, because the bill quotes the
+ * block and wraps it to its own measure while the Code does neither.
+ *
+ * The first 80 folded characters are enough to identify a provision and short
+ * enough to survive later amendment of its tail; below 24 there is not enough to
+ * be sure, and a false positive here silently hides real new law.
+ */
+function alreadyIn(fullText, added) {
+  if (typeof fullText !== 'string' || !fullText) return false;
+  const needle = fold(added).norm.trim().slice(0, 80).trim();
+  if (needle.length < 24) return false;
+  return fold(fullText).norm.includes(needle);
 }
 
 /**

@@ -10,20 +10,24 @@
 
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+// Node's ESM loader rejects a bare Windows path ("Received protocol 'c:'");
+// bun accepts one. Every dynamic import here goes through a file:// URL so the
+// tools run the same under both.
+const imp = (p) => import(pathToFileURL(join(ROOT, p)).href);
 
 const { extractCitations, extractAmendments, expandRelativeRefs } =
-  await import(join(ROOT, 'app/parse/citations.js'));
-const { parseBill, normalizeText } = await import(join(ROOT, 'app/parse/bill.js'));
+  await imp('app/parse/citations.js');
+const { parseBill, normalizeText } = await imp('app/parse/bill.js');
 
 /** Read a bill off disk. Handles the three shapes the corpus holds. */
 export async function loadBill(path) {
   const lower = path.toLowerCase();
   if (lower.endsWith('.pdf')) {
     globalThis.DOMMatrix ??= class { constructor() {} };
-    const { pdfToText } = await import(join(ROOT, 'app/parse/pdf.js'));
+    const { pdfToText } = await imp('app/parse/pdf.js');
     const { text, pages } = await pdfToText(new Uint8Array(readFileSync(path)).buffer);
     return { text, pages };
   }

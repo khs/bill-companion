@@ -6,17 +6,20 @@
 // structure — plus a live eCFR round trip. The DOM renderers aren't exercised
 // here; they need a browser.
 
-import { readFileSync, existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+// Node's ESM loader rejects a bare Windows path ("Received protocol 'c:'");
+// bun accepts one. Go through a file:// URL so the tools run under both.
+const imp = (p) => import(pathToFileURL(join(ROOT, p)).href);
 
 const { extractCitations, extractAmendments, subsectionLadder, expandRelativeRefs } =
-  await import(join(ROOT, 'app/parse/citations.js'));
-const { buildTree, findNode, pathChain } = await import(join(ROOT, 'app/resolve/provision-tree.js'));
-const { parseBill, normalizeText } = await import(join(ROOT, 'app/parse/bill.js'));
-const { findAct } = await import(join(ROOT, 'app/resolve/popular-names.js'));
+  await imp('app/parse/citations.js');
+const { buildTree, findNode, pathChain } = await imp('app/resolve/provision-tree.js');
+const { parseBill, normalizeText } = await imp('app/parse/bill.js');
+const { findAct } = await imp('app/resolve/popular-names.js');
 
 let pass = 0;
 let fail = 0;
@@ -462,7 +465,7 @@ section('CRLF handling');
 // ------------------------------------------------------------ share links
 section('share links');
 {
-  const { encodeBill, decodeBill, readSharedBill } = await import(join(ROOT, 'app/share.js'));
+  const { encodeBill, decodeBill, readSharedBill } = await imp('app/share.js');
   const sharedSamplePath = join(ROOT, 'samples/sample-bill.txt');
 
   const sample = 'SEC. 2. FIX.\n\nSection 4 of the Widget Act (15 U.S.C. 2601) is amended by striking “a”.\n';
@@ -538,7 +541,7 @@ const pdfPath = join(ROOT, 'samples/hr9925-frontier-act-119th.pdf');
 if (existsSync(pdfPath)) {
   // pdf.js probes for a couple of browser globals before it will run.
   globalThis.DOMMatrix ??= class { constructor() {} };
-  const { pdfToText } = await import(join(ROOT, 'app/parse/pdf.js'));
+  const { pdfToText } = await imp('app/parse/pdf.js');
 
   const buf = new Uint8Array(readFileSync(pdfPath)).buffer;
   const { text: raw, pages } = await pdfToText(buf);
@@ -757,7 +760,7 @@ section('operand placement');
 // Farm to Fly Act, whose whole operative content is one anchored insertion.
 section('reaching the redline');
 {
-  const { amendmentFor } = await import(join(ROOT, 'app/parse/citations.js'));
+  const { amendmentFor } = await imp('app/parse/citations.js');
   const t = normalizeText(
     'SEC. 2. SUSTAINABLE AVIATION FUEL.\n' +
     'Section 9001 of the Farm Security and Rural Investment Act of 2002 (7 U.S.C. 8101) is amended—\n' +
@@ -785,7 +788,7 @@ section('reaching the redline');
 
   // And the effect, once reached, actually marks the law — in the clause the
   // instruction navigated to, and nowhere else.
-  const { createRedline } = await import(join(ROOT, 'app/ui/redline.js'));
+  const { createRedline } = await imp('app/ui/redline.js');
   const law = '(iv) diesel-equivalent fuel derived from renewable biomass, including vegetable oil and animal fat;';
   const ins = ams[0].ops.find((o) => o.type === 'insert');
   eq('the operation is bound to the clause the instruction walked to', ins.scope, '(3)(B)(iv)');
@@ -811,7 +814,7 @@ section('reaching the redline');
 // resolve inside the bill, so the answer is to go and show the provision.
 section('internal cross-references');
 {
-  const { locateInternal } = await import(join(ROOT, 'app/resolve/internal.js'));
+  const { locateInternal } = await imp('app/resolve/internal.js');
 
   // The shape that decides the algorithm. Two sibling subparagraphs, each with
   // its own (i)/(ii), quoted as inserted law — so the markers sit behind quote
@@ -1010,7 +1013,35 @@ if (existsSync(substitutePath)) {
   eq('  and all but the two structural targets resolve', ams.filter((a) => a.target).length, 18);
 
   eq('substitute: extracts the operations', JSON.stringify(opCounts(ams)),
-     JSON.stringify({ strike: 14, insert: 28, 'add-at-end': 9, redesignate: 4 }));
+     JSON.stringify({ strike: 14, insert: 28, 'add-at-end': 10, redesignate: 4 }));
+
+  // Counted against the source, not asserted at. Every "adding at the end the
+  // following" in this bill falls inside a parsed amendment, so the op count is
+  // the phrase count — and one instruction (§ 5330) writes two of them, which is
+  // what a single boolean per instruction used to collapse into one.
+  {
+    const phrases = text.match(/adding\s+at\s+the\s+end\s+the\s+following/gi) || [];
+    const adds = ams.flatMap((a) => a.ops.filter((o) => o.type === 'add-at-end'));
+    eq('substitute: one addition per phrase in the source', adds.length, phrases.length);
+    eq('  every one carries the language it adds', adds.filter((o) => o.text).length, adds.length);
+    eq('  and every offset round-trips',
+       adds.filter((o) => text.slice(o.start, o.end) !== o.text).length, 0);
+
+    // The lawyer's check, as an assertion. "in subsection (d)— (A) in paragraph
+    // (1)(A), by inserting…; and (B) by adding at the end the following: ``(3)
+    // Digital asset…''" adds a new *paragraph* (3). Its siblings are the other
+    // paragraphs of subsection (d), so it belongs at the end of (d) — not inside
+    // paragraph (1)(A), which is merely where the walk had got to.
+    const a5330 = ams.find((a) => a.section === '5330');
+    const its = a5330 ? a5330.ops.filter((o) => o.type === 'add-at-end') : [];
+    eq('  § 5330 adds in two places', its.length, 2);
+    eq('    the new paragraph (3) lands in subsection (d)', its[0] && its[0].scope, '(d)');
+    ok('    and it is paragraph (3)', /^\(3\) Digital asset/.test(its[0] ? its[0].text : ''),
+       JSON.stringify((its[0] || {}).text || '').slice(0, 60));
+    // A new subsection (f) is a sibling of (a)–(e): end of the section itself.
+    ok('    the new subsection (f) lands at section level', !its[1] || !its[1].scope,
+       String((its[1] || {}).scope));
+  }
 
   eq('substitute: composes the navigation steps', ams.reduce((n, a) => n + a.steps.length, 0), 22);
   // 30, not 35. Five unit phrases sit inside quoted law the bill is *inserting*
@@ -1052,7 +1083,7 @@ if (existsSync(substitutePath)) {
 const clarityPdfPath = join(ROOT, 'samples/hr3633eh-clarity-act-house-passed.pdf');
 if (existsSync(clarityPdfPath)) {
   globalThis.DOMMatrix ??= class { constructor() {} };
-  const { pdfToText } = await import(join(ROOT, 'app/parse/pdf.js'));
+  const { pdfToText } = await imp('app/parse/pdf.js');
   const { text: raw, pages } = await pdfToText(new Uint8Array(readFileSync(clarityPdfPath)).buffer);
   const text = normalizeText(raw);
   const bill = parseBill(text);
@@ -1099,14 +1130,47 @@ if (existsSync(clarityPdfPath)) {
   // every one of them was silently missing.
   const ops = opCounts(ams);
   eq('house print: extracts ‘‘...’’ operands', JSON.stringify(ops),
-     JSON.stringify({ 'add-at-end': 24, insert: 57, redesignate: 6, strike: 39 }));
+     JSON.stringify({ 'add-at-end': 27, insert: 57, redesignate: 6, strike: 39 }));
+
+  // Counted against the source. 31 phrases in the bill, 27 of them inside a
+  // parsed amendment — the other four sit in the long tail of amendatory
+  // phrasings nothing matches yet (TODO 2), not in anything this dropped.
+  {
+    const phrases = text.match(/adding\s+at\s+the\s+end\s+the\s+following/gi) || [];
+    const adds = ams.flatMap((a) => a.ops.filter((o) => o.type === 'add-at-end'));
+    eq('house print: phrases in the bill', phrases.length, 31);
+    eq('  additions parsed out of them', adds.length, 27);
+    eq('  every one carries the language it adds', adds.filter((o) => o.text).length, adds.length);
+
+    // THE scoping guard, and the reason this whole path needed rewriting.
+    //
+    //   (1) in paragraph (3)—
+    //       (B) in subparagraph (C), by striking the period …; and
+    //       (C) by adding at the end the following:
+    //   ``(D) a contract of sale of a digital commodity.'';
+    //
+    // The last step written is "in subparagraph (C)". The new subparagraph (D)
+    // is its *sibling*, so it goes at the end of paragraph (3); scoping it to
+    // (a)(3)(C) drew the new language inside (C). Same shape twice more, one
+    // level deeper, where a new clause (iv) follows a step into clause (iii).
+    const a4c = ams.find((a) => a.section === '4c');
+    const its = a4c ? a4c.ops.filter((o) => o.type === 'add-at-end') : [];
+    eq('  § 4c(a) adds in three places', its.length, 3);
+    eq('    new subparagraph (D) is a sibling, not a child',
+       its.map((o) => o.scope).join(' '), '(a)(3) (a)(4)(A) (a)(4)(B)');
+    ok('    and each addition is the clause/subparagraph it says',
+       its.every((o) => /^\((D|iv)\) a contract of sale of a digital/.test(o.text)),
+       JSON.stringify(its.map((o) => (o.text || '').slice(0, 24))));
+  }
   // Counted per amendment above, so a distributed instruction's operand appears
   // once for each provision it changes. Distinct spans are what the bill pane
   // actually marks, and 16 entries collapsing to 4 spans is the whole design.
   const spans = new Set(
     ams.flatMap((a) => a.ops.filter((o) => o.start != null).map((o) => `${o.type}:${o.start}-${o.end}`))
   );
-  eq('  which collapse to distinct spans', spans.size, 84);
+  // 84 + the 27 additions, which now carry the offsets of the language they add
+  // and so are spans the bill pane can mark. They used to carry none at all.
+  eq('  which collapse to distinct spans', spans.size, 111);
   const quoted = ams.flatMap((a) => a.ops).filter((o) => o.text);
   ok('  and they are real quoted language', quoted.some((o) => /digital commodity/i.test(o.text)),
      JSON.stringify(quoted.slice(0, 3).map((o) => o.text)));
@@ -1190,7 +1254,7 @@ section('ingested USC data');
         if (!existsSync(p)) return { ok: false, status: 404, json: async () => null };
         return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')) };
       };
-      const { resolveUsc } = await import(join(ROOT, 'app/resolve/usc.js'));
+      const { resolveUsc } = await imp('app/resolve/usc.js');
       const dashed = await resolveUsc({ title: '15', section: '77z-3', subsection: '' });
       ok('ASCII-hyphen cite resolves to the en-dash shard', !dashed.missing, dashed.reason);
       ok('undivided section still carries its text', Boolean(dashed.lead), 'lead empty');
@@ -1225,6 +1289,166 @@ section('ingested USC data');
     }
   } else {
     console.log('  (no data/usc/manifest.json — run tools/ingest_usc.py)');
+  }
+}
+
+// ----------------------------------------------------- deployment shape
+// The site is served from this repo by GitHub Pages, which puts a project site
+// at https://user.github.io/<repo>/. Two things follow, and both are silent
+// failures rather than loud ones.
+section('deployment shape');
+{
+  const { DATA, isLocalCheckout } = await imp('app/resolve/data-base.js');
+
+  // A leading slash would resolve against the ACCOUNT root, not the repo, and
+  // 404 all 63,000 shards on a project site while working perfectly locally.
+  eq('the data base is relative', DATA, 'data/usc');
+  ok('  with no leading slash', !DATA.startsWith('/'), DATA);
+  ok('  and no host', !/^https?:/.test(DATA), DATA);
+
+  // No `location` means a headless DOM, i.e. the tests, i.e. a checkout — the
+  // same shape as the window.top guard: the missing global IS the answer.
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  ok('no location reads as a checkout', isLocalCheckout());
+  const setHost = (hostname, protocol = 'https:') =>
+    Object.defineProperty(globalThis, 'location', {
+      value: { hostname, protocol }, configurable: true, writable: true,
+    });
+  setHost('localhost', 'http:');
+  ok('localhost is a checkout', isLocalCheckout());
+  setHost('127.0.0.1', 'http:');
+  ok('127.0.0.1 is a checkout', isLocalCheckout());
+  setHost('example.github.io');
+  ok('a real host is not', !isLocalCheckout());
+
+  // On a deployed page, "run this Python command" is not a remedy — the reader
+  // has no checkout and no terminal. They keep the outbound links, which are
+  // the thing that actually helps them.
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const u = String(url);
+    if (/^https?:/i.test(u)) return realFetch(u, opts);
+    const p = join(ROOT, u);
+    if (!existsSync(p)) return { ok: false, status: 404, json: async () => null };
+    return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')) };
+  };
+  const { resolveUsc } = await imp('app/resolve/usc.js');
+  const away = await resolveUsc({ title: '99', section: '1', subsection: '' });
+  eq('a deployed page offers no shell command', away.remedy, null);
+  ok('  nor names one in the reason', !/python|tools\//.test(away.reason || ''), away.reason);
+  ok('  but still says what is missing', /Title 99/.test(away.reason || ''), away.reason);
+  ok('  and still links out', (away.links || []).length > 0, `${(away.links || []).length}`);
+  globalThis.fetch = realFetch;
+
+  if (saved) Object.defineProperty(globalThis, 'location', saved);
+  else delete globalThis.location;
+  ok('location restored for later tests', isLocalCheckout());
+}
+
+// ------------------------------------------- Act section -> Code section
+// An Act's own numbering is not the Code's, and bills cite the Act's. The
+// mapping is not arithmetic and cannot be guessed; it is inverted out of the
+// source credit the Code prints on every section. These check the two halves
+// separately, because either can be right while the other is wrong: extraction
+// must carry the Act-relative number, and resolution must land on the section
+// the OLRC actually codified it as.
+section('Act section → Code section');
+{
+  const acts = join(ROOT, 'data/usc/acts');
+
+  // Extraction needs no data at all.
+  const t = 'Section 1861(s)(2)(B) of the Social Security Act is amended.';
+  const cs = extractCitations(t);
+  eq('the Act-relative cite is one citation', cs.length, 1);
+  eq('  of kind act, not usc', cs[0].kind, 'act');
+  eq('  carrying the Act section', cs[0].actSection, '1861');
+  eq('  and the subsection', cs[0].subsection, '(s)(2)(B)');
+  eq('  spanning the whole phrase', cs[0].text, 'Section 1861(s)(2)(B) of the Social Security Act');
+  // The bare Act-name match is inside this one and must not survive beside it,
+  // or the bill pane draws two chips over one citation.
+  ok('  and it replaces the bare Act-name chip', !cs.some((c) => c.text === 'Social Security Act'),
+     JSON.stringify(cs.map((c) => c.text)));
+
+  // A whole-Act mention keeps its old meaning.
+  const whole = extractCitations('The Social Security Act is amended.');
+  eq('a bare Act name is still the whole Act', whole[0] && whole[0].actSection, undefined);
+
+  if (existsSync(acts)) {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      const u = String(url);
+      if (/^https?:/i.test(u)) return realFetch(u, opts);
+      const p = join(ROOT, u);
+      if (!existsSync(p)) return { ok: false, status: 404, json: async () => null };
+      return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')) };
+    };
+    const { resolveActSection, actSlug } = await imp('app/resolve/act-sections.js');
+    const { findAct } = await imp('app/resolve/popular-names.js');
+
+    // The slug has to agree with act_slug() in the ingester or every lookup
+    // 404s silently — the same standing hazard as slug() for section shards.
+    eq('slug collapses punctuation runs', actSlug('Aug. 14, 1935, ch. 531'), 'aug_14_1935_ch_531');
+    eq('  and an EN DASH reaches the same file as a hyphen',
+       actSlug('Pub. L. 89–10'), actSlug('Pub. L. 89-10'));
+
+    // The four Acts the README used to list as unresolvable. Each answer is
+    // checkable against the OLRC by hand, which is the point of choosing them.
+    const known = [
+      ['Social Security Act', '1861', '42', '1395x'],
+      ['Social Security Act', '1862', '42', '1395y'],
+      ['Social Security Act', '401', '42', '601'],
+      ['Public Health Service Act', '330', '42', '254b'],
+      ['Immigration and Nationality Act', '212', '8', '1182'],
+      ['Commodity Exchange Act', '4', '7', '6'],
+      ['Commodity Exchange Act', '5', '7', '7'],
+    ];
+    for (const [name, sec, title, code] of known) {
+      const at = await resolveActSection(findAct(name), sec);
+      eq(`${name} § ${sec} → ${title} U.S.C. ${code}`,
+         at ? `${at.title} ${at.section}` : 'null', `${title} ${code}`);
+    }
+
+    // Blank beats wrong, in three shapes.
+    eq('an unindexed Act resolves to nothing',
+       await resolveActSection({ name: 'X', enactedAs: 'Jan. 1, 1900, ch. 1' }, '1'), null);
+    eq('an Act with no enactedAs is never looked up',
+       await resolveActSection({ name: 'Clean Air Act' }, '111'), null);
+    eq('a section the Act never had resolves to nothing',
+       await resolveActSection(findAct('Social Security Act'), '99999'), null);
+
+    // End to end, through the dispatcher the UI actually calls.
+    const { resolve } = await imp('app/resolve/index.js');
+    const res = await resolve(extractCitations(
+      'Section 1861(s)(2)(B) of the Social Security Act is amended.')[0]);
+    eq('the dispatcher lands on the codified section', res.citation, '42 U.S.C. 1395x(s)(2)(B)');
+    ok('  and shows its derivation rather than asserting it',
+       res.viaActSection && res.viaActSection.codified === '42 U.S.C. 1395x',
+       JSON.stringify(res.viaActSection));
+    ok('  with no numbering caveat, the gap being closed', !res.offsetNote, res.offsetNote);
+    ok('  and the real provision is there',
+       /physician/i.test(JSON.stringify(res.focusNode || '')), res.reason || 'no focus node');
+
+    // THE cache guard. Both citations are kind `act` on the same Act with no
+    // `section` of their own, so before actSection joined the key the second was
+    // served the first one's provision straight out of the memo.
+    const a = await resolve(extractCitations('Section 1861 of the Social Security Act.')[0]);
+    const b = await resolve(extractCitations('Section 1862 of the Social Security Act.')[0]);
+    eq('two sections of one Act do not share a cache entry',
+       `${a.citation} | ${b.citation}`, '42 U.S.C. 1395x | 42 U.S.C. 1395y');
+
+    // The manifest counts FILES, not writes — the same rule the section count
+    // follows, and for the same reason. It caught a real one: the rebuild after
+    // the "formerly § N" fix left ten Act files behind from the older parser,
+    // and a stale mapping is indistinguishable from a current one at lookup time.
+    const mf = JSON.parse(readFileSync(join(ROOT, 'data/usc/manifest.json'), 'utf8'));
+    const onDisk = readdirSync(acts).filter((f) => f.endsWith('.json') && !f.startsWith('_'));
+    eq('manifest.acts equals the number of Act files', mf.acts, onDisk.length);
+
+    const idx = JSON.parse(readFileSync(join(acts, 'aug_14_1935_ch_531.json'), 'utf8'));
+    console.log(`  · ${onDisk.length} Acts indexed; Social Security Act: ${Object.keys(idx.sections).length} sections mapped`);
+    globalThis.fetch = realFetch;
+  } else {
+    console.log('  (no data/usc/acts — run tools/ingest_usc.py --acts-only)');
   }
 }
 

@@ -176,6 +176,175 @@ def slug(section: str) -> str:
     return re.sub(r"[^a-z0-9]", "_", section.lower())
 
 
+# ------------------------------------------- Act section -> Code section index
+#
+# An Act's own section numbers are usually NOT its codified ones: Social Security
+# Act § 1861 is 42 U.S.C. 1395x, PHSA § 330 is 42 U.S.C. 254b. Bills cite the Act
+# number constantly, so without a mapping "Section 1861 of the Social Security
+# Act" resolves only to the head of the Act and the real provision is unreachable.
+#
+# The mapping does not need to be invented or downloaded: it is already in every
+# shard. USLM carries a <sourceCredit>, whose FIRST clause is the enacting credit
+# and names both the Act and the section number that Act gave the provision:
+#
+#   42 U.S.C. 1395x -> "(Aug. 14, 1935, ch. 531, title XVIII, § 1861, as added …)"
+#   42 U.S.C. 254b  -> "(July 1, 1944, ch. 373, title III, § 330, as added …)"
+#   20 U.S.C. 6301  -> "(Pub. L. 89–10, title I, § 1001, as added …)"
+#
+# Only the first clause. What follows a ';' is a later *amending* act, and reading
+# those would file the section under whichever law last touched it.
+ACT_DATE_CH = re.compile(r"^\(\s*([A-Z][a-z]{2,8}\.?\s+\d{1,2},\s+\d{4},\s+ch\.\s+\d+[A-Za-z]?)")
+ACT_PUBLAW = re.compile(r"^\(\s*(Pub\.\s*L\.\s*\d+[-–—]\d+)")
+ACT_SECNUM = re.compile(r"§{1,2}\s*([0-9][0-9A-Za-z.\-–—]*)")
+
+
+def act_slug(name: str) -> str:
+    """Filename for an Act key. Runs of punctuation collapse to ONE underscore,
+    unlike slug() above which maps each character — "Pub. L. 89–10" has to reach
+    the same name from the EN DASH the Code uses and the ASCII hyphen a bill
+    writes. Keep in step with actSlug() in app/resolve/act-sections.js."""
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def act_origin(source_credit: str) -> tuple[str, str] | None:
+    """(Act as enacted, section number that Act gave it), or None.
+
+    Returns the Act exactly as the credit spells it, so the popular-names table
+    can be written to match what is actually in the data.
+
+    The FIRST section number in the enacting clause is the current one. Every
+    other § in that clause is either historical or belongs to a different law,
+    and the credits are consistent about the order:
+
+        § 931, formerly § 944                                      -> 931
+        § 1866E, formerly § 1866D, as added and renumbered § 1866E -> 1866E
+        § 232, formerly title V, § 502, … renumbered … § 2102      -> 232
+        § 1861, as added Pub. L. 89-97, title I, § 102(a)          -> 1861
+
+    Reading the last one instead indexed the *former* number as if it were
+    current, which then collided with whichever section really holds it today —
+    42 U.S.C. 210 is "§ 208, formerly § 209" and was filed under 209, colliding
+    with 42 U.S.C. 210b, which actually is § 209. Both were dropped as ambiguous.
+    """
+    if not source_credit:
+        return None
+    first = source_credit.split(";")[0]
+    m = ACT_DATE_CH.match(first) or ACT_PUBLAW.match(first)
+    if not m:
+        return None
+    # "§ 1 (part)" says outright that this section is one piece of an Act section
+    # split across several. There is no 1:1 answer to record, and letting the
+    # pieces collide would only rediscover that as a conflict.
+    if re.search(r"§\s*[0-9][^,;]*\(part\)", first):
+        return None
+    nums = ACT_SECNUM.findall(first)
+    if not nums:
+        return None
+    return re.sub(r"\s+", " ", m.group(1)), nums[0]
+
+
+def write_act_index(out_root: Path, origins: dict[str, dict[str, str]],
+                    conflicts: dict[str, list[str]]) -> int:
+    """One file per Act, mapping its own section numbers onto the Code's.
+
+    One file per Act rather than one big index, for the same reason there is one
+    file per section: a lookup in the browser stays a single static GET with
+    nothing to load first.
+    """
+    adir = out_root / "acts"
+    adir.mkdir(parents=True, exist_ok=True)
+    # Cleared, not merged into. Everything here is derived from the shards, so a
+    # file left over from an earlier build is a mapping produced by an older
+    # parser with no way to tell it apart from a current one — and the first
+    # rebuild after the "formerly § N" fix left ten of them behind, which is how
+    # this was noticed: manifest.acts counted 2,730 writes against 2,740 files.
+    # Same rule as the section manifest — the count has to describe the
+    # directory, or comparing them proves nothing.
+    for old in adir.glob("*.json"):
+        old.unlink()
+    written = 0
+    for name, sections in origins.items():
+        # Tombstoned entries are the ambiguous ones; they are recorded in
+        # _conflicts.json and must not reach a shard, or the resolver would
+        # answer an empty string for a section it cannot actually place.
+        keep = {k: v for k, v in sections.items() if v}
+        if not keep:
+            continue
+        (adir / f"{act_slug(name)}.json").write_text(
+            json.dumps({"act": name, "sections": keep}, ensure_ascii=False,
+                       separators=(",", ":")),
+            encoding="utf-8",
+        )
+        written += 1
+    if conflicts:
+        n = sum(len(v) for v in conflicts.values())
+        log(f"  ! {n} Act section(s) claimed by two Code sections - dropped, see acts/_conflicts.json")
+        (adir / "_conflicts.json").write_text(json.dumps(conflicts, indent=1), encoding="utf-8")
+    return written
+
+
+def scan_shards_for_origins(out_root: Path) -> tuple[dict, dict]:
+    """Rebuild the Act index from shards already on disk (--acts-only).
+
+    Slower than a fresh ingest, because it reads 60,000 files back rather than
+    taking the credit off a section that is already in memory. It exists so the
+    index can be built without re-downloading 322 MB.
+    """
+    origins: dict[str, dict[str, str]] = {}
+    conflicts: dict[str, list[str]] = {}
+    # Three regexes rather than json.loads(). Fully parsing each shard rebuilds a
+    # subsection tree of up to several hundred nodes to read three scalar fields,
+    # and over 60,000 files that is the difference between a minute and a quarter
+    # of an hour. `title` and `section` are the first two keys written.
+    f_credit = re.compile(r'"sourceCredit":\s*"((?:[^"\\]|\\.)*)"')
+    f_title = re.compile(r'"title":\s*"([^"]*)"')
+    f_section = re.compile(r'"section":\s*"([^"]*)"')
+    n = 0
+    for tdir in sorted(out_root.glob("t*")):
+        if not tdir.is_dir():
+            continue
+        for f in tdir.iterdir():
+            if f.suffix != ".json":
+                continue
+            try:
+                raw = f.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            mc = f_credit.search(raw)
+            mt = f_title.search(raw)
+            ms = f_section.search(raw)
+            if not (mc and mt and ms):
+                continue
+            rec = {"title": mt.group(1), "section": ms.group(1)}
+            note_origin(origins, conflicts, rec, json.loads('"' + mc.group(1) + '"'))
+            n += 1
+            if n % 10000 == 0:
+                log(f"    …{n} shards read")
+    return origins, conflicts
+
+
+def note_origin(origins: dict, conflicts: dict, rec: dict, source_credit: str) -> None:
+    """Record one section's Act-relative number, refusing to guess on a clash.
+
+    Two Code sections claiming the same Act section means the Act was renumbered
+    or the credit is ambiguous. Keeping either one would point a citation at a
+    real but unrelated provision, which is the worst output this app has, so the
+    entry is dropped and recorded instead.
+    """
+    origin = act_origin(source_credit)
+    if not origin:
+        return
+    name, act_sec = origin
+    where = f"{rec['title']}:{rec['section']}"
+    table = origins.setdefault(name, {})
+    prev = table.get(act_sec)
+    if prev is None:
+        table[act_sec] = where
+    elif prev != where and prev != "":
+        table[act_sec] = ""  # tombstone: known ambiguous, never resolved
+        conflicts.setdefault(name, []).append(f"{act_sec} -> {prev} / {where}")
+
+
 def ancestors_of(stack: list[ET.Element]) -> list[dict]:
     """Snapshot the open container chain. num/heading precede sections in USLM,
     so by the time a section closes these are already parsed and readable."""
@@ -363,7 +532,28 @@ def main() -> int:
     ap.add_argument("--release", default=None, help="release point like 119/102 (default: auto-detect)")
     ap.add_argument("--out", default=None, help="output dir (default: <repo>/data/usc)")
     ap.add_argument("--force", action="store_true", help="re-ingest titles already present")
+    ap.add_argument("--acts-only", action="store_true",
+                    help="rebuild data/usc/acts/ from shards already on disk; downloads nothing")
     args = ap.parse_args()
+
+    if args.acts_only:
+        root = Path(args.out) if args.out else Path(__file__).resolve().parent.parent / "data" / "usc"
+        log(f"Rebuilding the Act index from shards in {root} (no download)")
+        t0 = time.time()
+        origins, conflicts = scan_shards_for_origins(root)
+        n = write_act_index(root, origins, conflicts)
+        # The manifest count has to follow, or `manifest.acts` describes the
+        # previous build and the directory comparison stops meaning anything.
+        mp = root / "manifest.json"
+        if mp.exists():
+            try:
+                mf = json.loads(mp.read_text(encoding="utf-8"))
+                mf["acts"] = n
+                mp.write_text(json.dumps(mf, indent=1), encoding="utf-8")
+            except json.JSONDecodeError:
+                pass
+        log(f"Done in {time.time() - t0:.0f}s. {n} Act(s) indexed.")
+        return 0
 
     if args.titles == "all":
         titles = ALL_TITLES
@@ -399,8 +589,25 @@ def main() -> int:
             manifest["titles"][t] = entry
         manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
 
+    # Always rebuilt from every shard on disk, never from just the titles this
+    # run happened to fetch.
+    #
+    # Accumulating credits during the walk is free, and was how this worked until
+    # `--titles 51 --force` wrote an index describing one title over an index
+    # describing all 53 — `manifest.acts` said 0 while the directory held 2,740.
+    # That is the same shape as the bug the manifest's section count exists to
+    # catch: a count that describes writes rather than files. An Act's sections
+    # are also spread across titles, so a subset ingest cannot see a whole Act
+    # even in principle. One extra pass over the shards is a small price.
+    log("\nBuilding the Act index from every shard on disk")
+    origins, conflicts = scan_shards_for_origins(out_root)
+    acts = write_act_index(out_root, origins, conflicts)
+    manifest["acts"] = acts
+    manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+
     have = sorted(manifest["titles"], key=lambda x: int(re.sub(r"\D", "", x) or 0))
     log(f"\nDone in {time.time() - started:.0f}s. {len(have)} title(s) available: {', '.join(have)}")
+    log(f"Act index: {acts} Act(s) in {out_root / 'acts'}")
     return 0
 
 

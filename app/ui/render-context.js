@@ -45,6 +45,23 @@ export function renderContext(res, handlers) {
       )
     );
   }
+  if (res.viaActSection) {
+    // The bill wrote an Act-relative number and the pane is showing a Code
+    // section with a different one. That is the correct answer and it looks
+    // wrong, so the derivation is shown rather than asserted — and it names the
+    // source credit it came from, which is checkable against the section itself.
+    const v = res.viaActSection;
+    root.appendChild(
+      card(
+        'Read in context',
+        `The bill says “section ${v.actSection} of the ${v.act}”. That Act's own section ` +
+          `numbers are not the ones the Code uses, so ${v.act} § ${v.actSection} is ` +
+          `${v.codified} — taken from the source credit the Code prints on that section ` +
+          `(${v.enactedAs}).`,
+        ''
+      )
+    );
+  }
   if (res.crumbs && res.crumbs.length) root.appendChild(crumbs(res.crumbs, res, handlers));
   if (res.offsetNote) root.appendChild(card('Numbering caveat', res.offsetNote, 'warn'));
   if (res.isActStart) {
@@ -235,6 +252,10 @@ function provision(res, scope) {
     // likely thing to be under an amendment, so it must be redlined too.
     appendMarked(container, scopeNode.text, red, scopeNode.path);
   }
+  // A new subsection is a sibling of (a)–(e), so it follows the whole provision
+  // rather than any node within it. Same for an addition whose scope the walk
+  // never narrowed — it goes where the instruction's target ends.
+  appendAdditions(container, red, '');
   return box;
 }
 
@@ -278,7 +299,41 @@ function nodeEl(node, focusPath, red) {
     for (const c of node.children) kids.appendChild(nodeEl(c, focusPath, red));
     el.appendChild(kids);
   }
+  // "by adding at the end the following" — after the last child, which is where
+  // the bill puts it. Done here rather than inside appendMarked because a new
+  // subparagraph (D) follows (A), (B) and (C); woven into the parent's own text
+  // it would sit above them, ahead of the siblings it is written to follow.
+  appendAdditions(el, red, node.path);
   return el;
+}
+
+/**
+ * New provisions this amendment adds at the end of `path`.
+ *
+ * Rendered as whole nodes in the insertion colour rather than as a run of
+ * inserted words, because that is what they are: language that does not replace
+ * or interrupt anything, but follows the last provision at this level.
+ */
+function appendAdditions(parent, red, path) {
+  if (!red || !red.additionsAt) return;
+  for (const op of red.additionsAt(path)) {
+    const d = document.createElement('div');
+    d.className = 'node added';
+    const s = document.createElement('span');
+    s.className = 'ins';
+    s.title = 'Language this bill adds at the end';
+    // The block is quoted and wrapped to the bill's measure, and it opens each
+    // of its paragraphs with a quote mark that belongs to the bill's
+    // typesetting, not to the law being written. Strip those and keep the line
+    // structure, which is the outline of the new provision.
+    s.textContent = String(op.text)
+      .split('\n')
+      .map((l) => l.replace(/^\s*(?:``|‘‘|["“])/, '').trimEnd())
+      .join('\n')
+      .trim();
+    d.appendChild(s);
+    parent.appendChild(d);
+  }
 }
 
 /**
@@ -353,8 +408,16 @@ function effect(eff) {
     // not language, and left in it opens a gap across the panel.
     const flat = (s) => String(s || '').replace(/\s+/g, ' ').trim();
     if (op.type === 'redesignate') t.textContent = `${flat(op.from)} → ${flat(op.to)}`;
-    else if (op.type === 'add-at-end') t.textContent = 'adds new language at the end';
-    else if (op.type === 'repeal') t.textContent = 'the provision is repealed in full';
+    else if (op.type === 'add-at-end') {
+      // The language itself, where the block could be delimited. A long added
+      // provision is drawn in full above; here it only has to be recognisable,
+      // and the opening words are what identify it.
+      t.className = 'op-text added';
+      const words = flat(op.text);
+      t.textContent = words
+        ? `at the end: “${words.length > 120 ? `${words.slice(0, 120)}…` : words}”`
+        : 'adds new language at the end';
+    } else if (op.type === 'repeal') t.textContent = 'the provision is repealed in full';
     else t.textContent = `“${flat(op.text)}”`;
     row.appendChild(t);
 
@@ -381,6 +444,23 @@ function effect(eff) {
       f.textContent =
         op.replaces != null || op.anchor ? '⚠ anchor text not found' : '⚠ position not stated';
       row.appendChild(f);
+    } else if (op.type === 'add-at-end') {
+      // Three reasons an addition isn't drawn, and they mean opposite things.
+      // Already in the law is the bill having *succeeded*; the reader should not
+      // go hunting for green text, nor conclude the change was missed.
+      const applied = eff.redline ? eff.redline.appliedAdditions() : [];
+      const f = document.createElement('span');
+      if (applied.some((p) => p.start === op.start)) {
+        f.className = 'found';
+        f.textContent = '✓ already in the law as it stands';
+      } else if (!op.text) {
+        f.className = 'notfound';
+        f.textContent = '⚠ added language not delimited';
+      } else {
+        f.className = 'notfound';
+        f.textContent = '⚠ the provision it follows is not shown';
+      }
+      row.appendChild(f);
     }
     c.appendChild(row);
   }
@@ -393,7 +473,7 @@ function effect(eff) {
     if (loose) {
       parts.push(
         `${loose === 1 ? 'One gives' : `${loose} give`} the new language without saying where it goes ` +
-          `("adding at the end the following", or a position described in words rather than quoted)`
+          `(a position described in words rather than quoted)`
       );
     }
     if (anchored) {

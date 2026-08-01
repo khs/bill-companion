@@ -39,7 +39,7 @@ const UNIT_DEPTH = {
  * subsection, "(i)" following "(A)" is a clause. Read as roman, which is the
  * commoner case by a wide margin at the depths these references appear.
  */
-function markerDepth(marker) {
+export function markerDepth(marker) {
   const s = marker.slice(1, -1);
   if (/^\d+$/.test(s)) return UNIT_DEPTH.paragraph;
   if (/^[IVXLC]{2,}$/.test(s)) return UNIT_DEPTH.subclause;

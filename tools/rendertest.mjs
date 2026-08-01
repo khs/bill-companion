@@ -379,6 +379,151 @@ section('redline on the current law');
      'In the case of acres, for the 2018 crop year, all producers may elect.');
 }
 
+// --- additions at the end --------------------------------------------------
+// "by adding at the end the following" is the commonest way a bill creates new
+// law, and for a long time it captured no text at all: the op recorded that an
+// addition happened and nothing about what was added, so there was nothing to
+// draw. These assert the language is read out of the bill AND lands beside the
+// right siblings — the two halves are separately wrong in ways counts can't see.
+// --- Act-relative derivation --------------------------------------------
+// The pane is showing "42 U.S.C. 1395x" for a bill that said "section 1861 of
+// the Social Security Act". That is the right answer and it looks like the wrong
+// one, so the derivation has to be on screen — and it has to cite the source
+// credit it came from, so a reader can check it against the section itself.
+section('Act-relative derivation');
+{
+  const { renderContext: rc } = await imp('app/ui/render-context.js');
+  const base = {
+    source: 'U.S. Code', citation: '42 U.S.C. 1395x(s)(2)', links: [],
+    tree: [{ marker: '(s)', path: '(s)', heading: '', text: 'The term “medical services” means—', children: [] }],
+    focusPath: '',
+  };
+  const el = rc({
+    ...base,
+    viaActSection: {
+      act: 'Social Security Act', actSection: '1861',
+      enactedAs: 'Aug. 14, 1935, ch. 531', codified: '42 U.S.C. 1395x',
+    },
+  }, { onScope: () => {} });
+  const txt = el.textContent.replace(/\s+/g, ' ');
+  ok('names what the bill actually wrote', /section 1861 of the Social Security Act/.test(txt), txt.slice(0, 200));
+  ok('  and where that is codified', /42 U\.S\.C\. 1395x/.test(txt), txt.slice(0, 200));
+  ok('  and the credit it was taken from', /Aug\. 14, 1935, ch\. 531/.test(txt), txt.slice(0, 200));
+  ok('  without a numbering caveat, the gap being closed',
+     !/Numbering caveat/.test(txt), txt.slice(0, 200));
+
+  // The unresolved case must still warn, and must not claim a derivation.
+  const un = rc({
+    ...base, citation: 'Social Security Act', isActStart: true,
+    offsetNote: 'SSA section numbers do NOT match their 42 U.S.C. numbers.',
+  }, { onScope: () => {} });
+  const utxt = un.textContent.replace(/\s+/g, ' ');
+  ok('an unresolved Act cite still carries the caveat', /Numbering caveat/.test(utxt), utxt.slice(0, 160));
+  ok('  and claims no derivation', !/taken from the source credit/.test(utxt), utxt.slice(0, 160));
+}
+
+section('additions at the end');
+{
+  const { renderContext: rc } = await imp('app/ui/render-context.js');
+
+  // The shape from the CLARITY Act, which is where this was found. The bill's
+  // own "(C)" is a list marker for the third sub-instruction, not a step into
+  // subparagraph (C) — the new subparagraph (D) is (C)'s sibling.
+  const t =
+    'Section 4c(a) of the Widget Act (7 U.S.C. 6c(a)) is amended—\n' +
+    '    (1) in paragraph (3)—\n' +
+    "        (A) in subparagraph (B), by striking ``or'' at the end;\n" +
+    "        (B) in subparagraph (C), by striking the period and inserting ``; or''; and\n" +
+    '        (C) by adding at the end the following:\n' +
+    "``(D) a contract of sale of a digital commodity.'';\n";
+  const ams = extractAmendments(t, extractCitations(t));
+  eq('reads the instruction', ams.length, 1);
+  const adds = ams[0].ops.filter((o) => o.type === 'add-at-end');
+  eq('  one addition', adds.length, 1);
+  eq('  carrying the added language', adds[0].text, 'a contract of sale of a digital commodity.'
+     .replace(/^/, '(D) '));
+  eq('  scoped to the paragraph, not the subparagraph walked to', adds[0].scope, '(a)(3)');
+
+  const law = () => [{
+    marker: '(a)', path: '(a)', heading: '', text: 'It shall be unlawful—',
+    children: [{
+      marker: '(3)', path: '(a)(3)', heading: '', text: 'to conduct—',
+      children: [
+        { marker: '(A)', path: '(a)(3)(A)', heading: '', text: 'a transaction;', children: [] },
+        { marker: '(B)', path: '(a)(3)(B)', heading: '', text: 'an option; or', children: [] },
+        { marker: '(C)', path: '(a)(3)(C)', heading: '', text: 'a swap.', children: [] },
+      ],
+    }],
+  }];
+
+  const res = {
+    source: 'U.S. Code', citation: '7 U.S.C. 6c(a)', links: [],
+    tree: law(), focusPath: '', effect: { ops: ams[0].ops, unmatched: false },
+  };
+  const el = rc(res, { onScope: () => {} });
+
+  const added = [...el.querySelectorAll('.node.added')];
+  eq('the addition is drawn into the law', added.length, 1);
+  eq('  as new language, in the insertion colour', added[0].querySelectorAll('.ins').length, 1);
+  eq('  reading as the bill wrote it, without the quote mark',
+     added[0].textContent.trim(), '(D) a contract of sale of a digital commodity.');
+
+  // THE guard. The addition's parent must be paragraph (3) — the level whose
+  // children (A), (B) and (C) the new (D) joins. Scoped to the last step the
+  // instruction wrote, it was drawn inside subparagraph (C) instead, one level
+  // too deep, with every count still green.
+  const ownMarker = (node) => {
+    const m = node.querySelector(':scope > .body > .marker');
+    return m ? m.textContent : '';
+  };
+  eq('  under paragraph (3), whose siblings it joins', ownMarker(added[0].parentElement), '(3)');
+
+  // Order, independently of structure: it follows the last existing sibling
+  // rather than the parent's own lead-in sentence.
+  const flat = el.querySelector('.prov').textContent.replace(/\s+/g, ' ');
+  ok('  after the last existing subparagraph',
+     /a swap\.\s*\(D\) a contract of sale/.test(flat), flat);
+  ok('  and not before them', !/to conduct—\s*\(D\)/.test(flat), flat);
+
+  // A new subsection is a sibling of (a), so it follows the whole provision.
+  const t2 =
+    'Section 5330 of title 31, United States Code, is amended by adding at the end the following:\n' +
+    "``(f) Registration of Kiosk Locations.--The Secretary shall require operators to register.'';\n";
+  const ams2 = extractAmendments(t2, extractCitations(t2));
+  const add2 = ams2[0].ops.filter((o) => o.type === 'add-at-end');
+  eq('a new subsection is read too', add2.length, 1);
+  ok('  and is scoped to the section, not into it', !add2[0].scope, String(add2[0].scope));
+  const el2 = rc({
+    source: 'U.S. Code', citation: '31 U.S.C. 5330', links: [],
+    tree: law(), focusPath: '', effect: { ops: ams2[0].ops, unmatched: false },
+  }, { onScope: () => {} });
+  eq('  drawn once', el2.querySelectorAll('.node.added').length, 1);
+  ok('  at the end of the whole provision',
+     /a swap\.\s*\(f\) Registration of Kiosk Locations/.test(
+       el2.querySelector('.prov').textContent.replace(/\s+/g, ' ')),
+     el2.querySelector('.prov').textContent.replace(/\s+/g, ' '));
+
+  // The enacted-bill case. The Code we hold is current, so this addition is
+  // usually already in it; drawing it again shows the provision twice with one
+  // copy coloured as new. Same tree, but the law already contains (D).
+  const enacted = law();
+  enacted[0].children[0].children.push({
+    marker: '(D)', path: '(a)(3)(D)', heading: '',
+    text: 'a contract of sale of a digital commodity.', children: [],
+  });
+  const el3 = rc({
+    source: 'U.S. Code', citation: '7 U.S.C. 6c(a)', links: [],
+    tree: enacted, focusPath: '', effect: { ops: ams[0].ops, unmatched: false },
+  }, { onScope: () => {} });
+  eq('an addition the law already contains is not drawn again',
+     el3.querySelectorAll('.node.added').length, 0);
+  const flat3 = el3.querySelector('.prov').textContent.replace(/\s+/g, ' ');
+  eq('  so the provision reads once, not twice',
+     flat3.split('a contract of sale of a digital commodity.').length - 1, 1);
+  ok('  and the panel says so rather than staying silent',
+     /already in the law/.test(el3.textContent), el3.textContent.slice(0, 200));
+}
+
 section('context renderer');
 const { renderContext } = await imp('app/ui/render-context.js');
 const { findNode, pathChain } = await imp('app/resolve/provision-tree.js');
@@ -444,6 +589,7 @@ section('resolvers');
   const gone = await resolve({ kind: 'usc', title: '99', section: '1', subsection: '', text: '99 U.S.C. 1' });
   ok('un-ingested title reports missing', gone.missing === true);
   ok('  suggests the ingest command', (gone.remedy || '').includes('--titles 99'), gone.remedy);
+  ok('  and still gives outbound links', (gone.links || []).length > 0, `${(gone.links || []).length}`);
 
   const act = await resolve({ kind: 'act', act: { name: 'Clean Air Act', pattern: '', title: '42', section: '7401', range: '7401 et seq.' }, text: 'Clean Air Act' });
   ok('act name resolves to its first section', act.isActStart === true && !act.missing);

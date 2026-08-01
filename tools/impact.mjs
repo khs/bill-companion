@@ -20,9 +20,12 @@
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname, basename, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+// Node's ESM loader rejects a bare Windows path ("Received protocol 'c:'");
+// bun accepts one. Go through a file:// URL so the tools run under both.
+const imp = (p) => import(pathToFileURL(join(ROOT, p)).href);
 
 // Static shards live on disk here, not behind an HTTP server; the resolver
 // fetches them by relative URL. Same shim selftest.mjs uses.
@@ -36,14 +39,15 @@ globalThis.fetch = async (url, opts) => {
 };
 
 const { extractCitations, extractAmendments, expandRelativeRefs } =
-  await import(join(ROOT, 'app/parse/citations.js'));
-const { parseBill, normalizeText } = await import(join(ROOT, 'app/parse/bill.js'));
-const { resolveUsc } = await import(join(ROOT, 'app/resolve/usc.js'));
+  await imp('app/parse/citations.js');
+const { parseBill, normalizeText } = await imp('app/parse/bill.js');
+const { resolveUsc } = await imp('app/resolve/usc.js');
+const { resolveActSection } = await imp('app/resolve/act-sections.js');
 
 async function textOf(path) {
   if (!path.toLowerCase().endsWith('.pdf')) return readFileSync(path, 'utf8');
   globalThis.DOMMatrix ??= class { constructor() {} };
-  const { pdfToText } = await import(join(ROOT, 'app/parse/pdf.js'));
+  const { pdfToText } = await imp('app/parse/pdf.js');
   const { text, pages } = await pdfToText(new Uint8Array(readFileSync(path)).buffer);
   return { text, pages };
 }
@@ -87,6 +91,19 @@ export async function report(path) {
     else hit++;
   }
 
+  // "Section 1861 of the Social Security Act" — an Act's own numbering, which is
+  // not the Code's. These used to reach only the head of the Act; each one that
+  // resolves is a provision the reader can now actually open. Measured here
+  // rather than in corpus.mjs because it is resolution, and corpus metrics are
+  // deliberately parse-only.
+  const actRel = cites.filter((c) => c.kind === 'act' && c.actSection);
+  let actHit = 0;
+  const actSeen = new Set();
+  for (const c of actRel) {
+    const at = await resolveActSection(c.act, c.actSection);
+    if (at) { actHit++; actSeen.add(`${at.title}:${at.section}`); }
+  }
+
   const badOffsets = cites.filter((c) => text.slice(c.start, c.end) !== c.text);
 
   console.log(`\n${b(relative(ROOT, path).replace(/\\/g, '/'))}  ${dim(`${(raw.length / 1024).toFixed(0)} KB${pages ? `, ${pages} pages` : ''}`)}`);
@@ -98,6 +115,9 @@ export async function report(path) {
   console.log(`  relative addresses  ${relative_.length}  ${dim('composed from context')}`);
   console.log(`  inert refs          ${inertAfter}  ${dim(`of ${inertBefore} internal refs; ${inertBefore - inertAfter} resolved`)}`);
   console.log(`  USC lookups         ${hit} hit, ${missSection} missing section, ${missSubsection} missing subsection  ${dim(`(${seen.size} distinct)`)}`);
+  if (actRel.length) {
+    console.log(`  Act-relative cites  ${actHit}/${actRel.length} mapped to the Code  ${dim(`(${actSeen.size} distinct provisions)`)}`);
+  }
   if (badOffsets.length) console.log(`  \x1b[31moffsets broken      ${badOffsets.length}\x1b[0m`);
 
   if (process.argv.includes('--misses')) {

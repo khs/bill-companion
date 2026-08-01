@@ -274,6 +274,26 @@ body {
 }
 .del .cite { text-decoration: line-through; }
 
+/* A whole provision the bill adds at the end.
+
+   The inline .ins above is for words landing inside a sentence. This is a new
+   subparagraph or subsection following its siblings, so it is a block: it keeps
+   the outline the bill wrote (markers on their own lines) instead of collapsing
+   the new law into one green paragraph. The rule is the seam between what the
+   provision says now and what this bill would add to it. */
+.node.added {
+  margin-top: .35em;
+  padding-left: .7em;
+  border-left: 2px solid color-mix(in srgb, var(--ins) 55%, transparent);
+}
+.node.added .ins {
+  display: block;
+  white-space: pre-wrap;
+  background: none;
+  box-shadow: none;
+  padding: 0;
+}
+
 /* amendment blocks */
 .amend {
   border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent-soft) 45%, transparent);

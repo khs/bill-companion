@@ -5,6 +5,10 @@
 // from all matchers, then overlaps are resolved by specificity (see dedupe()).
 
 import { POPULAR_NAMES } from '../resolve/popular-names.js';
+// Depth-by-marker-style, shared rather than reimplemented: it decides where an
+// addition belongs here and where a cross-reference points there, and the two
+// answers have to agree.
+import { markerDepth } from '../resolve/internal.js';
 
 // A subsection path: the "(s)(2)(B)" trailing a section number. Bounded repeat
 // keeps a runaway "(" in scanned text from eating the rest of the document.
@@ -53,6 +57,25 @@ const RE_ACT_SECTION = POPULAR_NAMES.filter((a) => a.sectionsMatchCode).map((act
     'g'
   ),
 }));
+
+// "section 1861 of the Social Security Act" — the same shape, for Acts whose
+// numbering does NOT match the Code's.
+//
+// These cannot be composed here the way the IRC's are, because there is no rule
+// to apply: SSA § 1861 is 42 U.S.C. 1395x by an act of codification, not by
+// arithmetic. What this does is carry the Act-relative number through as
+// `actSection` so the resolver can look it up in the table the ingester derives
+// from the Code's own source credits. Where the lookup misses, the citation is
+// exactly what it was before this existed — the Act, with its numbering caveat.
+const RE_ACT_REL_SECTION = POPULAR_NAMES.filter((a) => a.enactedAs && !a.sectionsMatchCode).map(
+  (act) => ({
+    act,
+    re: new RegExp(
+      `\\b[Ss]ections?\\s+(\\d+[A-Za-z]*)(${SUBSEC})\\s+of\\s+the\\s+(?:${act.pattern})`,
+      'g'
+    ),
+  })
+);
 
 // 40 CFR 60.1 / 40 C.F.R. § 60.1(a) / 40 CFR part 60 / 45 C.F.R. parts 160, 164
 const RE_CFR = new RegExp(
@@ -319,6 +342,49 @@ function scopeOps(ops, steps) {
   }
 }
 
+/**
+ * An addition belongs beside its siblings, not inside the provision the walk
+ * stopped at.
+ *
+ * scopeOps() binds every op to the last step written before it, which is right
+ * for a strike or an insert — those act *on* the provision the instruction
+ * walked to. An addition does not. It is written as the last item of a list of
+ * sub-instructions:
+ *
+ *     (1) in paragraph (3)—
+ *         (A) in subparagraph (B), by striking ``or'' at the end;
+ *         (B) in subparagraph (C), by striking the period and inserting ``; or''; and
+ *         (C) by adding at the end the following:
+ *     ``(D) a contract of sale of a digital commodity.'';
+ *
+ * The last step written is "in subparagraph (C)", so the new subparagraph (D)
+ * was scoped to (a)(3)(C) — drawn *inside* (C), when (D) is plainly its sibling
+ * and belongs at the end of paragraph (3). Every count stayed green while the
+ * new language was being attached one level too deep.
+ *
+ * The added block states its own depth, in the only way that survives PDF
+ * extraction: the style of its leading marker. (D) is a subparagraph, so its
+ * parent is the nearest enclosing paragraph — the walked path with everything at
+ * subparagraph depth or below dropped. The same rule puts a new ``(iv)'' beside
+ * clause (iii) rather than inside it, and a new ``(f)'' at the end of the
+ * section rather than inside a subparagraph four levels down.
+ *
+ * An addition with no leading marker — "adding at the end the following flush
+ * sentence: ``The preceding sentence shall not apply…''" — carries no depth
+ * signal and is left exactly where the instruction walked to, which is where a
+ * flush sentence does in fact go.
+ */
+function scopeAdditions(ops) {
+  for (const op of ops) {
+    if (op.type !== 'add-at-end' || !op.text || !op.scope) continue;
+    const lead = op.text.match(/^\s*(\([A-Za-z0-9]{1,8}\))/);
+    if (!lead) continue;
+    const depth = markerDepth(lead[1]);
+    const kept = (op.scope.match(MARKER_RE) || []).filter((mk) => markerDepth(mk) < depth);
+    op.scope = kept.join('');
+  }
+}
+
 function placeOps(text, ops) {
   const spans = ops.filter((o) => o.start != null).sort((a, b) => a.start - b.start);
   for (let i = 0; i < spans.length; i++) {
@@ -390,6 +456,85 @@ const RE_STRIKE = new RegExp(
 const RE_INSERT = new RegExp(
   `insert(?:ing)?\\b(?:(?!strik)[\\s\\S]){0,120}?${QO}([\\s\\S]{1,400}?)${QC}`, 'gi');
 const RE_ADD_END = /adding\s+at\s+the\s+end\s+the\s+following/gi;
+
+// The commonest way a bill creates new law, and for a long time the one whose
+// language was never captured: "by adding at the end the following new
+// paragraph:" followed by the paragraph itself. The op recorded that an addition
+// happened and nothing about what was added, so the redline had nothing to draw
+// and the panel could only say "adds new language at the end".
+//
+// Reading the block needs the opener and closer as a *pair* — QO/QC above are
+// alternations, which is right for "find any quoted operand" and wrong here,
+// because a block opened with `` must be closed by '' and not by a curly double
+// that happens to appear inside it.
+const QUOTE_PAIRS = [
+  ['``', "''"],
+  ['‘‘', '’’'],
+  ['“', '”'],
+  ['"', '"'],
+];
+
+// Between the phrase and the block sits an optional unit ("new paragraph:",
+// "new flush sentence:", "new subchapter:") and, in a typeset PDF, a page break
+// with its furniture — "•HR 3633 EH1S", a page number, blank lines. None of it
+// contains a quote opener, which is what makes "everything up to the opener"
+// a safe way across. 120 characters covers the longest real gap seen; beyond
+// that the phrase and the block are unrelated.
+const ADD_END_GAP = /^[^`‘“"]{0,120}(?=``|‘‘|[“"])/;
+
+// …but the crossing must not step over another instruction on the way.
+//
+//     is amended by adding at the end the following new subclause:
+//         (A) in subclause (VI), by striking ``and'' at the end;
+//
+// The next quote opener there belongs to the *strike*, and reading up to it
+// reported "and" — a word being removed from the statute book — as the new
+// language this bill adds. One of these verbs in the gap means the quote that
+// follows is that verb's operand, not the block this phrase introduced.
+//
+// Only the verbs that take a quoted operand. "amend" is not one of them and
+// appears in the gap legitimately — "adding at the end the following new
+// section (and amending the table of sections accordingly):" is three real
+// additions that a broader guard threw away.
+const ADD_END_INTERVENING = /\b(?:strik|insert|redesignat)/i;
+
+// A runaway guard, not a judgement about length: added blocks legitimately run
+// to tens of thousands of characters when a bill adds a whole chapter (the
+// largest in the corpus is 59k). Past this the closer was almost certainly
+// missed and the "block" is the rest of the bill.
+const MAX_ADDED = 60000;
+
+/**
+ * Read the block of new law introduced by "adding at the end the following".
+ *
+ * Searched in the whole bill, not in the instruction's body: the body is capped
+ * at MAX_AMEND_BODY so that one instruction cannot swallow the next, and an
+ * added block is routinely longer than that cap on its own.
+ *
+ * The first closer wins. In every convention bills actually use, a multi-
+ * paragraph block opens each paragraph with a quote mark and closes only once,
+ * at the very end — so there are no intermediate closers to step over, and a
+ * nested single-quoted term (`covered entity') is not a closer because both
+ * single conventions take two characters. Measured across the corpus, that rule
+ * ends the block correctly at 3,251 of 3,253 sites; the two exceptions write
+ * each added subparagraph as its own closed quote, where this reads the first
+ * and stops — short of the whole addition rather than wrong about it.
+ *
+ * @returns {{start:number,end:number}|null} absolute offsets of the added text,
+ *   or null where the block cannot be delimited — in which case the caller still
+ *   records that an addition happens, just not what it says.
+ */
+function readAddedBlock(text, from) {
+  const g = text.slice(from, from + 200).match(ADD_END_GAP);
+  if (!g || ADD_END_INTERVENING.test(g[0])) return null;
+  const openAt = from + g[0].length;
+  const pair = QUOTE_PAIRS.find(([open]) => text.startsWith(open, openAt));
+  if (!pair) return null;
+  const start = openAt + pair[0].length;
+  const close = text.indexOf(pair[1], start);
+  if (close < 0 || close - start > MAX_ADDED) return null;
+  return { start, end: close };
+}
 // Both sides of a redesignation are ranges: "redesignating clauses (v) through
 // (vii) as clauses (vi) through (viii)". The second group used to take a single
 // marker, so the panel read "clauses (v) through (vii) → clauses (vi)" — an
@@ -781,6 +926,21 @@ export function extractCitations(text) {
     }
   }
 
+  // Still an `act` citation, not a `usc` one: the Code section is not known
+  // until the resolver has read the Act's table, and asserting one here would be
+  // asserting the very equivalence this exists because it cannot be assumed.
+  for (const { act, re } of RE_ACT_REL_SECTION) {
+    re.lastIndex = 0;
+    while ((m = re.exec(text))) {
+      push(out, m, 'act', {
+        act,
+        actSection: m[1],
+        subsection: m[2] || '',
+        ladder: subsectionLadder(m[2]),
+      });
+    }
+  }
+
   RE_CFR.lastIndex = 0;
   while ((m = RE_CFR.exec(text))) {
     const unit = (m[2] || '').toLowerCase().replace(/s$/, '');
@@ -1144,8 +1304,32 @@ export function extractAmendments(text, citations, divisions = []) {
     while ((rm = RE_REDESIG.exec(body))) {
       ops.push({ type: 'redesignate', from: rm[1], to: rm[2] });
     }
+    // One op per occurrence, each carrying the language it adds. A single
+    // instruction commonly adds at the end of more than one provision ("in
+    // subsection (a), by adding at the end the following … ; in subsection (b),
+    // by adding at the end the following …"), and a lone boolean reported those
+    // as one nameless addition.
+    //
+    // start/end delimit the added language itself, like every other op that
+    // carries text — the bill pane marks that span, and an offset that doesn't
+    // round-trip to op.text mismarks it. They also sit just past the phrase, so
+    // scopeOps() binds each addition to the subsection the instruction had
+    // walked to and the new language lands under the provision it belongs to
+    // rather than at the end of the whole section.
     RE_ADD_END.lastIndex = 0;
-    if (RE_ADD_END.test(body)) ops.push({ type: 'add-at-end' });
+    let am;
+    while ((am = RE_ADD_END.exec(body))) {
+      const block = readAddedBlock(text, h.headEnd + am.index + am[0].length);
+      // Undelimited: record that an addition happens without claiming to know
+      // what it says, or where. Blank beats wrong.
+      if (!block) { ops.push({ type: 'add-at-end' }); continue; }
+      ops.push({
+        type: 'add-at-end',
+        text: text.slice(block.start, block.end),
+        start: block.start,
+        end: block.end,
+      });
+    }
     if (h.verb === 'repealed') ops.push({ type: 'repeal' });
 
     // One instruction over a list of provisions becomes one amendment per
@@ -1209,6 +1393,7 @@ export function extractAmendments(text, citations, divisions = []) {
     // numbering the resolved provision actually uses.
     const nav = extractSteps(text, h.headEnd, bodyEnd, (target && target.subsection) || '');
     scopeOps(ops, nav.steps);
+    scopeAdditions(ops);
 
     return [{
       start: h.start,

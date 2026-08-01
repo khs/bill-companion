@@ -1,0 +1,20 @@
+# Byte-for-byte, everywhere. No end-of-line conversion, on any platform.
+#
+# `core.autocrlf` is true by default in Git for Windows, which rewrites line
+# endings in the working tree on checkout. Nearly everything in this repo is
+# either a fixture whose exact bytes are asserted against or generated data, so
+# that conversion is pure risk:
+#
+#   - samples/*.pdf are binary. Git's text/binary detection is a heuristic, and
+#     a PDF "converted" to CRLF is a corrupt PDF and a broken test suite.
+#   - samples/*.txt and corpus/files/* are the fixtures selftest, rendertest and
+#     the corpus baseline assert fixed numbers about. normalizeText() strips CR
+#     before anything measures a character offset, so a CRLF checkout would not
+#     actually move those numbers — but relying on that to protect 34 MB of
+#     fixtures is a bet with no upside.
+#   - data/usc/**/*.json is 63,000 generated files nobody should ever see a
+#     whitespace diff in.
+#
+# `-text` disables conversion while leaving text diffs working (unlike `binary`,
+# which also turns diffs off).
+* -text
