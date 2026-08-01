@@ -1,0 +1,213 @@
+// U.S. Code resolution against pre-ingested static shards.
+//
+// Unlike the CFR, there is no CORS-open API for the U.S. Code — uscode.house.gov
+// serves bulk XML with no CORS headers and govinfo requires a key. So the Code
+// is ingested ahead of time by tools/ingest_usc.py into one JSON file per
+// section, which makes a lookup a single static GET with no index to load first.
+//
+// Titles that haven't been ingested are not an error state: we still render the
+// citation with working outbound links and tell the user how to add the title.
+
+import { buildTree, findNode, pathChain } from './provision-tree.js';
+
+const DATA = 'data/usc';
+
+let manifestPromise = null;
+const sectionCache = new Map();
+
+/**
+ * Which titles are available locally. Written by the ingest script.
+ *
+ * A *failed* load is never cached. Caching the rejection meant one dropped
+ * request — the dev server not running yet, a reload mid-flight — permanently
+ * downgraded the page to "no title has been ingested", for every title, and it
+ * stayed that way after the server came back because nothing ever retried. A
+ * 404 is cached, because that is a real answer: no data has been ingested.
+ */
+export function manifest() {
+  if (!manifestPromise) {
+    manifestPromise = fetch(`${DATA}/manifest.json`)
+      .then((r) => (r.ok ? r.json() : { titles: {} }))
+      .catch(() => {
+        manifestPromise = null;
+        // Distinguished from a real empty manifest so the pane can say the index
+        // couldn't be reached rather than accusing the user of not ingesting it.
+        return { titles: {}, unreachable: true };
+      });
+  }
+  return manifestPromise;
+}
+
+/**
+ * Section numbers appear as 300f, 1395x, 2000a-1 — normalise for a filename.
+ *
+ * Every non-alphanumeric character collapses to `_`, and the dash is the reason
+ * why. The OLRC's USLM writes dashed section numbers with an EN DASH — "77z–3",
+ * U+2013 — while every bill in the wild cites the same section with an ASCII
+ * hyphen, "77z-3". Keeping `-` as a legal filename character made those two
+ * spellings slug differently, so the shard written as `s77z_3.json` was looked
+ * up as `s77z-3.json` and 404'd. That silently took out ~7,000 sections, and
+ * disproportionately the securities ones (77z-3, 78o-11, 80a-3, 80b-2 …) where
+ * dashed numbering is the norm. Must stay in step with slug() in
+ * tools/ingest_usc.py, which writes the files this reads.
+ */
+function slug(section) {
+  return String(section).toLowerCase().replace(/[^a-z0-9]/g, '_');
+}
+
+async function loadSection(title, section) {
+  const key = `${title}/${slug(section)}`;
+  if (sectionCache.has(key)) return sectionCache.get(key);
+  const p = fetch(`${DATA}/t${title}/s${slug(section)}.json`)
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => {
+      // Same reasoning as manifest(): a 404 is an answer worth remembering, a
+      // transport failure is not, and caching it makes the section permanently
+      // unresolvable for the life of the page.
+      sectionCache.delete(key);
+      return null;
+    });
+  sectionCache.set(key, p);
+  return p;
+}
+
+/**
+ * @param {{title:string, section:string, subsection:string}} cite
+ */
+export async function resolveUsc(cite) {
+  const { title, section, subsection } = cite;
+  const [mf, data] = await Promise.all([manifest(), loadSection(title, section)]);
+  const ingested = Boolean(mf.titles && mf.titles[String(title)]);
+  const links = uscLinks(cite);
+
+  if (!data) {
+    return {
+      source: 'U.S. Code',
+      citation: `${title} U.S.C. ${section}${subsection}`,
+      missing: true,
+      // Three different failures, three different fixes. Conflating the first
+      // with the second sent someone looking for missing data that was sitting
+      // on disk the whole time: the dev server was simply not running, so the
+      // index never loaded and every title looked un-ingested.
+      reason: mf.unreachable
+        ? `Couldn't load the U.S. Code index at ${DATA}/manifest.json, so nothing can be resolved locally. The shards are fetched over HTTP — this is what it looks like when the dev server isn't running, or when index.html was opened as a file:// URL.`
+        : ingested
+        ? `Title ${title} is ingested, but section ${section} isn't in it. The citation may be to a section that was repealed, renumbered, or never existed.`
+        : `Title ${title} of the U.S. Code hasn't been ingested yet.`,
+      remedy: mf.unreachable
+        ? 'python tools/serve.py'
+        : ingested
+        ? null
+        : `python tools/ingest_usc.py --titles ${title}`,
+      links,
+    };
+  }
+
+  const tree = data.tree && data.tree.length ? data.tree : buildTree(data.paragraphs || []);
+
+  // The path the bill cited, and the path the tree actually uses. Usually the
+  // same; see runInLevels() for when they aren't.
+  let focusPath = subsection;
+  let focusNode = subsection ? findNode(tree, subsection) : null;
+  let runIn = null;
+  if (subsection && !focusNode) {
+    const found = runInLevels(tree, data.lead || '', subsection);
+    if (found) {
+      focusPath = found.path;
+      focusNode = found.node;
+      runIn = found.dropped;
+    }
+  }
+  const chain = focusPath ? pathChain(tree, focusPath) : [];
+
+  return {
+    source: 'U.S. Code',
+    asOf: data.releasePoint || mf.releasePoint || null,
+    citation: `${title} U.S.C. ${section}${subsection}`,
+    heading: data.heading || '',
+    // The section's flush lead-in text, above any subsection. For a section that
+    // was never subdivided this is the entire operative provision — 15 U.S.C.
+    // 77z-3 ("General exemptive authority") is one flush paragraph and nothing
+    // else. Dropping it rendered roughly a quarter of all sections as an empty
+    // pane and hid their text from the struck-language check.
+    lead: data.lead || '',
+    crumbs: (data.ancestors || []).map((a) => ({
+      type: a.type,
+      label: a.heading ? `${a.num} ${a.heading}`.trim() : a.num,
+      short: a.num,
+      identifier: a.identifier,
+    })),
+    tree,
+    notes: data.notes || [],
+    sourceCredit: data.sourceCredit || '',
+    // The subsection the bill pointed at, plus every level above it. This is the
+    // "go up sub-levels" payload the context pane renders as a breadcrumb.
+    // The tree's own spelling of the path, because this is what node
+    // highlighting compares against. `citedPath` keeps what the bill wrote.
+    focusPath: focusPath || '',
+    citedPath: subsection || '',
+    // Set when the two differ: the levels that live in the lead rather than in
+    // the tree, so the pane can explain the gap instead of hiding it.
+    runIn,
+    focusNode,
+    focusChain: chain,
+    // A subsection was cited but isn't in the text we have — usually means the
+    // bill is *adding* it, which is worth saying out loud rather than 404ing.
+    focusMissing: Boolean(subsection && !focusNode),
+    links,
+  };
+}
+
+/**
+ * Recover a citation whose upper levels are written into the section's lead.
+ *
+ * Not every level of a section is a node. Where a paragraph's text runs on into
+ * its own subparagraphs, the OLRC leaves it in the lead and structures only what
+ * follows — 42 U.S.C. 4332 is the standard example:
+ *
+ *   lead: "The Congress authorizes and directs that, to the fullest extent
+ *          possible: (1) the policies … shall be interpreted … and (2) all
+ *          agencies of the Federal Government shall—"
+ *   tree: (A) (B) (C) … (L)
+ *
+ * So a bill citing 4332(2)(C) — the environmental impact statement, and about
+ * the most litigated provision in the Code — found no node and was told the
+ * subsection did not exist. Stating that a provision isn't in the law is far
+ * worse than saying nothing, and the reader has no way to tell it is wrong.
+ *
+ * Both conditions must hold before the citation is rewritten: every dropped
+ * marker appears literally in the lead, AND what remains resolves to a real
+ * node. That is what keeps this away from the ordinary case — a bill *adding* a
+ * subsection still has nothing in the lead to match, so it is still reported
+ * missing, correctly. Measured over the amendatory corpus, this recovers the
+ * run-in citations and leaves the genuinely-absent ones alone.
+ */
+function runInLevels(tree, lead, subsection) {
+  const parts = subsection.match(/\([A-Za-z0-9]{1,8}\)/g) || [];
+  for (let d = 1; d < parts.length; d++) {
+    const dropped = parts.slice(0, d);
+    if (!dropped.every((mk) => lead.includes(mk))) continue;
+    const rest = parts.slice(d).join('');
+    const node = findNode(tree, rest);
+    if (node) return { path: rest, node, dropped: dropped.join('') };
+  }
+  return null;
+}
+
+export function uscLinks(cite) {
+  const { title, section } = cite;
+  return [
+    {
+      label: 'Cornell LII',
+      href: `https://www.law.cornell.edu/uscode/text/${title}/${section}`,
+    },
+    {
+      label: 'OLRC (uscode.house.gov)',
+      href: `https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title${title}-section${section}&num=0&edition=prelim`,
+    },
+    {
+      label: 'govinfo',
+      href: `https://www.govinfo.gov/link/uscode/${title}/${section}`,
+    },
+  ];
+}

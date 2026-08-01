@@ -1,0 +1,910 @@
+{
+ "hr3746-118-enr": {
+  "chars": 119726,
+  "sections": 39,
+  "divisions": 14,
+  "citations": 325,
+  "byKind": {
+   "act": 61,
+   "usc": 45,
+   "internal": 92,
+   "publaw": 127
+  },
+  "amendments": 18,
+  "targeted": 15,
+  "distributed": 0,
+  "steps": 21,
+  "refs": 28,
+  "relative": 38,
+  "ops": {
+   "strike": 20,
+   "insert": 24,
+   "add-at-end": 6,
+   "redesignate": 1
+  },
+  "opSpans": 44,
+  "uncoveredVerbs": 0,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr9925-119-sponsor-pdf": {
+  "chars": 84832,
+  "sections": 9,
+  "divisions": 0,
+  "citations": 154,
+  "byKind": {
+   "act": 1,
+   "usc": 4,
+   "internal": 149
+  },
+  "amendments": 0,
+  "targeted": 0,
+  "distributed": 0,
+  "steps": 0,
+  "refs": 0,
+  "relative": 0,
+  "ops": {},
+  "opSpans": 0,
+  "uncoveredVerbs": 0,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0,
+  "pages": 74
+ },
+ "hr3633-119-eh-pdf": {
+  "chars": 259001,
+  "sections": 66,
+  "divisions": 6,
+  "citations": 558,
+  "byKind": {
+   "act": 163,
+   "usc": 130,
+   "internal": 263,
+   "publaw": 2
+  },
+  "amendments": 63,
+  "targeted": 62,
+  "distributed": 8,
+  "steps": 45,
+  "refs": 54,
+  "relative": 95,
+  "ops": {
+   "add-at-end": 24,
+   "insert": 57,
+   "redesignate": 6,
+   "strike": 39
+  },
+  "opSpans": 84,
+  "uncoveredVerbs": 0,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0,
+  "pages": 258
+ },
+ "hr3633-119-rs-substitute": {
+  "chars": 475095,
+  "sections": 63,
+  "divisions": 9,
+  "citations": 712,
+  "byKind": {
+   "act": 116,
+   "usc": 202,
+   "publaw": 3,
+   "internal": 389,
+   "stat": 2
+  },
+  "amendments": 20,
+  "targeted": 18,
+  "distributed": 0,
+  "steps": 22,
+  "refs": 30,
+  "relative": 49,
+  "ops": {
+   "strike": 14,
+   "insert": 28,
+   "add-at-end": 9,
+   "redesignate": 4
+  },
+  "opSpans": 42,
+  "uncoveredVerbs": 0,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr3633-119-eh-text": {
+  "chars": 353798,
+  "sections": 66,
+  "divisions": 6,
+  "citations": 568,
+  "byKind": {
+   "act": 170,
+   "usc": 131,
+   "internal": 265,
+   "publaw": 2
+  },
+  "amendments": 63,
+  "targeted": 62,
+  "distributed": 8,
+  "steps": 43,
+  "refs": 49,
+  "relative": 87,
+  "ops": {
+   "add-at-end": 24,
+   "insert": 56,
+   "redesignate": 5,
+   "strike": 39
+  },
+  "opSpans": 83,
+  "uncoveredVerbs": 0,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr5376-117-enr": {
+  "chars": 863854,
+  "sections": 153,
+  "divisions": 24,
+  "citations": 2100,
+  "byKind": {
+   "act": 184,
+   "internal": 1631,
+   "usc": 274,
+   "publaw": 8,
+   "stat": 3
+  },
+  "amendments": 315,
+  "targeted": 292,
+  "distributed": 0,
+  "steps": 226,
+  "refs": 278,
+  "relative": 477,
+  "ops": {
+   "add-at-end": 110,
+   "insert": 327,
+   "strike": 241,
+   "redesignate": 20,
+   "repeal": 1
+  },
+  "opSpans": 568,
+  "uncoveredVerbs": 1,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr3684-117-enr": {
+  "chars": 3251237,
+  "sections": 612,
+  "divisions": 112,
+  "citations": 6936,
+  "byKind": {
+   "act": 492,
+   "usc": 1508,
+   "internal": 4638,
+   "publaw": 216,
+   "stat": 81,
+   "cfr": 1
+  },
+  "amendments": 595,
+  "targeted": 482,
+  "distributed": 7,
+  "steps": 729,
+  "refs": 948,
+  "relative": 1548,
+  "ops": {
+   "strike": 619,
+   "insert": 798,
+   "redesignate": 104,
+   "add-at-end": 235,
+   "repeal": 11
+  },
+  "opSpans": 1407,
+  "uncoveredVerbs": 6,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr1892-115-enr": {
+  "chars": 780824,
+  "sections": 191,
+  "divisions": 46,
+  "citations": 2083,
+  "byKind": {
+   "usc": 407,
+   "internal": 1190,
+   "act": 378,
+   "publaw": 96,
+   "stat": 12
+  },
+  "amendments": 291,
+  "targeted": 288,
+  "distributed": 0,
+  "steps": 207,
+  "refs": 266,
+  "relative": 462,
+  "ops": {
+   "strike": 276,
+   "insert": 324,
+   "add-at-end": 105,
+   "redesignate": 19,
+   "repeal": 6
+  },
+  "opSpans": 600,
+  "uncoveredVerbs": 7,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr748-116-enr": {
+  "chars": 1059989,
+  "sections": 189,
+  "divisions": 20,
+  "citations": 2665,
+  "byKind": {
+   "act": 564,
+   "usc": 736,
+   "internal": 1247,
+   "publaw": 112,
+   "stat": 4,
+   "cfr": 2
+  },
+  "amendments": 184,
+  "targeted": 151,
+  "distributed": 0,
+  "steps": 156,
+  "refs": 221,
+  "relative": 317,
+  "ops": {
+   "strike": 174,
+   "insert": 222,
+   "add-at-end": 56,
+   "redesignate": 13,
+   "repeal": 2
+  },
+  "opSpans": 396,
+  "uncoveredVerbs": 1,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr1719-119-ih": {
+  "chars": 9819,
+  "sections": 5,
+  "divisions": 0,
+  "citations": 20,
+  "byKind": {
+   "act": 4,
+   "usc": 3,
+   "internal": 13
+  },
+  "amendments": 2,
+  "targeted": 2,
+  "distributed": 0,
+  "steps": 8,
+  "refs": 15,
+  "relative": 23,
+  "ops": {
+   "insert": 5,
+   "redesignate": 3,
+   "add-at-end": 2,
+   "strike": 1
+  },
+  "opSpans": 6,
+  "uncoveredVerbs": 0,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "s2938-117-enr": {
+  "chars": 97126,
+  "sections": 21,
+  "divisions": 10,
+  "citations": 263,
+  "byKind": {
+   "internal": 145,
+   "usc": 72,
+   "act": 39,
+   "publaw": 6,
+   "stat": 1
+  },
+  "amendments": 27,
+  "targeted": 25,
+  "distributed": 0,
+  "steps": 39,
+  "refs": 22,
+  "relative": 61,
+  "ops": {
+   "strike": 25,
+   "insert": 36,
+   "add-at-end": 14,
+   "redesignate": 3
+  },
+  "opSpans": 61,
+  "uncoveredVerbs": 0,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr6395-116-enr": {
+  "chars": 4843073,
+  "sections": 1270,
+  "divisions": 336,
+  "citations": 10747,
+  "byKind": {
+   "act": 634,
+   "usc": 1756,
+   "publaw": 464,
+   "stat": 242,
+   "internal": 7651
+  },
+  "amendments": 1387,
+  "targeted": 1079,
+  "distributed": 0,
+  "steps": 1095,
+  "refs": 2442,
+  "relative": 2763,
+  "ops": {
+   "insert": 2121,
+   "strike": 1483,
+   "add-at-end": 320,
+   "redesignate": 195,
+   "repeal": 36
+  },
+  "opSpans": 3604,
+  "uncoveredVerbs": 110,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr1319-117-enr": {
+  "chars": 770504,
+  "sections": 217,
+  "divisions": 49,
+  "citations": 1859,
+  "byKind": {
+   "act": 296,
+   "internal": 1021,
+   "usc": 482,
+   "publaw": 58,
+   "stat": 2
+  },
+  "amendments": 148,
+  "targeted": 128,
+  "distributed": 0,
+  "steps": 51,
+  "refs": 126,
+  "relative": 139,
+  "ops": {
+   "strike": 85,
+   "insert": 121,
+   "add-at-end": 64,
+   "redesignate": 7,
+   "repeal": 1
+  },
+  "opSpans": 206,
+  "uncoveredVerbs": 4,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr2-115-enr": {
+  "chars": 1629679,
+  "sections": 503,
+  "divisions": 63,
+  "citations": 4551,
+  "byKind": {
+   "act": 161,
+   "usc": 1222,
+   "internal": 3043,
+   "publaw": 99,
+   "stat": 26
+  },
+  "amendments": 792,
+  "targeted": 759,
+  "distributed": 0,
+  "steps": 811,
+  "refs": 961,
+  "relative": 1731,
+  "ops": {
+   "redesignate": 106,
+   "insert": 1017,
+   "add-at-end": 213,
+   "strike": 862,
+   "repeal": 50
+  },
+  "opSpans": 1879,
+  "uncoveredVerbs": 4,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr4346-117-enr": {
+  "chars": 1241175,
+  "sections": 262,
+  "divisions": 50,
+  "citations": 1982,
+  "byKind": {
+   "act": 182,
+   "usc": 485,
+   "publaw": 80,
+   "internal": 1223,
+   "stat": 12
+  },
+  "amendments": 139,
+  "targeted": 129,
+  "distributed": 0,
+  "steps": 167,
+  "refs": 203,
+  "relative": 362,
+  "ops": {
+   "insert": 184,
+   "redesignate": 23,
+   "add-at-end": 42,
+   "strike": 132,
+   "repeal": 1
+  },
+  "opSpans": 316,
+  "uncoveredVerbs": 7,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr1865-116-enr": {
+  "chars": 2271931,
+  "sections": 273,
+  "divisions": 81,
+  "citations": 3824,
+  "byKind": {
+   "act": 478,
+   "usc": 1307,
+   "publaw": 457,
+   "stat": 72,
+   "internal": 1498,
+   "cfr": 12
+  },
+  "amendments": 329,
+  "targeted": 305,
+  "distributed": 0,
+  "steps": 201,
+  "refs": 300,
+  "relative": 467,
+  "ops": {
+   "strike": 355,
+   "insert": 393,
+   "add-at-end": 104,
+   "repeal": 6,
+   "redesignate": 16
+  },
+  "opSpans": 748,
+  "uncoveredVerbs": 6,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr1957-116-enr": {
+  "chars": 16192,
+  "sections": 3,
+  "divisions": 0,
+  "citations": 31,
+  "byKind": {
+   "internal": 20,
+   "usc": 7,
+   "publaw": 3,
+   "stat": 1
+  },
+  "amendments": 6,
+  "targeted": 3,
+  "distributed": 0,
+  "steps": 0,
+  "refs": 3,
+  "relative": 2,
+  "ops": {
+   "insert": 2
+  },
+  "opSpans": 2,
+  "uncoveredVerbs": 0,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "s47-116-enr": {
+  "chars": 797343,
+  "sections": 177,
+  "divisions": 32,
+  "citations": 1576,
+  "byKind": {
+   "internal": 947,
+   "usc": 354,
+   "publaw": 114,
+   "stat": 134,
+   "act": 27
+  },
+  "amendments": 127,
+  "targeted": 121,
+  "distributed": 0,
+  "steps": 104,
+  "refs": 176,
+  "relative": 157,
+  "ops": {
+   "insert": 159,
+   "strike": 126,
+   "redesignate": 14,
+   "add-at-end": 47,
+   "repeal": 2
+  },
+  "opSpans": 285,
+  "uncoveredVerbs": 6,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr6201-116-enr": {
+  "chars": 128661,
+  "sections": 49,
+  "divisions": 19,
+  "citations": 400,
+  "byKind": {
+   "act": 97,
+   "usc": 124,
+   "internal": 179
+  },
+  "amendments": 20,
+  "targeted": 20,
+  "distributed": 0,
+  "steps": 27,
+  "refs": 35,
+  "relative": 62,
+  "ops": {
+   "add-at-end": 13,
+   "strike": 22,
+   "insert": 20
+  },
+  "opSpans": 42,
+  "uncoveredVerbs": 0,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr2617-117-enr": {
+  "chars": 5244482,
+  "sections": 710,
+  "divisions": 208,
+  "citations": 9622,
+  "byKind": {
+   "usc": 2863,
+   "internal": 4542,
+   "publaw": 830,
+   "act": 1243,
+   "stat": 119,
+   "cfr": 25
+  },
+  "amendments": 836,
+  "targeted": 772,
+  "distributed": 0,
+  "steps": 632,
+  "refs": 941,
+  "relative": 1453,
+  "ops": {
+   "strike": 797,
+   "insert": 1012,
+   "add-at-end": 325,
+   "redesignate": 92,
+   "repeal": 4
+  },
+  "opSpans": 1809,
+  "uncoveredVerbs": 21,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr3590-111-enr": {
+  "chars": 2907331,
+  "sections": 442,
+  "divisions": 68,
+  "citations": 7063,
+  "byKind": {
+   "act": 1330,
+   "usc": 1055,
+   "internal": 4610,
+   "publaw": 53,
+   "stat": 15
+  },
+  "amendments": 850,
+  "targeted": 731,
+  "distributed": 0,
+  "steps": 549,
+  "refs": 702,
+  "relative": 1001,
+  "ops": {
+   "insert": 771,
+   "add-at-end": 350,
+   "strike": 562,
+   "redesignate": 56,
+   "repeal": 2
+  },
+  "opSpans": 1333,
+  "uncoveredVerbs": 9,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr1-115-enr": {
+  "chars": 575249,
+  "sections": 130,
+  "divisions": 7,
+  "citations": 1362,
+  "byKind": {
+   "act": 18,
+   "internal": 1293,
+   "usc": 48,
+   "publaw": 2,
+   "stat": 1
+  },
+  "amendments": 472,
+  "targeted": 428,
+  "distributed": 0,
+  "steps": 58,
+  "refs": 562,
+  "relative": 613,
+  "ops": {
+   "add-at-end": 114,
+   "redesignate": 50,
+   "strike": 254,
+   "insert": 277
+  },
+  "opSpans": 531,
+  "uncoveredVerbs": 3,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr4173-111-enr": {
+  "chars": 2738522,
+  "sections": 544,
+  "divisions": 54,
+  "citations": 5380,
+  "byKind": {
+   "act": 658,
+   "publaw": 26,
+   "usc": 1409,
+   "internal": 3270,
+   "stat": 11,
+   "cfr": 6
+  },
+  "amendments": 575,
+  "targeted": 545,
+  "distributed": 0,
+  "steps": 407,
+  "refs": 596,
+  "relative": 900,
+  "ops": {
+   "add-at-end": 208,
+   "strike": 496,
+   "insert": 590,
+   "redesignate": 66,
+   "repeal": 1
+  },
+  "opSpans": 1086,
+  "uncoveredVerbs": 9,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "s1177-114-enr": {
+  "chars": 1252664,
+  "sections": 131,
+  "divisions": 9,
+  "citations": 3190,
+  "byKind": {
+   "act": 542,
+   "usc": 567,
+   "internal": 2040,
+   "publaw": 25,
+   "stat": 16
+  },
+  "amendments": 284,
+  "targeted": 247,
+  "distributed": 0,
+  "steps": 344,
+  "refs": 229,
+  "relative": 483,
+  "ops": {
+   "redesignate": 17,
+   "strike": 404,
+   "insert": 445,
+   "add-at-end": 18,
+   "repeal": 2
+  },
+  "opSpans": 849,
+  "uncoveredVerbs": 5,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "s756-115-enr": {
+  "chars": 176702,
+  "sections": 36,
+  "divisions": 6,
+  "citations": 351,
+  "byKind": {
+   "usc": 97,
+   "internal": 226,
+   "act": 16,
+   "publaw": 6,
+   "stat": 6
+  },
+  "amendments": 43,
+  "targeted": 33,
+  "distributed": 0,
+  "steps": 42,
+  "refs": 48,
+  "relative": 83,
+  "ops": {
+   "add-at-end": 16,
+   "strike": 37,
+   "insert": 50,
+   "redesignate": 8,
+   "repeal": 4
+  },
+  "opSpans": 87,
+  "uncoveredVerbs": 1,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr5430-116-enr": {
+  "chars": 278477,
+  "sections": 84,
+  "divisions": 28,
+  "citations": 551,
+  "byKind": {
+   "usc": 116,
+   "internal": 413,
+   "act": 16,
+   "publaw": 5,
+   "stat": 1
+  },
+  "amendments": 40,
+  "targeted": 31,
+  "distributed": 0,
+  "steps": 58,
+  "refs": 71,
+  "relative": 85,
+  "ops": {
+   "strike": 88,
+   "insert": 95,
+   "redesignate": 3,
+   "add-at-end": 3,
+   "repeal": 1
+  },
+  "opSpans": 183,
+  "uncoveredVerbs": 0,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr3080-113-enr": {
+  "chars": 564197,
+  "sections": 139,
+  "divisions": 15,
+  "citations": 1012,
+  "byKind": {
+   "usc": 260,
+   "internal": 624,
+   "act": 44,
+   "stat": 69,
+   "publaw": 15
+  },
+  "amendments": 104,
+  "targeted": 100,
+  "distributed": 0,
+  "steps": 71,
+  "refs": 143,
+  "relative": 155,
+  "ops": {
+   "repeal": 4,
+   "strike": 87,
+   "add-at-end": 25,
+   "insert": 129,
+   "redesignate": 13
+  },
+  "opSpans": 216,
+  "uncoveredVerbs": 2,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr3734-104-enr": {
+  "chars": 794688,
+  "sections": 216,
+  "divisions": 35,
+  "citations": 2116,
+  "byKind": {
+   "act": 248,
+   "internal": 1259,
+   "usc": 581,
+   "publaw": 21,
+   "stat": 7
+  },
+  "amendments": 394,
+  "targeted": 380,
+  "distributed": 0,
+  "steps": 236,
+  "refs": 531,
+  "relative": 741,
+  "ops": {
+   "redesignate": 44,
+   "strike": 367,
+   "insert": 367,
+   "repeal": 17,
+   "add-at-end": 95
+  },
+  "opSpans": 734,
+  "uncoveredVerbs": 8,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hr3162-107-enr": {
+  "chars": 416510,
+  "sections": 158,
+  "divisions": 18,
+  "citations": 906,
+  "byKind": {
+   "act": 66,
+   "internal": 489,
+   "publaw": 34,
+   "usc": 310,
+   "stat": 6,
+   "cfr": 1
+  },
+  "amendments": 216,
+  "targeted": 190,
+  "distributed": 0,
+  "steps": 125,
+  "refs": 123,
+  "relative": 227,
+  "ops": {
+   "strike": 142,
+   "insert": 248,
+   "redesignate": 11,
+   "add-at-end": 56
+  },
+  "opSpans": 390,
+  "uncoveredVerbs": 5,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ },
+ "hjres31-116-enr": {
+  "chars": 1492185,
+  "sections": 11,
+  "divisions": 8,
+  "citations": 2042,
+  "byKind": {
+   "act": 201,
+   "publaw": 448,
+   "internal": 389,
+   "usc": 960,
+   "stat": 41,
+   "cfr": 3
+  },
+  "amendments": 26,
+  "targeted": 26,
+  "distributed": 0,
+  "steps": 5,
+  "refs": 21,
+  "relative": 16,
+  "ops": {
+   "strike": 29,
+   "insert": 35,
+   "repeal": 2,
+   "add-at-end": 3
+  },
+  "opSpans": 64,
+  "uncoveredVerbs": 7,
+  "badOffsets": 0,
+  "overlaps": 0,
+  "badOpOffsets": 0
+ }
+}

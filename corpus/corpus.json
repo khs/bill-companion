@@ -1,0 +1,187 @@
+{
+  "note": "The regression corpus. Bill FILES are not kept here — this manifest is the shared definition, and `bun tools/corpus.mjs fetch` downloads them into corpus/files/, which is gitignored and never served. Add a bill by adding a row and re-running with --update.",
+  "bills": [
+    {
+      "id": "hr3746-118-enr",
+      "name": "Fiscal Responsibility Act of 2023 (enrolled)",
+      "why": "Plain-text enrolled bill. Divisions and titles, a table of contents that lists both, and heavy Public Law / Statutes at Large citation.",
+      "local": "samples/sample-bill.txt"
+    },
+    {
+      "id": "hr9925-119-sponsor-pdf",
+      "name": "FRONTIER Act (H.R. 9925, sponsor PDF)",
+      "why": "PDF path with an indented line-number gutter. Freestanding: zero amendments is the correct parse, which is what makes it a good negative control.",
+      "local": "samples/hr9925-frontier-act-119th.pdf"
+    },
+    {
+      "id": "hr3633-119-eh-pdf",
+      "name": "CLARITY Act (H.R. 3633, House-passed print)",
+      "why": "Typeset GPO PDF, densely amendatory. Doubled-single quotes, wrapped division headings, and both distributed 'Each of the following' instructions.",
+      "local": "samples/hr3633eh-clarity-act-house-passed.pdf"
+    },
+    {
+      "id": "hr3633-119-rs-substitute",
+      "name": "CLARITY Act (H.R. 3633, Senate substitute text)",
+      "why": "The largest plain-text bill here. Mostly freestanding rewrite, reaches into title 11 (Bankruptcy), which no other bill does.",
+      "local": "samples/hr3633rs-clarity-act-senate-substitute.txt"
+    },
+    {
+      "id": "hr3633-119-eh-text",
+      "name": "CLARITY Act (H.R. 3633, House-passed text)",
+      "why": "The same bill as the House-passed PDF, in govinfo plain text. The pair is the only direct check that the two extraction paths agree on one document.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-119hr3633eh/html/BILLS-119hr3633eh.htm"
+    },
+    {
+      "id": "hr1719-119-ih",
+      "name": "Farm to Fly Act of 2025 (H.R. 1719, introduced)",
+      "why": "Small and entirely amendatory — its whole operative content is one instruction against 7 U.S.C. 8101. The redline case that matters: an anchored insertion ('inserting X after Y') rather than a strike-and-replace, reached by clicking the composed address rather than the amendment tag. That combination is what showed the redline was unreachable from a citation chip.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-119hr1719ih/html/BILLS-119hr1719ih.htm"
+    },
+    {
+      "id": "hr5376-117-enr",
+      "name": "Inflation Reduction Act of 2022 (enrolled)",
+      "why": "Internal Revenue Code throughout — the one Act whose section numbers really are the Code's, so it exercises sectionsMatchCode. Also the corpus's short-title edge case: the enrolled text contains no 'may be cited as' at all, because the Senate struck the short title under the Byrd rule, so 'AMENDMENT OF 1986 CODE' is a faithful reading and not a parser fault. Do not re-investigate.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-117hr5376enr/html/BILLS-117hr5376enr.htm"
+    },
+    {
+      "id": "hr3684-117-enr",
+      "name": "Infrastructure Investment and Jobs Act (enrolled)",
+      "why": "The biggest bill in the corpus, ~3 MB. Titles 23 and 49, and enough structure to catch anything quadratic.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-117hr3684enr/html/BILLS-117hr3684enr.htm"
+    },
+    {
+      "id": "hr1892-115-enr",
+      "name": "Bipartisan Budget Act of 2018 (enrolled)",
+      "why": "Social Security Act and Medicare amendments in bulk — the offsetNote path, where Act section numbers do not match their 42 U.S.C. numbers.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-115hr1892enr/html/BILLS-115hr1892enr.htm"
+    },
+    {
+      "id": "hr748-116-enr",
+      "name": "CARES Act (enrolled)",
+      "why": "Broad subject matter across many titles, and a bill that both creates freestanding programs and amends existing law in the same text.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-116hr748enr/html/BILLS-116hr748enr.htm"
+    },
+
+    {
+      "id": "s2938-117-enr",
+      "name": "Bipartisan Safer Communities Act (enrolled)",
+      "why": "A Senate bill, so it exercises the S. designation rather than H.R. Amends title 18 in short, surgical instructions — the redline's best case.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-117s2938enr/html/BILLS-117s2938enr.htm"
+    },
+    {
+      "id": "hr6395-116-enr",
+      "name": "National Defense Authorization Act for FY2021 (enrolled)",
+      "why": "4.7 MB, the largest text here. Title 10 throughout, with divisions, and enough repetition to expose anything quadratic.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-116hr6395enr/html/BILLS-116hr6395enr.htm"
+    },
+    {
+      "id": "hr1319-117-enr",
+      "name": "American Rescue Plan Act of 2021 (enrolled)",
+      "why": "Social Security Act amendments in bulk, where Act section numbers diverge from their 42 U.S.C. numbers — the offsetNote path at scale.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-117hr1319enr/html/BILLS-117hr1319enr.htm"
+    },
+    {
+      "id": "hr2-115-enr",
+      "name": "Agriculture Improvement Act of 2018 (the Farm Bill, enrolled)",
+      "why": "About as amendatory as a bill gets: page after page of strike-and-insert against title 7, and the densest redesignation in the corpus.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-115hr2enr/html/BILLS-115hr2enr.htm"
+    },
+    {
+      "id": "hr4346-117-enr",
+      "name": "CHIPS and Science Act of 2022 (enrolled)",
+      "why": "Creates new programs and amends title 15 science authorities in the same text, with heavy internal cross-referencing between its own divisions.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-117hr4346enr/html/BILLS-117hr4346enr.htm"
+    },
+    {
+      "id": "hr1865-116-enr",
+      "name": "Further Consolidated Appropriations Act, 2020 (enrolled)",
+      "why": "Carries the SECURE Act, so Internal Revenue Code amendments sit inside an appropriations vehicle — divisions, and IRC section numbers that are the Code's own.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-116hr1865enr/html/BILLS-116hr1865enr.htm"
+    },
+    {
+      "id": "hr1957-116-enr",
+      "name": "Great American Outdoors Act (enrolled)",
+      "why": "15 KB. The smallest bill here and a useful floor: a short Act should produce a small, clean parse and nothing spurious.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-116hr1957enr/html/BILLS-116hr1957enr.htm"
+    },
+    {
+      "id": "s47-116-enr",
+      "name": "John D. Dingell, Jr. Conservation, Management, and Recreation Act (enrolled)",
+      "why": "Public lands: titles 16, 43 and 54, and a lot of Public Law and Statutes at Large citation rather than U.S. Code.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-116s47enr/html/BILLS-116s47enr.htm"
+    },
+    {
+      "id": "hr6201-116-enr",
+      "name": "Families First Coronavirus Response Act (enrolled)",
+      "why": "Small and fast-drafted, amending the FMLA, the Social Security Act and the Food and Nutrition Act at once. Emergency drafting is where odd phrasings turn up.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-116hr6201enr/html/BILLS-116hr6201enr.htm"
+    },
+    {
+      "id": "hr2617-117-enr",
+      "name": "Consolidated Appropriations Act, 2023 (enrolled)",
+      "why": "5.1 MB of omnibus. Many divisions, each a different Act, and the widest spread of citation kinds in the corpus.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-117hr2617enr/html/BILLS-117hr2617enr.htm"
+    },
+
+    {
+      "id": "hr3590-111-enr",
+      "name": "Patient Protection and Affordable Care Act (enrolled)",
+      "why": "The Social Security Act and Public Health Service Act at full scale — the two Acts whose section numbers diverge most sharply from their 42 U.S.C. numbers. The offsetNote path under maximum load.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-111hr3590enr/html/BILLS-111hr3590enr.htm"
+    },
+    {
+      "id": "hr1-115-enr",
+      "name": "Tax Cuts and Jobs Act (enrolled)",
+      "why": "A second, independent test of the 'Amendment of 1986 Code' declaration, in a bill that is nothing but Internal Revenue Code amendments from end to end.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-115hr1enr/html/BILLS-115hr1enr.htm"
+    },
+    {
+      "id": "hr4173-111-enr",
+      "name": "Dodd-Frank Wall Street Reform and Consumer Protection Act (enrolled)",
+      "why": "Banking and securities: titles 12 and 15, and an Act that creates agencies while amending a dozen others. Heavy on 'such Act' anaphora.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-111hr4173enr/html/BILLS-111hr4173enr.htm"
+    },
+    {
+      "id": "s1177-114-enr",
+      "name": "Every Student Succeeds Act (enrolled)",
+      "why": "Rewrites the Elementary and Secondary Education Act almost entirely — long redesignation chains and whole-part replacements against title 20.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-114s1177enr/html/BILLS-114s1177enr.htm"
+    },
+    {
+      "id": "s756-115-enr",
+      "name": "First Step Act of 2018 (enrolled)",
+      "why": "Criminal law: title 18 and title 34, short surgical amendments to sentencing provisions. A good redline case on a bill small enough to read.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-115s756enr/html/BILLS-115s756enr.htm"
+    },
+    {
+      "id": "hr5430-116-enr",
+      "name": "United States–Mexico–Canada Agreement Implementation Act (enrolled)",
+      "why": "Trade, title 19 — a corner of the Code nothing else here touches, and an implementing Act with a structure of its own.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-116hr5430enr/html/BILLS-116hr5430enr.htm"
+    },
+    {
+      "id": "hr3080-113-enr",
+      "name": "Water Resources Reform and Development Act of 2014 (enrolled)",
+      "why": "Title 33 and a great deal of uncodified Public Law amendment — the target family that was invisible until Public Laws became eligible targets.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-113hr3080enr/html/BILLS-113hr3080enr.htm"
+    },
+    {
+      "id": "hr3734-104-enr",
+      "name": "Personal Responsibility and Work Opportunity Reconciliation Act of 1996 (enrolled)",
+      "why": "The oldest bill in the corpus by twenty years. Drafting conventions shift over time, and every parser here was written against modern text.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-104hr3734enr/html/BILLS-104hr3734enr.htm"
+    },
+    {
+      "id": "hr3162-107-enr",
+      "name": "USA PATRIOT Act (enrolled)",
+      "why": "2001 drafting, ten titles, and amendments spread across titles 18, 31 and 50 — including a lot of 'such title' anaphora.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-107hr3162enr/html/BILLS-107hr3162enr.htm"
+    },
+    {
+      "id": "hjres31-116-enr",
+      "name": "Consolidated Appropriations Act, 2019 (joint resolution, enrolled)",
+      "why": "A joint resolution rather than a bill, so the designation is H.J.Res. rather than H.R. — the one bill shape the meta parser has never been given.",
+      "url": "https://www.govinfo.gov/content/pkg/BILLS-116hjres31enr/html/BILLS-116hjres31enr.htm"
+    }
+  ]
+}

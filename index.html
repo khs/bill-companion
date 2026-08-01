@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bill Companion</title>
+<link rel="stylesheet" href="app/ui/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>&#167;</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><span class="mark">§</span> Bill&nbsp;Companion</div>
+
+  <div class="loaders">
+    <label class="btn" for="file">
+      <input type="file" id="file" accept="application/pdf,.pdf,.txt,.htm,.html,text/plain" hidden>
+      Open PDF / text
+    </label>
+    <button class="btn" id="paste-btn">Paste text</button>
+    <button class="btn ghost" id="sample-btn">Load sample</button>
+    <button class="btn ghost" id="share-btn" hidden title="Copy a link with this bill's text embedded">Copy link</button>
+  </div>
+
+  <div class="billmeta" id="billmeta" hidden>
+    <span class="desig" id="meta-desig"></span>
+    <span class="short" id="meta-short"></span>
+  </div>
+
+  <div class="spacer"></div>
+  <div class="status" id="status"></div>
+  <!-- Shown only when the page is running inside someone else's frame. The
+       Fullscreen API needs the host's iframe to carry allow="fullscreen"; where
+       it doesn't, main.js falls back to opening the app in a new tab. -->
+  <button class="btn ghost icon" id="full-btn" hidden title="Fill the screen" aria-label="Fill the screen">⛶</button>
+  <button class="btn ghost icon" id="about-btn" title="About Bill Companion" aria-label="About Bill Companion">?</button>
+  <button class="btn ghost icon" id="theme-btn" title="Toggle theme" aria-label="Toggle theme">◐</button>
+</header>
+
+<main class="split" id="split">
+
+  <!-- ---------------------------------------------------------------- -->
+  <section class="pane pane-bill" id="pane-bill">
+    <div class="pane-head">
+      <h2>Bill</h2>
+      <div class="pane-tools">
+        <label class="chk"><input type="checkbox" id="only-amend"> amendments only</label>
+        <select id="jump" class="jump" aria-label="Jump to section"><option value="">Jump to…</option></select>
+      </div>
+    </div>
+    <div class="pane-body" id="bill-body">
+      <div class="empty" id="dropzone">
+        <div class="empty-inner">
+          <div class="big">§</div>
+          <h3>Drop a bill here</h3>
+          <p>PDF or plain text. Or paste it, or load the sample.</p>
+          <p class="dim">Everything is parsed in your browser. Nothing is uploaded.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="gutter" id="gutter" role="separator" aria-orientation="vertical" tabindex="0"
+       aria-label="Resize panes"></div>
+
+  <!-- ---------------------------------------------------------------- -->
+  <section class="pane pane-ctx" id="pane-ctx">
+    <div class="pane-head">
+      <h2>Context</h2>
+      <div class="pane-tools">
+        <button class="btn tiny ghost" id="ctx-back" hidden>← back</button>
+        <span class="srcbadge" id="ctx-src"></span>
+      </div>
+    </div>
+    <div class="pane-body" id="ctx-body">
+      <div class="empty">
+        <div class="empty-inner">
+          <p class="dim">Click any highlighted citation in the bill to pull up the
+             provision it points at, with the levels above it.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- paste modal -->
+<div class="modal" id="paste-modal" hidden>
+  <div class="modal-box">
+    <h3>Paste bill text</h3>
+    <textarea id="paste-area" spellcheck="false"
+              placeholder="Paste the full text of the bill…"></textarea>
+    <div class="modal-actions">
+      <button class="btn ghost" id="paste-cancel">Cancel</button>
+      <button class="btn primary" id="paste-ok">Parse</button>
+    </div>
+  </div>
+</div>
+
+<!-- about -->
+<div class="modal" id="about-modal" hidden>
+  <div class="modal-box about-box">
+    <h3><span class="mark">§</span> Bill Companion</h3>
+    <p>Read a bill beside the law it actually changes. Citations become
+       clickable; amendments are drawn as a redline on the current text of the
+       U.S. Code.</p>
+    <p class="dim">Bills are parsed entirely in your browser. Nothing is uploaded,
+       and there is no server-side application — the U.S. Code is served as static
+       files and the CFR is fetched from eCFR directly.</p>
+    <!-- target=_blank is not decoration here: framed, a bare link would
+         navigate the host page's iframe away from the app. -->
+    <p class="credit">Built by
+      <a href="https://kellerscholl.com" target="_blank" rel="noopener noreferrer">Keller Scholl</a>.</p>
+
+    <h4>Embed it</h4>
+    <p class="dim">Paste this into a page. <code>allow="fullscreen"</code> is what
+       lets the ⛶ button fill the screen rather than open a new tab.</p>
+    <pre class="snippet" id="embed-snippet"></pre>
+    <div class="modal-actions">
+      <button class="btn ghost" id="embed-copy">Copy embed code</button>
+      <button class="btn primary" id="about-ok">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Boot diagnostics. A classic (non-module) script, so it runs even when the
+     module graph fails to load at all — which is exactly when the page would
+     otherwise sit there looking fine while every button does nothing. -->
+<script>
+(function () {
+  var errors = [];
+  window.addEventListener('error', function (e) {
+    // Module/network load failures arrive as error events on the element.
+    var msg = e.message || ('failed to load ' + ((e.target && (e.target.src || e.target.href)) || 'a resource'));
+    errors.push(msg);
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    errors.push('unhandled promise rejection: ' + (e.reason && e.reason.message || e.reason));
+  });
+
+  function report() {
+    if (window.__bcReady) return;           // main.js booted fine
+    var body = document.getElementById('bill-body');
+    if (!body) return;
+
+    var fileProto = location.protocol === 'file:';
+    var h = document.createElement('div');
+    h.className = 'card err';
+    var t = document.createElement('h4');
+    t.textContent = fileProto ? 'Open this over http, not file://' : 'The app failed to start';
+    h.appendChild(t);
+
+    var p = document.createElement('p');
+    if (fileProto) {
+      // ES modules and fetch() are both blocked under file:// as cross-origin,
+      // so nothing can load and every control silently does nothing.
+      p.textContent =
+        'Browsers refuse to load ES modules and fetch local data from file:// URLs, ' +
+        'so none of the buttons can work. Serve the folder over http instead:';
+      h.appendChild(p);
+      var code = document.createElement('div');
+      code.className = 'remedy';
+      code.textContent = 'python tools/serve.py';
+      h.appendChild(code);
+      var p2 = document.createElement('p');
+      p2.style.marginTop = '8px';
+      p2.textContent = 'Then open the http://localhost:… address it prints.';
+      h.appendChild(p2);
+    } else {
+      p.textContent = errors.length
+        ? 'JavaScript failed to load. The browser reported:'
+        : 'JavaScript did not finish loading, and the browser reported no error. ' +
+          'Check the DevTools console (F12).';
+      h.appendChild(p);
+      errors.slice(0, 4).forEach(function (msg) {
+        var c = document.createElement('div');
+        c.className = 'remedy';
+        c.style.userSelect = 'text';
+        c.textContent = msg;
+        h.appendChild(c);
+      });
+    }
+    body.replaceChildren(h);
+  }
+
+  // Module scripts are deferred; give them a beat past load to finish.
+  window.addEventListener('load', function () { setTimeout(report, 250); });
+})();
+</script>
+<script type="module" src="app/main.js"></script>
+</body>
+</html>

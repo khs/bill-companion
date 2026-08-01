@@ -1,0 +1,130 @@
+#!/usr/bin/env bun
+//
+// Impact report: run a bill all the way through the pipeline and print what
+// came out the far end.
+//
+//   bun tools/impact.mjs                  # every sample in samples/
+//   bun tools/impact.mjs samples/x.pdf    # one file
+//
+// This exists because the unit tests check *shapes* and this checks *outputs*.
+// Every assertion in selftest.mjs can pass while a real bill loses eleven of
+// its twelve amendment blocks, or resolves a navigation step to the wrong
+// subtree — the counts here are what caught that. Numbers are meant to be
+// diffed against the previous run after touching extraction: a line that moves
+// is either a fix you made or a regression you didn't notice.
+//
+// "inert" below means an internal cross-reference that stayed a bare
+// "paragraph (3)" note instead of being composed into a real address by
+// expandRelativeRefs. Fewer is better; zero is not the target, because some
+// references genuinely name a position rather than a provision.
+
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { join, dirname, basename, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+// Static shards live on disk here, not behind an HTTP server; the resolver
+// fetches them by relative URL. Same shim selftest.mjs uses.
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, opts) => {
+  const u = String(url);
+  if (/^https?:/i.test(u)) return realFetch(u, opts);
+  const p = join(ROOT, u);
+  if (!existsSync(p)) return { ok: false, status: 404, json: async () => null };
+  return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')) };
+};
+
+const { extractCitations, extractAmendments, expandRelativeRefs } =
+  await import(join(ROOT, 'app/parse/citations.js'));
+const { parseBill, normalizeText } = await import(join(ROOT, 'app/parse/bill.js'));
+const { resolveUsc } = await import(join(ROOT, 'app/resolve/usc.js'));
+
+async function textOf(path) {
+  if (!path.toLowerCase().endsWith('.pdf')) return readFileSync(path, 'utf8');
+  globalThis.DOMMatrix ??= class { constructor() {} };
+  const { pdfToText } = await import(join(ROOT, 'app/parse/pdf.js'));
+  const { text, pages } = await pdfToText(new Uint8Array(readFileSync(path)).buffer);
+  return { text, pages };
+}
+
+const b = (s) => `\x1b[1m${s}\x1b[0m`;
+const dim = (s) => `\x1b[2m${s}\x1b[0m`;
+
+export async function report(path) {
+  const loaded = await textOf(path);
+  const raw = typeof loaded === 'string' ? loaded : loaded.text;
+  const pages = typeof loaded === 'string' ? null : loaded.pages;
+
+  const text = normalizeText(raw);
+  const bill = parseBill(text);
+  const cites = extractCitations(text);
+  const ams = extractAmendments(text, cites);
+  const expanded = expandRelativeRefs(cites, ams);
+
+  const byKind = {};
+  for (const c of cites) byKind[c.kind] = (byKind[c.kind] || 0) + 1;
+
+  const steps = ams.reduce((n, a) => n + (a.steps || []).length, 0);
+  const refs = ams.reduce((n, a) => n + (a.refs || []).length, 0);
+  const relative_ = expanded.filter((c) => c.relative);
+  const inertBefore = cites.filter((c) => c.kind === 'internal' && c.scope !== 'act').length;
+  const inertAfter = expanded.filter((c) => c.kind === 'internal' && c.scope !== 'act').length;
+
+  // Do the composed addresses actually exist in the Code? A step that resolves
+  // to a subsection the target section doesn't have is a navigation bug wearing
+  // a plausible-looking address.
+  const uscTargets = expanded.filter((c) => c.kind === 'usc');
+  let hit = 0, missSection = 0, missSubsection = 0;
+  const misses = [];
+  const seen = new Map();
+  for (const c of uscTargets) {
+    const key = `${c.title}|${c.section}|${c.subsection || ''}`;
+    if (!seen.has(key)) seen.set(key, await resolveUsc(c));
+    const r = seen.get(key);
+    if (r.missing) { missSection++; misses.push(`${c.title} U.S.C. ${c.section} — no such section`); }
+    else if (r.focusMissing) { missSubsection++; misses.push(`${c.title} U.S.C. ${c.section}${c.subsection} — section exists, subsection does not`); }
+    else hit++;
+  }
+
+  const badOffsets = cites.filter((c) => text.slice(c.start, c.end) !== c.text);
+
+  console.log(`\n${b(relative(ROOT, path).replace(/\\/g, '/'))}  ${dim(`${(raw.length / 1024).toFixed(0)} KB${pages ? `, ${pages} pages` : ''}`)}`);
+  console.log(`  sections            ${bill.sections.length}${bill.meta.shortTitle ? dim(`  (${bill.meta.shortTitle})`) : ''}`);
+  console.log(`  citations           ${cites.length}  ${dim(JSON.stringify(byKind))}`);
+  console.log(`  amendments          ${ams.length}  ${dim(`${ams.filter((a) => a.target).length} with a resolved target`)}`);
+  console.log(`  navigation steps    ${steps}`);
+  console.log(`  in-place refs       ${refs}`);
+  console.log(`  relative addresses  ${relative_.length}  ${dim('composed from context')}`);
+  console.log(`  inert refs          ${inertAfter}  ${dim(`of ${inertBefore} internal refs; ${inertBefore - inertAfter} resolved`)}`);
+  console.log(`  USC lookups         ${hit} hit, ${missSection} missing section, ${missSubsection} missing subsection  ${dim(`(${seen.size} distinct)`)}`);
+  if (badOffsets.length) console.log(`  \x1b[31moffsets broken      ${badOffsets.length}\x1b[0m`);
+
+  if (process.argv.includes('--misses')) {
+    for (const m of [...new Set(misses)].slice(0, 40)) console.log(`    ${dim('·')} ${m}`);
+  }
+
+  return {
+    path, sections: bill.sections.length, citations: cites.length, byKind,
+    amendments: ams.length, targeted: ams.filter((a) => a.target).length,
+    steps, refs, relative: relative_.length, inertBefore, inertAfter,
+    uscHit: hit, uscMissSection: missSection, uscMissSubsection: missSubsection,
+    badOffsets: badOffsets.length,
+  };
+}
+
+if (import.meta.main) {
+  const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+  const paths = args.length
+    ? args.map((a) => (existsSync(a) ? a : join(ROOT, a)))
+    : readdirSync(join(ROOT, 'samples'))
+        .filter((f) => /\.(txt|pdf)$/i.test(f))
+        .sort()
+        .map((f) => join(ROOT, 'samples', f));
+
+  for (const p of paths) {
+    if (!existsSync(p)) { console.log(`\n${basename(p)} — missing, skipped`); continue; }
+    await report(p);
+  }
+  console.log();
+}

@@ -1,0 +1,629 @@
+// Headless render test for the DOM code (bill pane + context pane).
+//
+//   bun add -d linkedom      # one-time; the app itself has no dependencies
+//   bun tools/rendertest.mjs
+//
+// Skips cleanly if linkedom isn't installed. tools/selftest.mjs covers the pure
+// parsing/resolution logic and needs no dependencies at all.
+
+import { readFileSync, existsSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const imp = (p) => import(pathToFileURL(join(ROOT, p)).href);
+
+let parseHTML;
+try {
+  ({ parseHTML } = await import('linkedom'));
+} catch {
+  console.log('linkedom not installed — skipping render tests.');
+  console.log('  install with:  bun add -d linkedom   (or npm i -D linkedom)');
+  process.exit(0);
+}
+
+let pass = 0;
+let fail = 0;
+const failures = [];
+const ok = (n, c, d) => { if (c) pass++; else { fail++; failures.push(`${n}${d ? ` — ${d}` : ''}`); } };
+const eq = (n, a, b) => ok(n, a === b, `got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`);
+const section = (t) => console.log(`\n\x1b[1m${t}\x1b[0m`);
+
+// --- install a DOM ---------------------------------------------------------
+const { window, document } = parseHTML(readFileSync(join(ROOT, 'index.html'), 'utf8'));
+globalThis.window = window;
+globalThis.document = document;
+globalThis.DOMParser = window.DOMParser;
+// main.js builds the jump menu with `new Option(...)`. linkedom has no usable
+// Option constructor, so back it with a real <option> element — a plain object
+// would blow up inside appendChild rather than testing anything.
+globalThis.Option = function Option(text, value) {
+  const o = document.createElement('option');
+  o.textContent = text;
+  o.value = value ?? text;
+  return o;
+};
+globalThis.localStorage = { getItem: () => null, setItem: () => {} };
+globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
+
+section('CSS / markup contract');
+{
+  // linkedom does no cascade, so this class of bug is invisible to render tests.
+  // Check it structurally instead: any element the app toggles via the `hidden`
+  // attribute is broken if an author rule sets `display` on one of its classes,
+  // because author origin beats the UA sheet's [hidden] rule at any specificity.
+  // The paste modal shipped exactly this way — permanently on screen, Parse dead.
+  const css = readFileSync(join(ROOT, 'app/ui/style.css'), 'utf8');
+  const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
+
+  const override = /\[hidden\][^{]*\{[^}]*display\s*:\s*none\s*!important/i.test(css);
+  ok('stylesheet forces [hidden] to win over author display rules', override);
+
+  // Report which elements depend on that rule, so removing it fails loudly.
+  const classesWithDisplay = new Set();
+  for (const m of css.matchAll(/\.([A-Za-z][\w-]*)[^{,]*\{([^}]*)\}/g)) {
+    if (/(^|;)\s*display\s*:/.test(m[2])) classesWithDisplay.add(m[1]);
+  }
+  const atRisk = [];
+  for (const el of html.matchAll(/<[a-z]+[^>]*\bhidden\b[^>]*>/gi)) {
+    const cls = (el[0].match(/class="([^"]*)"/) || [, ''])[1].split(/\s+/).filter(Boolean);
+    const hit = cls.filter((c) => classesWithDisplay.has(c));
+    if (hit.length) atRisk.push(hit.join('.'));
+  }
+  ok('hidden elements with display rules are covered by the override',
+     atRisk.length === 0 || override, `at risk: ${atRisk.join(', ')}`);
+  if (atRisk.length) console.log(`  · relies on the [hidden] override: ${atRisk.join(', ')}`);
+
+  // Every class the app toggles at runtime must be styled, for the same reason:
+  // linkedom has no cascade, so a class that exists in the markup and nowhere in
+  // the stylesheet passes every render test while doing nothing on screen. The
+  // internal-reference highlight is exactly that shape — main.js adds
+  // `jump-target` and the entire visible effect is one CSS rule.
+  const styled = new Set([...css.matchAll(/\.([A-Za-z][\w-]*)/g)].map((m) => m[1]));
+  const toggled = new Map();
+  for (const f of ['app/main.js', 'app/ui/render-bill.js', 'app/ui/render-context.js']) {
+    const src = readFileSync(join(ROOT, f), 'utf8');
+    for (const m of src.matchAll(/classList\.(?:add|toggle)\(\s*['"]([A-Za-z][\w-]*)['"]/g)) {
+      toggled.set(m[1], f);
+    }
+  }
+  const unstyled = [...toggled].filter(([c]) => !styled.has(c));
+  ok('every class the app toggles is styled', unstyled.length === 0,
+     unstyled.map(([c, f]) => `${c} (${f})`).join(', '));
+  ok('  and the set is non-trivial', toggled.size >= 10, `${toggled.size} classes`);
+  ok('  including the internal-reference highlight', styled.has('jump-target') && toggled.has('jump-target'),
+     'jump-target is not both toggled and styled');
+}
+
+section('DOM wiring');
+// Every id main.js looks up must exist in index.html, or the app dies on load.
+const IDS = ['file', 'paste-btn', 'sample-btn', 'bill-body', 'ctx-body', 'ctx-src', 'ctx-back',
+  'status', 'billmeta', 'meta-desig', 'meta-short', 'jump', 'only-amend', 'split', 'gutter',
+  'theme-btn', 'paste-modal', 'paste-area', 'paste-ok', 'paste-cancel',
+  'full-btn', 'about-btn', 'about-modal', 'about-ok', 'embed-snippet', 'embed-copy'];
+eq('all main.js element ids exist in index.html',
+   IDS.filter((id) => !document.getElementById(id)).join(',') || 'none', 'none');
+
+// --- bill pane -------------------------------------------------------------
+section('bill renderer');
+const { parseBill, normalizeText } = await imp('app/parse/bill.js');
+const { extractCitations, extractAmendments } = await imp('app/parse/citations.js');
+const { renderBill } = await imp('app/ui/render-bill.js');
+
+const samplePath = join(ROOT, 'samples/sample-bill.txt');
+if (existsSync(samplePath)) {
+  const text = normalizeText(readFileSync(samplePath, 'utf8'));
+  const bill = parseBill(text);
+  const cites = extractCitations(text);
+  const amends = extractAmendments(text, cites);
+
+  let clicked = null;
+  const el = renderBill(bill, cites, amends, (c) => { clicked = c; }, () => {});
+  const chips = el.querySelectorAll('.cite');
+
+  eq('renders one chip per citation', chips.length, cites.length);
+  // Every parsed section must render its heading. A loose ">5" hid a heading
+  // silently losing its class (and its #sec-N jump anchor) when the following
+  // line got merged into it to keep a straddling citation intact.
+  eq('renders a heading for every parsed section',
+     el.querySelectorAll('.sec-head').length, bill.sections.length);
+  // Exact equality, not a range. ">0" once waved through a first-overlap bug
+  // that rendered a single block for eleven amendments, and the ">= n-1" that
+  // replaced it was slack left over from two amendments sharing a paragraph —
+  // where the renderer finds only the first and the second silently loses its
+  // block. Every amendment now begins at an outline marker or a heading, both of
+  // which open a paragraph, so parity is a property the renderer actually has:
+  // measured exact on all five sample bills, including the two carrying
+  // distributed amendments. If this drops by one, an amendment has gone
+  // invisible — which is precisely the bug the loose bound was hiding.
+  const blocks = el.querySelectorAll('.amend').length;
+  eq('renders exactly one block per amendment', blocks, amends.length);
+  // Each amendment must own at most one wrapper — no double-wrapping.
+  eq('no paragraph is wrapped twice', el.querySelectorAll('.amend .amend').length, 0);
+
+  // Rendered text must track the source: proof that offset splicing neither
+  // dropped nor duplicated any of the bill.
+  const rendered = el.textContent.replace(/\s+/g, ' ').trim();
+  const source = text.replace(/\s+/g, ' ').trim();
+  ok('rendered text preserves the source', Math.abs(rendered.length - source.length) < source.length * 0.05,
+     `rendered ${rendered.length} vs source ${source.length}`);
+
+  // No citation may be rendered twice. A citation straddling a line break used
+  // to be emitted once on each side of the paragraph split — two half-chips
+  // ("paragraph " + " (1)") for one citation, both of them clickable.
+  const cids = [...chips].map((c) => c.dataset.cid);
+  eq('every citation renders exactly once', cids.length, new Set(cids).size);
+
+  const badChips = [...chips].filter((c, i) =>
+    c.textContent.replace(/\s+/g, ' ') !== cites[i].text.replace(/\s+/g, ' '));
+  eq('chip text matches its citation', badChips.length, 0);
+
+  // A line that opens a quotation is a block of statute the bill is inserting,
+  // and it has to start its own paragraph rather than running on from the
+  // instruction above it. Only the double-quote styles were listed as paragraph
+  // openers, so in a govinfo plain-text bill — which quotes ``like this'' — none
+  // of them did: 209 inserted blocks were glued to the preceding paragraph.
+  // Asserted as an exact identity against the source rather than a floor.
+  const quotedParas = [...el.querySelectorAll('p')]
+    .filter((p) => /^\s*(?:``|‘‘|["“])/.test(p.textContent)).length;
+  const quotedLines = text.split('\n').filter((l) => /^\s*(?:``|‘‘|["“])/.test(l)).length;
+  ok('the sample really does contain quoted blocks', quotedLines > 100, `${quotedLines} lines`);
+  eq('every quoted block starts its own paragraph', quotedParas, quotedLines);
+
+  // Every paragraph publishes its span in the source. An internal
+  // cross-reference resolves to an offset, not to an element, so this is the
+  // only thing that lets a click on "subparagraph (C)" find the paragraph to
+  // highlight. Ranges must tile the text in order and never overlap, or a
+  // reference lands in the wrong paragraph or in none.
+  const spans = [...el.querySelectorAll('p[data-start]')].map((p) => [+p.dataset.start, +p.dataset.end]);
+  eq('every paragraph carries its source span', spans.length, el.querySelectorAll('p').length);
+  ok('spans are well formed', spans.every(([s, e]) => Number.isFinite(s) && Number.isFinite(e) && e > s),
+     JSON.stringify(spans.slice(0, 3)));
+  ok('spans do not overlap and run in order',
+     spans.every(([s], i) => i === 0 || s >= spans[i - 1][1] || s >= spans[i - 1][0]),
+     'paragraph spans out of order');
+  // The end-to-end property: every located internal reference must fall inside
+  // exactly one rendered paragraph, which is what main.js relies on to scroll.
+  const { locateInternal } = await imp('app/resolve/internal.js');
+  const internals = cites.filter((c) => c.kind === 'internal');
+  const targets = internals.map((c) => locateInternal(bill, c)).filter(Boolean);
+  const homeless = targets.filter((t) => !spans.some(([s, e]) => t.start >= s && t.start < e));
+  ok('the sample really exercises this', targets.length > 20, `${targets.length} located`);
+  eq('every located reference lands in a rendered paragraph', homeless.length, 0);
+
+  chips[0].dispatchEvent(new window.Event('click'));
+  ok('clicking a chip fires the handler', clicked !== null);
+
+  console.log(`  · ${chips.length} chips, ${el.querySelectorAll('.sec-head').length} headings, ` +
+              `${el.querySelectorAll('.amend').length} amendment blocks`);
+} else {
+  console.log('  (samples/sample-bill.txt missing — skipped)');
+}
+
+// --- redline ---------------------------------------------------------------
+// The diff belongs on the LAW, not on the bill. Marking the bill's own quoted
+// operands said only "the bill quotes this phrase", which the quote marks
+// already said, and it painted language being *removed from the statute book*
+// in the colour of something being added to the page. These tests assert the
+// diff is drawn into the provision in the right-hand pane, and that the bill
+// pane no longer carries it.
+section('redline on the current law');
+{
+  const { renderContext: rc } = await imp('app/ui/render-context.js');
+
+  // Every quote convention, because the source decides which one appears and a
+  // convention the operand matcher cannot see yields an empty redline — which
+  // is exactly how the PDF path stayed broken while the text path looked fine.
+  const styles = [
+    ['GPO PDF (‘‘...’’)', '‘‘', '’’'],
+    ["govinfo text (``...'')", '``', "''"],
+    ['curly doubles (“...”)', '“', '”'],
+    ['straight ("...")', '"', '"'],
+  ];
+  const LAW = 'The Secretary shall promote the use of diesel-equivalent fuel in aviation.';
+
+  for (const [label, qo, qc] of styles) {
+    const t =
+      `Section 40007(a) of the Widget Act (49 U.S.C. 44504(a)) is amended by striking ` +
+      `${qo}diesel-equivalent fuel${qc} and inserting ${qo}sustainable aviation fuel${qc}.\n`;
+    const ams = extractAmendments(t, extractCitations(t));
+    eq(`${label}: reads the instruction`, ams.length, 1);
+
+    const res = {
+      source: 'U.S. Code', citation: '49 U.S.C. 44504(a)', links: [],
+      tree: [{ marker: '(a)', path: '(a)', heading: '', text: LAW, children: [] }],
+      focusPath: '', effect: { ops: ams[0].ops, unmatched: false },
+    };
+    const el = rc(res, { onScope: () => {} });
+    const del = [...el.querySelectorAll('.prov .del')];
+    const ins = [...el.querySelectorAll('.prov .ins')];
+
+    eq(`${label}: strikes the old words in the law`, del.map((n) => n.textContent).join('|'),
+       'diesel-equivalent fuel');
+    eq(`${label}: inserts the new words in their place`, ins.map((n) => n.textContent).join('|'),
+       'sustainable aviation fuel');
+
+    // Order is the point of a redline: the replacement reads where the struck
+    // phrase stood, not appended somewhere after the sentence.
+    const marked = el.querySelector('.prov').textContent;
+    ok(`${label}: the new text sits where the old text was`,
+       /use of diesel-equivalent fuelsustainable aviation fuel in aviation/.test(marked.replace(/\s+/g, ' ')),
+       marked.replace(/\s+/g, ' '));
+
+    // The law either side of the change must survive intact and unduplicated.
+    const count = (h, n) => h.split(n).length - 1;
+    eq(`${label}: the surrounding law is not duplicated`, count(marked, 'The Secretary shall promote'), 1);
+    eq(`${label}: nor is the tail`, count(marked, 'in aviation.'), 1);
+    ok(`${label}: no nested marks`, el.querySelectorAll('.ins .ins, .del .del, .ins .del, .del .ins').length === 0);
+  }
+}
+{
+  // The bill pane must carry no diff at all now.
+  const t =
+    'Section 40007(a) of the Widget Act (49 U.S.C. 44504(a)) is amended by striking ' +
+    '``diesel-equivalent fuel\'\' and inserting ``sustainable aviation fuel\'\'.\n';
+  const bill = parseBill(t);
+  const raw = extractCitations(t);
+  const ams = extractAmendments(t, raw);
+  const { expandRelativeRefs } = await imp('app/parse/citations.js');
+  const el = renderBill(bill, expandRelativeRefs(raw, ams), ams, () => {}, () => {});
+  eq('the bill pane carries no diff marks', el.querySelectorAll('.ins, .del').length, 0);
+  // …but the bill's own text is still all there, quotes and all.
+  const rendered = el.textContent.replace(/\s+/g, ' ');
+  const count = (h, n) => h.split(n).length - 1;
+  for (const phrase of ['diesel-equivalent fuel', 'sustainable aviation fuel']) {
+    eq(`"${phrase}" still renders exactly once in the bill`, count(rendered, phrase),
+       count(t.replace(/\s+/g, ' '), phrase));
+  }
+  // The target citation appears twice on purpose — once in the bill's own text
+  // and once in the block's "▸ amends …" tag, which is chrome, not duplication.
+  eq('the amendment tag names the target', count(rendered, '49 U.S.C. 44504(a)'), 2);
+  ok('and the amendment block is still drawn', el.querySelectorAll('.amend').length === 1,
+     `${el.querySelectorAll('.amend').length} blocks`);
+}
+{
+  // Placement rules, each of which changes where the mark lands.
+  const { createRedline } = await imp('app/ui/redline.js');
+  const seg = (ops, law) => createRedline(ops).apply(law);
+  const show = (segs) => segs.map((s) => (s.type === 'keep' ? s.text : `[${s.type}:${s.text}]`)).join('');
+
+  // Whole words only. "or" must not match inside "for" — bills strike one-word
+  // operands constantly, and a substring match draws a line through the middle
+  // of a word the amendment never mentions.
+  eq('a short operand does not match inside a word',
+     show(seg([{ type: 'strike', text: 'or', start: 1, end: 3 }], 'eligible for lottery or gambling')),
+     'eligible for lottery [del:or] gambling');
+
+  // "at the end" takes the last occurrence, not the first.
+  eq('"at the end" strikes the last occurrence',
+     show(seg([{ type: 'strike', text: 'and', start: 1, end: 4, atEnd: true }], 'apples and pears; and')),
+     'apples and pears; [del:and]');
+  eq('without it, the first',
+     show(seg([{ type: 'strike', text: 'and', start: 1, end: 4 }], 'apples and pears; and')),
+     'apples [del:and] pears; and');
+
+  // "each place it appears" marks every one.
+  eq('"each place it appears" strikes them all',
+     show(seg([{ type: 'strike', text: 'fee', start: 1, end: 4, all: true }], 'the fee or the fee')),
+     'the [del:fee] or the [del:fee]');
+
+  // An anchored insertion goes beside the anchor, which is not struck.
+  eq('an "after" anchor places the insertion',
+     show(seg([{ type: 'insert', text: ' and jets', start: 1, end: 9, relation: 'after', anchor: 'planes' }],
+              'for planes only')),
+     'for planes[ins: and jets] only');
+  eq('a "before" anchor places it ahead',
+     show(seg([{ type: 'insert', text: 'small ', start: 1, end: 7, relation: 'before', anchor: 'planes' }],
+              'for planes only')),
+     'for [ins:small ]planes only');
+
+  // Quote conventions and line wrapping differ between the bill and the Code.
+  // A PDF operand carries the line break the Code text does not have.
+  eq('an operand wrapped across a line still matches',
+     show(seg([{ type: 'strike', text: 'diesel-equivalent\nfuel', start: 1, end: 22 }],
+              'use of diesel-equivalent fuel here')),
+     'use of [del:diesel-equivalent fuel] here');
+  eq('and a differing quote convention folds together',
+     show(seg([{ type: 'strike', text: "the ``fee''", start: 1, end: 12 }], 'pay the “fee” now')),
+     'pay [del:the “fee”] now');
+
+  // Nothing found: no marks, and the op is reported as unplaced rather than
+  // being drawn somewhere plausible-looking.
+  const r = createRedline([{ type: 'strike', text: 'absent phrase', start: 1, end: 14 }]);
+  eq('an absent phrase leaves the law untouched', show(r.apply('unrelated text')), 'unrelated text');
+  eq('  and is reported unplaced', r.unplaced().length, 1);
+
+  // "at the end" is a claim about position, and it is checked. The Code we hold
+  // is current, so an enacted bill's strike has usually already happened —
+  // asked to strike "or" at the end of a list that no longer ends in "or",
+  // taking the last match drew a line through "farmer [or] rancher" mid-sentence.
+  eq('"at the end" declines a match that is not at the end',
+     show(seg([{ type: 'strike', text: 'or', start: 1, end: 3, atEnd: true }],
+              'a socially disadvantaged farmer or rancher (as defined in section 2003(e));')),
+     'a socially disadvantaged farmer or rancher (as defined in section 2003(e));');
+  eq('  but takes one that is',
+     show(seg([{ type: 'strike', text: 'or', start: 1, end: 3, atEnd: true }], 'apples; or')),
+     'apples; [del:or]');
+
+  // An operation applies only in the provision the instruction navigated to.
+  const scoped = [{ type: 'strike', text: 'or', start: 1, end: 3, atEnd: true, scope: '(d)(2)(A)' }];
+  eq('a scoped op marks its own provision', show(createRedline(scoped).apply('apples; or', '(d)(2)(A)')),
+     'apples; [del:or]');
+  eq('  and a descendant of it', show(createRedline(scoped).apply('apples; or', '(d)(2)(A)(i)')),
+     'apples; [del:or]');
+  eq('  but not a sibling', show(createRedline(scoped).apply('apples; or', '(d)(2)(B)')), 'apples; or');
+  eq('  nor the section lead', show(createRedline(scoped).apply('apples; or', '')), 'apples; or');
+
+  // An amendment whose strikes all miss is an amendment that has already been
+  // applied to the law we hold. Its insertions must not be drawn — anchored to
+  // text that has moved on, they duplicated language already present:
+  // "for the 2018 crop year, {+for the 2018 crop year,+} all of the producers".
+  const staleOps = [
+    { type: 'strike', text: 'language that is long gone', start: 1, end: 27 },
+    { type: 'insert', text: 'brand new words', start: 30, end: 45, relation: 'after', anchor: 'the Secretary' },
+  ];
+  const law = 'the Secretary shall do the thing.';
+  eq('a stale amendment draws nothing', show(createRedline(staleOps, law).apply(law)), law);
+  ok('  and reports both operations unplaced', createRedline(staleOps, law).unplaced().length === 2);
+  // Without the provision text there is nothing to judge staleness against, so
+  // the insertion still places — the caller decides how much it knows.
+  ok('  while an unjudged redline still places it',
+     show(createRedline(staleOps).apply(law)).includes('[ins:brand new words]'));
+
+  // Even with no strikes to test, an insertion whose words already sit at the
+  // anchor has plainly been applied already.
+  eq('an insertion already present is not drawn again',
+     show(seg([{ type: 'insert', text: 'for the 2018 crop year,', start: 1, end: 24,
+                relation: 'after', anchor: 'In the case of acres,' }],
+              'In the case of acres, for the 2018 crop year, all producers may elect.')),
+     'In the case of acres, for the 2018 crop year, all producers may elect.');
+}
+
+section('context renderer');
+const { renderContext } = await imp('app/ui/render-context.js');
+const { findNode, pathChain } = await imp('app/resolve/provision-tree.js');
+
+const secPath = join(ROOT, 'data/usc/t42/s7401.json');
+if (existsSync(secPath)) {
+  const d = JSON.parse(readFileSync(secPath, 'utf8'));
+  const focusPath = '(a)(1)';
+  const res = {
+    source: 'U.S. Code', citation: '42 U.S.C. 7401(a)(1)', heading: d.heading, asOf: d.releasePoint,
+    crumbs: d.ancestors.map((a) => ({ type: a.type, label: `${a.num} ${a.heading}`.trim(), short: a.num })),
+    tree: d.tree, notes: d.notes, sourceCredit: d.sourceCredit,
+    focusPath, focusNode: findNode(d.tree, focusPath), focusChain: pathChain(d.tree, focusPath),
+    focusMissing: false, links: [{ label: 'Cornell LII', href: 'https://example.invalid' }],
+  };
+
+  let scoped = null;
+  const el = renderContext(res, { scopePath: null, onScope: (p) => { scoped = p; } });
+
+  ok('renders a title', el.querySelector('.ctx-title')?.textContent.includes('7401'));
+  ok('renders ancestry crumbs', el.querySelectorAll('.crumbs .crumb').length >= 2);
+  ok('renders the sub-level ladder', el.querySelectorAll('.ladder button').length >= 3);
+  ok('highlights the focused subsection', !!el.querySelector('.node.focus'));
+  ok('shows ancestor lead-in text', !!el.querySelector('.node.on-path'));
+  ok('renders outbound links', el.querySelectorAll('.links a').length >= 1);
+  ok('shows the as-of date', el.querySelector('.asof')?.textContent.includes(d.releasePoint));
+
+  el.querySelectorAll('.ladder button')[0].dispatchEvent(new window.Event('click'));
+  ok('ladder rung fires onScope', scoped !== null);
+
+  const wide = renderContext({ ...res }, { scopePath: '', onScope: () => {} });
+  ok('whole-section view renders every top-level subsection',
+     wide.querySelectorAll(':scope > .prov > .node').length >= d.tree.length);
+} else {
+  console.log('  (42 U.S.C. 7401 not ingested — skipped)');
+}
+
+// --- resolvers (real module code, not just the raw APIs) -------------------
+section('resolvers');
+{
+  // usc.js fetches relative paths ('data/usc/...'), which have no meaning
+  // outside a browser. Serve those from disk and let real URLs through.
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    if (typeof url === 'string' && !/^https?:/.test(url)) {
+      const f = join(ROOT, url);
+      if (!existsSync(f)) return { ok: false, status: 404, json: async () => null, text: async () => '' };
+      const body = readFileSync(f, 'utf8');
+      return { ok: true, status: 200, json: async () => JSON.parse(body), text: async () => body };
+    }
+    return realFetch(url, init);
+  };
+
+  const { resolve } = await imp('app/resolve/index.js');
+
+  const usc = await resolve({ kind: 'usc', title: '42', section: '7401', subsection: '(a)(1)', text: '42 U.S.C. 7401(a)(1)' });
+  ok('resolveUsc loads a shard', !usc.missing && !usc.error, usc.reason || usc.error);
+  ok('  builds a tree', (usc.tree || []).length > 0);
+  ok('  locates the focus node', !!usc.focusNode, `focusPath=${usc.focusPath}`);
+  ok('  builds the focus chain', (usc.focusChain || []).length === 2, `${usc.focusChain?.length}`);
+  ok('  carries ancestry crumbs', (usc.crumbs || []).length >= 2);
+
+  const gone = await resolve({ kind: 'usc', title: '99', section: '1', subsection: '', text: '99 U.S.C. 1' });
+  ok('un-ingested title reports missing', gone.missing === true);
+  ok('  suggests the ingest command', (gone.remedy || '').includes('--titles 99'), gone.remedy);
+
+  const act = await resolve({ kind: 'act', act: { name: 'Clean Air Act', pattern: '', title: '42', section: '7401', range: '7401 et seq.' }, text: 'Clean Air Act' });
+  ok('act name resolves to its first section', act.isActStart === true && !act.missing);
+
+  // Live eCFR through the real resolver: XML parse, section split, ancestry.
+  try {
+    const cfr = await resolve({ kind: 'cfr', title: '40', part: '60', section: '60.1', subsection: '', text: '40 CFR 60.1' });
+    ok('resolveCfr fetches and parses', !cfr.error, cfr.error);
+    ok('  extracts a focus section', !!cfr.focus && cfr.focus.number === '60.1', cfr.focus?.number);
+    ok('  section has paragraphs', (cfr.focus?.paragraphs || []).length > 0);
+    ok('  builds ancestry crumbs', (cfr.crumbs || []).length >= 3, `${cfr.crumbs?.length}`);
+    ok('  reports an as-of date', !!cfr.asOf);
+  } catch (err) {
+    ok('resolveCfr works', false, err.message);
+  }
+
+  globalThis.fetch = realFetch;
+}
+
+// --- the paste flow, driven through main.js exactly as a user does it -------
+section('paste → parse flow');
+try {
+  // Importing main.js registers every real listener against our DOM, so this
+  // exercises the actual wiring rather than a reimplementation of it.
+  globalThis.FileReader = class {};
+  globalThis.Event = window.Event;
+  // The app reads location to build share links and the embed snippet. linkedom
+  // has no navigation, so the harness supplies one — same reason as the two
+  // shims above.
+  globalThis.location = window.location ?? { href: 'http://localhost:8000/', protocol: 'http:' };
+  await imp('app/main.js');
+
+  // The boot diagnostic in index.html treats a missing __bcReady as "the app
+  // failed to start". Dropping this flag therefore turns a healthy page into a
+  // false error report — which is exactly what happened once.
+  ok('main.js sets the boot-ready flag', window.__bcReady === true,
+     'index.html will report a false "failed to start" without it');
+
+  const modal = document.getElementById('paste-modal');
+  const area = document.getElementById('paste-area');
+  const billBody = document.getElementById('bill-body');
+
+  document.getElementById('paste-btn').dispatchEvent(new window.Event('click'));
+  eq('Paste text opens the modal', modal.hidden, false);
+
+  area.value = 'SEC. 2. FIX.\n\nSection 407(b)(3) of the Social Security Act ' +
+               '(42 U.S.C. 607(b)(3)) is amended by striking ``old\'\' and inserting ``new\'\'.\n';
+  document.getElementById('paste-ok').dispatchEvent(new window.Event('click'));
+
+  ok('Parse closes the modal', modal.hidden === true);
+  ok('Parse renders the bill', billBody.querySelectorAll('.cite').length > 0,
+     `${billBody.querySelectorAll('.cite').length} chips rendered`);
+  ok('Parse finds the amendment', billBody.querySelectorAll('.amend').length === 1,
+     `${billBody.querySelectorAll('.amend').length} blocks`);
+  ok('bill metadata is revealed', document.getElementById('billmeta').hidden === false);
+  ok('status reports what was found',
+     /citation/.test(document.getElementById('status').textContent),
+     JSON.stringify(document.getElementById('status').textContent));
+} catch (err) {
+  ok('paste flow runs', false, err.message);
+}
+
+// --- embedding & credit ----------------------------------------------------
+// main.js has already been imported by the section above, so these assert the
+// real listeners rather than a reimplementation of them.
+section('embedding & about');
+{
+  const aboutModal = document.getElementById('about-modal');
+  const fullBtn = document.getElementById('full-btn');
+  const snippet = document.getElementById('embed-snippet');
+
+  // Not framed in the test harness, so the way out of a frame stays hidden and
+  // the page does not claim to be embedded.
+  ok('the fullscreen button is hidden when not embedded', fullBtn.hidden === true);
+  ok('  and no embed flag is set', document.documentElement.dataset.embed === undefined,
+     JSON.stringify(document.documentElement.dataset.embed));
+
+  // The embed snippet is the thing a host actually pastes; it has to be present
+  // and correct without anyone clicking anything.
+  const code = snippet.textContent;
+  ok('an embed snippet is generated', code.length > 40, JSON.stringify(code));
+  ok('  it is an iframe', /^<iframe\b/.test(code), code.slice(0, 60));
+  // Without this attribute the host's frame refuses the Fullscreen API and the
+  // button silently does nothing — which is why it is in the snippet at all.
+  ok('  carrying allow="fullscreen"', /allow="fullscreen"/.test(code), code);
+  ok('  and a title for screen readers', /title="Bill Companion"/.test(code), code);
+  ok('  pointing at this page, with no share payload in it',
+     code.includes('src="http') && !code.includes('#t='), code);
+
+  // The about dialog: opens, credits, closes.
+  eq('about starts hidden', aboutModal.hidden, true);
+  document.getElementById('about-btn').dispatchEvent(new window.Event('click'));
+  eq('the about button opens it', aboutModal.hidden, false);
+  ok('it credits the author', /Keller Scholl/.test(aboutModal.textContent), aboutModal.textContent.slice(0, 120));
+  const credit = aboutModal.querySelector('.credit a');
+  ok('  the credit is a link', Boolean(credit) && /Keller Scholl/.test(credit.textContent),
+     credit ? credit.outerHTML : 'no link in .credit');
+  eq('  to kellerscholl.com', credit?.getAttribute('href'), 'https://kellerscholl.com');
+  // Framed, a bare link would navigate the host page's iframe away from the app.
+  eq('  opening in a new tab', credit?.getAttribute('target'), '_blank');
+  ok('  with rel protecting the opener', /noopener/.test(credit?.getAttribute('rel') || ''),
+     credit?.getAttribute('rel'));
+  ok('  and says the bill never leaves the browser',
+     /Nothing is uploaded/i.test(aboutModal.textContent), aboutModal.textContent.slice(0, 200));
+  document.getElementById('about-ok').dispatchEvent(new window.Event('click'));
+  eq('the close button closes it', aboutModal.hidden, true);
+
+  // Same hazard as the paste modal: an author `display` rule on .modal beats the
+  // UA sheet's [hidden], so the dialog would sit invisibly over the whole page
+  // swallowing every click. The contract check above covers it — this asserts
+  // the new dialog is actually in that check's scope.
+  const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
+  const aboutTag = html.match(/<div class="modal" id="about-modal"[^>]*>/);
+  ok('the about dialog is hidden by the attribute, not by a class',
+     aboutTag && /\bhidden\b/.test(aboutTag[0]), JSON.stringify(aboutTag && aboutTag[0]));
+}
+
+section('fallback states');
+{
+  const el = renderContext(
+    { source: 'U.S. Code', citation: '99 U.S.C. 1', missing: true,
+      reason: 'Title 99 has not been ingested.', remedy: 'python tools/ingest_usc.py --titles 99',
+      links: [{ label: 'Cornell LII', href: 'https://example.invalid' }] },
+    { onScope: () => {} });
+  ok('missing title shows the remedy command', el.querySelector('.remedy')?.textContent.includes('ingest_usc'));
+  ok('missing title still offers links', el.querySelectorAll('.links a').length >= 1);
+}
+{
+  const el = renderContext({ source: 'error', citation: 'x', error: 'boom', links: [] }, { onScope: () => {} });
+  ok('error state renders the message', el.querySelector('.card.err')?.textContent.includes('boom'));
+}
+{
+  // A located internal reference reports what was highlighted. It must NOT fall
+  // back to the note, which now only describes failure.
+  const el = renderContext(
+    { source: 'Internal reference', citation: 'clause (ii)', internal: true,
+      note: 'nothing was found', links: [],
+      target: { label: 'clause (ii)', why: 'The only (ii) inside the enclosing provision.',
+                section: { num: '4', heading: 'DEFINITIONS' }, ambiguous: false } },
+    { onScope: () => {} });
+  const txt = el.textContent;
+  ok('a located internal ref says what it highlighted', /Shown in the bill/.test(txt), txt.slice(0, 120));
+  ok('  naming the provision and the section', /clause \(ii\)/.test(txt) && /Sec\. 4/.test(txt), txt);
+  ok('  and not the failure note', !/nothing was found/.test(txt), txt);
+  ok('  unambiguous matches are not flagged as warnings',
+     el.querySelector('.card.warn') === null, 'warn card on an unambiguous match');
+}
+{
+  // More than one candidate: still shown, but flagged rather than asserted.
+  const el = renderContext(
+    { source: 'Internal reference', citation: 'clause (ii)', internal: true, links: [],
+      target: { label: 'clause (ii)', why: 'The nearest (ii) inside the enclosing provision, which has 3.',
+                section: { num: '9', heading: 'X' }, ambiguous: true } },
+    { onScope: () => {} });
+  ok('an ambiguous match is flagged', el.querySelector('.card.warn') !== null, el.textContent);
+}
+{
+  // Nothing found: the note is the answer, and it explains rather than restates.
+  const { resolve } = await imp('app/resolve/index.js');
+  const res = await resolve({ kind: 'internal', text: 'paragraph (7)', scope: 'section', subsection: '(7)' });
+  const el = renderContext({ ...res }, { onScope: () => {} });
+  ok('an unlocated internal ref explains itself', /nothing to show/.test(el.textContent), el.textContent);
+  ok('  and no longer merely restates the citation',
+     !/Points at another part of the provision currently being amended/.test(el.textContent),
+     el.textContent);
+}
+{
+  const el = renderContext(
+    { source: 'U.S. Code', citation: '42 U.S.C. 7401', tree: [], focusPath: '',
+      effect: { ops: [{ type: 'strike', text: 'widget', found: true }, { type: 'insert', text: 'gadget' }],
+                unmatched: false }, links: [] },
+    { onScope: () => {} });
+  eq('effect panel renders each op', el.querySelectorAll('.effect .op-row').length, 2);
+  ok('effect marks found strike text', el.querySelector('.effect .found') !== null);
+}
+
+console.log(`\n${'─'.repeat(52)}`);
+if (fail) {
+  console.log(`\x1b[31m${fail} failed\x1b[0m, ${pass} passed\n`);
+  for (const f of failures) console.log(`  ✗ ${f}`);
+  process.exit(1);
+}
+console.log(`\x1b[32mall ${pass} render checks passed\x1b[0m`);
