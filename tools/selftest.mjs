@@ -1276,8 +1276,149 @@ section('internal cross-references');
     const divOnly = extractCitations(
       normalizeText('SEC. 2. X.\nUnder division A of the CARES Act.\n')
     ).find((x) => x.kind === 'act');
+    const divOnlyRes = await resolve(divOnly);
     eq('a division with no section still gives the division',
-       (await resolve(divOnly)).citation, 'Pub. L. 116-136, division A');
+       divOnlyRes.citation, 'Pub. L. 116-136, division A');
+
+    // ---- the chain narrows a division-only citation ------------------------
+    // With no section number the chain IS the address, and it used to be
+    // discarded — worse, the levels below the division sat outside the match,
+    // so the chip began after them. Division A of the CARES Act is 186
+    // sections; subtitle A of its title II is 16.
+    const deep = extractCitations(
+      normalizeText('SEC. 2. X.\nUnder subtitle A of title II of division A of the CARES Act.\n')
+    ).find((x) => x.kind === 'act');
+    eq('a division citation spans the levels below it too',
+       deep && deep.text, 'subtitle A of title II of division A of the CARES Act');
+    ok('  carrying the whole path, outermost first',
+       deep && JSON.stringify(deep.where) === '["DIVISION A","TITLE II","SUBTITLE A"]',
+       JSON.stringify(deep && deep.where));
+    const deepRes = await resolve(deep);
+    eq('  and answering with that subtitle', deepRes.citation,
+       'Pub. L. 116-136, division A, title II, subtitle A');
+    ok('  which is a fraction of the division',
+       deepRes.plaw.toc.length === 16 && divOnlyRes.plaw.toc.length === 186,
+       `${deepRes.plaw.toc.length} of ${divOnlyRes.plaw.toc.length}`);
+
+    // ---- the division picks between repeated section numbers ---------------
+    // Pub. L. 116-260 has four sections numbered 702, one each in divisions A,
+    // E, N and FF. Naming the division settles it — and the pane used to report
+    // "the citation does not say which" about a citation that said which.
+    const amb = extractCitations(
+      normalizeText('SEC. 2. X.\nUnder section 702 of Public Law 116-260 nothing changes.\n')
+    ).find((x) => x.kind === 'publaw');
+    const ambRes = await resolve(amb);
+    eq('a bare section number keeps every candidate', ambRes.plaw.entries.length, 4);
+    eq('  and reports no narrowing', ambRes.plaw.narrowedBy, null);
+    const picked = extractCitations(
+      normalizeText('SEC. 2. X.\nUnder section 702 of division N of Public Law 116-260 nothing changes.\n')
+    ).find((x) => x.kind === 'publaw');
+    const pickedRes = await resolve(picked);
+    eq('  naming the division leaves one', pickedRes.plaw.entries.length, 1);
+    eq('  out of the four', pickedRes.plaw.of, 4);
+    eq('  saying which narrowed it', pickedRes.plaw.narrowedBy, 'DIVISION N');
+    ok('  and it is that division\'s section',
+       /^DIVISION N\b/.test(pickedRes.plaw.entries[0].ancestors[0]),
+       pickedRes.plaw.entries[0].ancestors[0]);
+
+    // A division the law does not have is dropped, not obeyed: showing every
+    // candidate with the ambiguity stated is honest, showing none would turn a
+    // resolvable citation into a dead link on the strength of a bad guess.
+    const badDiv = extractCitations(
+      normalizeText('SEC. 2. X.\nUnder section 702 of division Q of Public Law 116-260 nothing changes.\n')
+    ).find((x) => x.kind === 'publaw');
+    const badRes = await resolve(badDiv);
+    eq('a division that matches nothing falls back to all of them',
+       badRes.plaw.entries.length, 4);
+    eq('  and does not claim to have narrowed', badRes.plaw.narrowedBy, null);
+
+    // ---- the parenthetical address ----------------------------------------
+    // "Section 252 of the Military Construction … Act, 2018 (division J of
+    // Public Law 115-141)" names a DIVISION's own short title, so the name
+    // itself is unlookupable — but the bill has already done the mapping and
+    // written the letter down. 173 of these across the corpus, of which the
+    // parser previously read the bare "Public Law 115-141" and dropped the
+    // section number, the division, and the link between them.
+    const paren = extractCitations(normalizeText(
+      'SEC. 2. X.\nSection 252 of the Military Construction, Veterans Affairs, and ' +
+      'Related Agencies Appropriations Act, 2018 (division J of Public Law 115-141) is amended.\n'
+    )).find((x) => x.kind === 'publaw');
+    eq('a parenthetical address gives the section', paren && paren.actSection, '252');
+    eq('  and the division beside it', paren && paren.division, 'J');
+    ok('  and the short title the bill used',
+       /^Military Construction/.test(paren && paren.shortTitle || ''),
+       JSON.stringify(paren && paren.shortTitle));
+    const parenRes = await resolve(paren);
+    ok('  resolving inside that division',
+       parenRes.plaw && /^DIVISION J\b/.test(parenRes.plaw.entries[0].ancestors[0]),
+       JSON.stringify(parenRes.citation));
+
+    // The guard that keeps this from being worse than useless. A parenthetical
+    // belongs to the name in FRONT of it, so anything intervening belongs to
+    // something else — and left ungated this read PHSA § 313 as a section of
+    // Pub. L. 116-260: a real law, a real number, the wrong statute.
+    const across = normalizeText(
+      'SEC. 2. X.\nsection 313 of the Public Health Service Act, as amended by section 311 ' +
+      'of division BB of the Consolidated Appropriations Act, 2021 (Public Law 116-260), applies.\n'
+    );
+    const stolen = extractCitations(across)
+      .filter((x) => x.kind === 'publaw' && x.actSection === '313');
+    eq('a parenthetical is not stolen across an intervening citation', stolen.length, 0);
+
+    // The same theft with no second "section" in it, from the sample bill —
+    // two references joined by a bare preposition. The tell is the subdivision
+    // word: "division" opens a new address, and the slot a chain may occupy is
+    // in FRONT of a name, never inside it. Ungated this filed section 251(b) of
+    // the Balanced Budget and Emergency Deficit Control Act under the
+    // Infrastructure Investment and Jobs Act.
+    const twoRefs = normalizeText(
+      'SEC. 2. X.\namounts designated by the Congress as an emergency requirement pursuant to ' +
+      'section 251(b) of the Balanced Budget and Emergency Deficit Control Act of 1985 in ' +
+      'division J of the Infrastructure Investment and Jobs Act (Public Law 117-58); and\n'
+    );
+    const glued = extractCitations(twoRefs)
+      .filter((x) => x.kind === 'publaw' && x.actSection === '251');
+    eq('a subdivision word inside the name blocks the match', glued.length, 0);
+    ok('  leaving the two references separate',
+       extractCitations(twoRefs).some((x) => x.kind === 'act' && x.actSection === '251' &&
+         /Balanced Budget/.test(x.act.name)) &&
+       extractCitations(twoRefs).some((x) => x.kind === 'act' && x.division === 'J' &&
+         /Infrastructure/.test(x.act.name)),
+       extractCitations(twoRefs).map((x) => `${x.kind}:${x.text.slice(0, 46)}`).join(' | '));
+    ok('  and the Public Health Service Act still resolves as itself',
+       extractCitations(across).some((x) => x.kind === 'act' && x.actSection === '313' &&
+         /Public Health Service/.test(x.act.name)),
+       extractCitations(across).map((x) => `${x.kind}:${x.text.slice(0, 40)}`).join(' | '));
+
+    // ---- only the enacting clause names the division -----------------------
+    // 42 U.S.C. 15883 is credited "(Pub. L. 109–58, title II, § 247, as added
+    // Pub. L. 117–58, div. D, …)". The only division there belongs to the law
+    // that ADDED the section, not to the one being cited — the same "first
+    // clause only" rule the Act index is built on. Reading the whole string
+    // found "div. D", disagreed with a citation naming no division, and
+    // declined a provision it had correctly identified.
+    const added = extractCitations(normalizeText(
+      'SEC. 2. X.\nAs authorized under section 247 of the Energy Policy Act of 2005 ' +
+      '(Public Law 109-58; 119 Stat. 674), funds are available.\n'
+    )).find((x) => x.kind === 'publaw' && x.actSection === '247');
+    eq('a division in an "as added" clause is not the cited law\'s',
+       (await resolve(added)).citation, '42 U.S.C. 15883');
+
+    // A richer citation must never resolve to LESS than its parts. Where the
+    // section is uncodified and the law is not one of the 25 held, the Act name
+    // the bill wrote down is still an answer — the start of the Act, which is
+    // what this phrase gave before the parenthetical was read at all. Falling to
+    // the bare Public Law link instead would punish the citation for being more
+    // specific.
+    const uncodified = extractCitations(normalizeText(
+      'SEC. 2. X.\nUnder section 6015 of the Farm Security and Rural Investment Act ' +
+      'of 2002 (Public Law 107-171) funds are available.\n'
+    )).filter((x) => x.kind === 'publaw').sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
+    const uncRes = await resolve(uncodified);
+    eq('an unresolvable section falls back to the Act it named',
+       uncRes.actName, 'Farm Security and Rural Investment Act of 2002');
+    eq('  labelled as the start of the Act, not as the provision',
+       uncRes.isActStart, true);
 
     // ---- the bracketed credit form --------------------------------------
     // "(Pub. L. 85-536, § 2[7], July 18, 1958, 72 Stat. 387)". The Small

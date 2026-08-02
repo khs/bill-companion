@@ -9,7 +9,7 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 426 checks, no dependencies
+node tools/selftest.mjs                   # 449 checks, no dependencies
 node tools/rendertest.mjs                 # 263 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
@@ -142,7 +142,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 426 checks passed
+node tools/selftest.mjs     # all 449 checks passed
 node tools/rendertest.mjs   # all 263 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
@@ -1243,11 +1243,100 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    § 110". The Code prints the division in the credit, so `divisionAgrees()`
    checks the two and declines where they disagree; the citation matcher now
    captures "of division G of" because that phrase is half the address.
-   Still open: a citation that names the division only through a *division's
-   short title* ("the Department of Commerce Appropriations Act, 2016" IS
-   division B) cannot be checked this way, and those decline rather than
-   resolve. Mapping division short titles to division letters would fix it, and
-   `data/plaw/` has the structure to do it for the 25 laws it holds.
+   The division short title case is closed too, and not by mapping titles to
+   letters — see item 17. What remains open is a citation that names *only* the
+   short title, with no parenthetical at all; there is nothing in the text to
+   read, and those still decline.
+
+17. **The division a citation names is now used to look the section up.**
+   (Fixed 2026-08-02, from a Haiku spot-check of 355 resolutions.) `division`
+   had been captured since item 15 and reached exactly two consumers —
+   `resolvePlawDivision()` and `divisionAgrees()`. `resolvePlaw()` had no
+   division parameter at all, so the pane showed all four of Pub. L. 116-260's
+   sections numbered 702 under the heading *"The citation does not say which."*
+   The citation said which. 52 citations across the corpus sit on a multi-entry
+   shard the named division would narrow.
+   Three things were wrong and each needed its own fix:
+   - **The path, not the letter.** A chain is written inside-out — "subtitle A
+     of title II of division A" — and `wherePath()` reverses it into the order
+     `data/plaw`'s table of contents records, so narrowing is a prefix test.
+     With no section number the levels *below* the division are the only thing
+     narrowing anything: subtitle A of title II of division A of the CARES Act
+     is 16 sections where division A is 186. `RE_ACT_DIVISION` had also *begun
+     the match after them*, so the chip covered less text than the citation did.
+   - **A path matching nothing is dropped, not obeyed.** 1 of the 52. Either the
+     citation or our reading of the law's structure is wrong, and showing every
+     candidate with the ambiguity stated is the honest answer to that; showing
+     none would turn a resolvable citation into a dead link on a guess.
+   - **The panel has two messages now** and telling them apart is the point.
+     "Narrowed by the citation" where the drafter supplied the division,
+     "More than one … does not say which" only where they did not.
+
+18. **A parenthetical belongs to the name immediately in front of it.**
+   (Added 2026-08-02.) "Section 252 of the Military Construction, Veterans
+   Affairs, and Related Agencies Appropriations Act, 2018 (division J of Public
+   Law 115-141)" is a complete address whose *name* is unlookupable — it is a
+   division's own short title. The bill has already done the mapping item 15
+   wanted and written the letter down. 173 of these across the corpus, and the
+   parser read the bare "Public Law 115-141" and dropped the section number, the
+   division, and the fact that the two belong together: a 1,254-section law in
+   place of one provision. `RE_PUBLAW_PAREN` reads the whole shape, from either
+   side — the chain may sit before the name ("section 702 of division N of the
+   Consolidated Appropriations Act, 2021 (Public Law 116-260)") or inside the
+   parenthetical.
+   **The middle must be a NAME and nothing else, and that is the entire safety
+   of this pattern.** Both failures below were live before the guards, and both
+   are the worst output this app has — a real law, a real section number, and
+   the wrong statute:
+
+   ```
+   section 313 of the Public Health Service Act, as amended by section 311
+   of division BB of the Consolidated Appropriations Act, 2021 (Pub. L. 116-260)
+
+   …pursuant to section 251(b) of the Balanced Budget and Emergency Deficit
+   Control Act of 1985 in division J of the Infrastructure Investment and
+   Jobs Act (Public Law 117-58)
+   ```
+
+   Two references each time, and the parenthetical is the second one's. The
+   first tell is an intervening `section`; the second is a **subdivision word
+   inside the name** — "division" opens a new address, and the slot a chain may
+   legitimately occupy is in front of a name, never inside it. The second shape
+   has no second "section" in it at all, which is why one guard was not enough.
+   Also barred: `as amended/added/authorized`, a semicolon, a paren, a paragraph
+   break. Every one of these turns a confident answer about the wrong Act back
+   into the bare Public Law link the citation had before.
+   Two orderings earned their place. The new form is `publaw` (rank 4) and so
+   beats the `act` (rank 3) citation inside it — which is right, because it
+   carries the division and goes through the same Act index — but **it must
+   never resolve to less than its parts.** Where the section is uncodified and
+   the law is not one of the 25, the resolver falls back to the Act the bill
+   named rather than to the link; without that, three citations went from the
+   head of their Act to an outbound link for being *more* specific.
+   Corpus: 1,646 citations absorbed into 1,264 richer ones. `byKind.publaw` does
+   not move anywhere — each match removes one bare Public Law and adds one
+   addressed one — so `citations` falls by exactly `byKind.act`, 382, on all 14
+   bills. All 17 displaced Act-with-section citations resolve to the same
+   provision as before. The one further move, `refs -1 / steps +1` on the NDAA,
+   is an instruction whose target gained a section number: its navigation steps
+   were the bare markers `(A)`, `(B)` and are now the addresses `(b)(1)`,
+   `(b)(1)(A)`, `(b)(1)(B)`.
+
+19. **`divisionAgrees()` may read only the enacting clause.** (Fixed
+   2026-08-02.) The same "only the first clause" rule the Act index is built on,
+   broken in the one place that consumes the credit rather than builds it.
+   42 U.S.C. 15883 is credited
+
+   ```
+   (Pub. L. 109–58, title II, § 247, as added Pub. L. 117–58, div. D, …)
+   ```
+
+   and the only division named there belongs to Pub. L. 117-58 — the law that
+   *added* the section — not to Pub. L. 109-58, the law being cited. Scanning
+   the whole string found "div. D", disagreed with a citation that named no
+   division, and declined a provision it had already correctly identified. This
+   was a silent decline before item 18 made it reachable, and it will be silent
+   again if the cut at `as added` is ever removed.
 
 
 ---

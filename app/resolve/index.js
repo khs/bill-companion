@@ -39,9 +39,27 @@ export async function resolve(cite) {
  * The Code prints the division in the credit, so the check is free: if the
  * credit names one and the citation did not name the same one, the number is
  * ambiguous and this declines. A credit with no division cannot disagree.
+ *
+ * Only the *enacting* clause may be read, which is the same rule the ingester
+ * follows in building the index and it is load-bearing for the same reason.
+ * 42 U.S.C. 15883 is credited
+ *
+ *   (Pub. L. 109–58, title II, § 247, as added Pub. L. 117–58, div. D, …)
+ *
+ * and the only division named there belongs to Pub. L. 117-58 — the law that
+ * *added* the section — not to Pub. L. 109-58, the law being cited. Reading the
+ * whole string found "div. D", disagreed with a citation that named no division,
+ * and declined a provision it had correctly identified.
  */
+function enactingClause(credit) {
+  return String(credit || '')
+    .replace(/^\s*\(/, '')
+    .split(';')[0]
+    .split(/,\s*as\s+(?:added|amended|renumbered)\b/)[0];
+}
+
 function divisionAgrees(cite, credit) {
-  const m = /\bdiv\.?\s+([A-Z]{1,2})\b/.exec(String(credit || ''));
+  const m = /\bdiv\.?\s+([A-Z]{1,2})\b/.exec(enactingClause(credit));
   if (!m) return true;
   return Boolean(cite.division) && cite.division === m[1].toUpperCase();
 }
@@ -84,8 +102,11 @@ function cacheKey(c) {
   // — they differ only in whether the division is named, which is precisely
   // what decides whether the answer is 6 U.S.C. 1509 or a decline. Without it
   // the first of the two to be clicked answered for both.
+  // `where` for the third time: it is the division plus every level below it, so
+  // "section 702 of subtitle A of title VII of division N" and "section 702 of
+  // division N" agree on `division` and name different provisions.
   return [c.kind, c.title, c.part, c.section, c.subsection, c.congress, c.law, c.volume, c.page,
-          c.act && c.act.name, c.actSection, c.division]
+          c.act && c.act.name, c.actSection, c.division, c.where && c.where.join('>')]
     .filter(Boolean)
     .join('|');
 }
@@ -113,7 +134,11 @@ async function dispatch(cite) {
       if (cite.division && !cite.actSection) {
         const pl = publawIdOf(act);
         if (pl) {
-          const local = await resolvePlawDivision(pl.congress, pl.law, cite.division);
+          const local = await resolvePlawDivision(
+            pl.congress,
+            pl.law,
+            cite.where || [`DIVISION ${cite.division}`]
+          );
           if (local) return { ...local, actName: act.name };
         }
       }
@@ -155,7 +180,7 @@ async function dispatch(cite) {
       if (cite.actSection) {
         const pl = publawIdOf(act);
         if (pl) {
-          const local = await resolvePlaw(pl.congress, pl.law, cite.actSection);
+          const local = await resolvePlaw(pl.congress, pl.law, cite.actSection, cite.where);
           if (local) return { ...local, actName: act.name };
         }
       }
@@ -211,8 +236,34 @@ async function dispatch(cite) {
       // the law's own text, that is the only thing left that can answer — and
       // for an appropriations line, an effective date or a savings clause it is
       // the *right* answer, since there was never going to be a Code section.
-      const local = await resolvePlaw(cite.congress, cite.law, cite.actSection || '');
+      const local = await resolvePlaw(
+        cite.congress,
+        cite.law,
+        cite.actSection || '',
+        cite.where
+      );
       if (local) return { ...local, links: publawLinks(cite) };
+
+      // "section 6015 of the Farm Security and Rural Investment Act of 2002
+      // (Public Law 107-171)" — the bill wrote the Act's name down, and where
+      // that name is one we know, the start of the Act is the answer this had
+      // before the parenthetical was being read at all. Dropping to the link
+      // instead would make the richer citation the poorer answer, which is the
+      // wrong way round: this form should never resolve to less than its parts.
+      const named = cite.shortTitle && findAct(cite.shortTitle);
+      if (named) {
+        const start = await resolveUsc({ title: named.title, section: named.section, subsection: '' });
+        return {
+          ...start,
+          source: 'Act (popular name)',
+          actName: named.name,
+          citation: named.name,
+          range: named.range || null,
+          offsetNote: named.offsetNote || null,
+          isActStart: true,
+          links: publawLinks(cite),
+        };
+      }
 
       return {
         source: 'Public Law',

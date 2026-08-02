@@ -956,7 +956,20 @@ function plawCard(root, res, handlers) {
   root.appendChild(warn);
 
   if (res.plaw.entries && res.plaw.entries.length) {
-    if (res.plaw.entries.length > 1) {
+    // Two different messages, and telling them apart is the whole point. A law
+    // numbers its sections per division, so several provisions share a number —
+    // but a citation that names the division has *resolved* that, and reporting
+    // it as ambiguous discards the half of the address the drafter supplied.
+    if (res.plaw.narrowedBy) {
+      root.appendChild(
+        card(
+          'Narrowed by the citation',
+          `This law has ${res.plaw.of} sections numbered ${res.plaw.number}. The citation ` +
+            `names ${res.plaw.narrowedBy}, which leaves ` +
+            `${res.plaw.entries.length === 1 ? 'the one below' : `the ${res.plaw.entries.length} below`}.`
+        )
+      );
+    } else if (res.plaw.entries.length > 1) {
       root.appendChild(
         card(
           'More than one',

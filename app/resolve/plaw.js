@@ -91,13 +91,62 @@ export function loadPlawSection(congress, law, section) {
 }
 
 /**
+ * A structural label, reduced to the level it names.
+ *
+ * The two records disagree about spelling and both are right. A section shard
+ * stores the heading the law itself prints — "DIVISION N—ADDITIONAL CORONAVIRUS
+ * RESPONSE AND RELIEF", "Subtitle A—Nutrition" — while the table of contents
+ * stores the bare label the ingester cut off the front of it. Everything after
+ * the separator is the unit's *name*, which no citation writes; only the level
+ * and its letter are addressable, so that is all this keeps.
+ */
+function unitLabel(s) {
+  return String(s || '')
+    .split(/\s*(?:--|[—–])\s*/)[0]
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ');
+}
+
+/**
+ * Does this provision sit at or below the path the citation named?
+ *
+ * A prefix test, not equality: "division N" is satisfied by
+ * DIVISION N › TITLE VII › Subtitle A, and so is "subtitle A of title VII of
+ * division N". A citation naming more levels than the provision has cannot be
+ * about it.
+ */
+/** "DIVISION A" -> "division A". The unit word is prose; the letter is a name. */
+function pretty(label) {
+  const at = String(label).lastIndexOf(' ');
+  return at < 0 ? label : `${label.slice(0, at).toLowerCase()}${label.slice(at)}`;
+}
+
+function underPath(ancestors, want) {
+  if (!want || !want.length) return true;
+  const have = (ancestors || []).map(unitLabel);
+  return want.length <= have.length && want.every((w, i) => have[i] === unitLabel(w));
+}
+
+/**
  * Resolve a Public Law citation against the local text.
+ *
+ * `where` is the structural path the citation named, outermost first, and it is
+ * the other half of the address whenever the law is an omnibus: Pub. L. 116-260
+ * has four sections numbered 702, one each in divisions A, E, N and FF, so
+ * "section 702(a) of division N" is unambiguous and used to be answered with all
+ * four and a note saying the citation did not say which. It said which.
+ *
+ * A path matching nothing is dropped rather than obeyed. Either the citation or
+ * our reading of the law's structure is wrong, and showing every candidate with
+ * the ambiguity stated is the honest answer to that; showing none would turn a
+ * resolvable citation into a dead link on the strength of a guess.
  *
  * @returns {Promise<object|null>} null whenever this cannot answer — the law is
  *   not held, or it holds no section by that number — so the caller falls
  *   through to the outbound link exactly as before.
  */
-export async function resolvePlaw(congress, law, section) {
+export async function resolvePlaw(congress, law, section, where) {
   if (!(await havePlaw(congress, law))) return null;
   const index = await loadPlawIndex(congress, law);
   if (!index) return null;
@@ -116,31 +165,47 @@ export async function resolvePlaw(congress, law, section) {
 
   const shard = await loadPlawSection(congress, law, section);
   if (!shard || !shard.entries || !shard.entries.length) return null;
+
+  const all = shard.entries;
+  const narrowed = where ? all.filter((e) => underPath(e.ancestors, where)) : [];
+  const entries = narrowed.length ? narrowed : all;
+  const by = narrowed.length && narrowed.length < all.length ? where.join(' › ') : null;
+
   return {
     source: 'Public Law (as enacted)',
-    citation: `Pub. L. ${lawId(congress, law)} § ${section}`,
-    plaw: { ...index, toc: null, number: section, entries: shard.entries },
+    citation:
+      `Pub. L. ${lawId(congress, law)}` +
+      (by ? `, ${pretty(where[0])}` : '') +
+      ` § ${section}`,
+    plaw: { ...index, toc: null, number: section, entries, narrowedBy: by, of: all.length },
     asEnacted: true,
   };
 }
 
 /**
- * One division of a Public Law we hold: its contents, not a provision.
+ * One subdivision of a Public Law we hold: its contents, not a provision.
  *
  * "Division J of the Infrastructure Investment and Jobs Act" names 19 sections
  * out of that law's 630, and the useful answer is which 19 — the same answer a
- * bare Public Law gets, narrowed to the division the citation actually named.
+ * bare Public Law gets, narrowed to what the citation actually named.
+ *
+ * `where` is the whole path and not just the division, because a citation with
+ * no section number has nothing *but* the path to narrow it: "Subtitle A of
+ * title II of division A of the CARES Act" is 16 sections where division A is
+ * 90, and answering with division A hands back the other 74 as though they had
+ * been cited.
  */
-export async function resolvePlawDivision(congress, law, division) {
-  if (!division || !(await havePlaw(congress, law))) return null;
+export async function resolvePlawDivision(congress, law, where) {
+  if (!where || !where.length || !(await havePlaw(congress, law))) return null;
   const index = await loadPlawIndex(congress, law);
   if (!index || !Array.isArray(index.toc)) return null;
-  const want = `DIVISION ${String(division).toUpperCase()}`;
-  const toc = index.toc.filter((t) => String(t.where || '').split(' > ')[0] === want);
+  const toc = index.toc.filter((t) => underPath(String(t.where || '').split(' > '), where));
   if (!toc.length) return null;
   return {
     source: 'Public Law (as enacted)',
-    citation: `Pub. L. ${lawId(congress, law)}, division ${String(division).toUpperCase()}`,
+    // Outermost first, the way the law is built — the reverse of the order the
+    // citation writes it, and the order the contents below are in.
+    citation: `Pub. L. ${lawId(congress, law)}, ${where.map(pretty).join(', ')}`,
     plaw: { ...index, toc, entries: null, total: toc.length },
     asEnacted: true,
   };

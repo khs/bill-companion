@@ -78,31 +78,48 @@ const RE_ACT_SECTION = POPULAR_NAMES.filter((a) => a.sectionsMatchCode).map((act
 // Every Act gets one, not just the ones with a codified home: what makes this
 // resolvable is the Public Law behind the name, and app/resolve/plaw.js holds
 // 25 of those in full.
-const RE_ACT_DIVISION = POPULAR_NAMES.map((act) => ({
-  act,
-  re: new RegExp(
-    `\\b[Dd]ivisions?\\s+([A-Z]{1,2})\\s+of\\s+(?:the\\s+)?(?:${act.pattern})`,
-    'g'
-  ),
-}));
-
 // The subdivision chain between a section number and the law it sits in:
 // "section 2118(a) of title II of division A of Public Law 116-136". Congress
-// walks down as many levels as it needs, and only the last of them — the
-// division — changes which provision is meant, because that is where the
-// numbering restarts. The rest is address, not ambiguity.
+// walks down as many levels as it needs, and the chain is written inside-out —
+// the level nearest the section number comes first and the outermost level last,
+// which is the reverse of the order the law itself is structured in.
 //
 // 489 citations across the corpus carry a chain. Matching only the bare
 // "division X of" form read 354 of them and lost the other 135, and the loss
 // was total rather than partial: with the chain unmatched the whole citation
 // failed and only the bare "Public Law 116-136" survived, so the section number
 // went with it.
-const SUBDIV_CHAIN =
-  '(?:(?:[Tt]itles?|[Ss]ubtitles?|[Pp]arts?|[Ss]ubparts?|[Cc]hapters?|[Ss]ubchapters?' +
-  '|[Dd]ivisions?|[Dd]iv\\.)\\s+[A-Za-z0-9]{1,5}\\s+of\\s+){0,4}';
+const SUBDIV_UNIT =
+  '(?:[Tt]itles?|[Ss]ubtitles?|[Pp]arts?|[Ss]ubparts?|[Cc]hapters?|[Ss]ubchapters?' +
+  '|[Dd]ivisions?|[Dd]iv\\.)';
+const SUBDIV_CHAIN = `(?:${SUBDIV_UNIT}\\s+[A-Za-z0-9]{1,5}\\s+of\\s+){0,4}`;
+
+// Every level of such a chain, in the order written.
+const RE_CHAIN_STEP = new RegExp(`(${SUBDIV_UNIT})\\s+([A-Za-z0-9]{1,5})\\s+of`, 'g');
 
 // The division named anywhere in such a chain, if one is.
 const RE_CHAIN_DIVISION = /\b(?:division|div\.?)\s+([A-Za-z0-9]{1,2})\s+of/i;
+
+// The levels a chain may name *below* a division — everything except a division
+// itself, so the pattern below can anchor on the division without the chain
+// swallowing it.
+const SUBDIV_INNER =
+  '(?:(?:[Tt]itles?|[Ss]ubtitles?|[Pp]arts?|[Ss]ubparts?|[Cc]hapters?|[Ss]ubchapters?)' +
+  '\\s+[A-Za-z0-9]{1,5}\\s+of\\s+){0,4}';
+
+// "division J of the Infrastructure Investment and Jobs Act", and the deeper
+// form "Subtitle A of title II of division A of the CARES Act". A division with
+// no section number is an address rather than a provision, so every level the
+// citation names is doing work: division A of the CARES Act is 90 sections and
+// Subtitle A of title II of it is 16. Matching only the bare form did not merely
+// discard the inner levels, it started the chip after them.
+const RE_ACT_DIVISION = POPULAR_NAMES.map((act) => ({
+  act,
+  re: new RegExp(
+    `\\b(${SUBDIV_INNER})[Dd]ivisions?\\s+([A-Z]{1,2})\\s+of\\s+(?:the\\s+)?(?:${act.pattern})`,
+    'g'
+  ),
+}));
 
 const RE_ACT_REL_SECTION = POPULAR_NAMES.filter((a) => a.enactedAs && !a.sectionsMatchCode).map(
   (act) => ({
@@ -153,6 +170,70 @@ const RE_PUBLAW_SECTION = new RegExp(
   // An omnibus restarts its numbering in every division, so "of division G of"
   // is not decoration — it is the half of the address that disambiguates.
   `(${SUBDIV_CHAIN})${PUBLAW_NAME}`,
+  'g'
+);
+
+// "Section 107 of the Department of Homeland Security Appropriations Act, 2018
+// (division F of Public Law 115-141)" — the shape that names a *division's own*
+// short title and then supplies the address in a parenthetical.
+//
+// 173 across the corpus, of which the parser previously read the parenthetical
+// "Public Law 115-141" and nothing else: the section number, the division, and
+// the fact that the two belong together were all discarded, so a complete
+// address became a link to a 1,254-section law.
+//
+// This is the answer to the half of the division problem that could not be
+// solved by mapping short titles to division letters — the bill has already
+// done that mapping and written the letter down. The name in the middle is not
+// looked up and does not need to be; the parenthetical is the address, and it
+// is the *bill's own* statement of where the section sits.
+//
+// The middle must be a NAME and nothing else, and that is the whole safety of
+// this pattern. A parenthetical belongs to the name immediately in front of it,
+// so anything that gets between them belongs to something else:
+//
+//   section 313 of the Public Health Service Act, as amended by section 311
+//   of division BB of the Consolidated Appropriations Act, 2021 (Pub. L. 116-260)
+//
+// Left ungated, that reads as PHSA § 313 living in Pub. L. 116-260 — a real law,
+// a real section number, and the wrong statute entirely. The parenthetical is
+// the *Consolidated Appropriations Act's*, and the tell is that a second
+// "section" intervenes.
+//
+// The same failure in a second shape, from the Fiscal Responsibility Act, where
+// the connective is a bare preposition and no second "section" appears:
+//
+//   …pursuant to section 251(b) of the Balanced Budget and Emergency Deficit
+//   Control Act of 1985 in division J of the Infrastructure Investment and
+//   Jobs Act (Public Law 117-58)
+//
+// Two references, and the parenthetical is the second one's. The tell there is
+// a subdivision word inside the name: "division" opens a new address, and the
+// place a chain may legitimately appear is the slot in front of the name, not
+// inside it.
+//
+// So the middle must be a NAME and nothing else — no further section reference,
+// no subdivision word, no "as amended / added / authorized / in effect"
+// connective, no semicolon, no paren (the lazy stop is the opening one) and no
+// paragraph break.
+//
+// This is the "wrong beats blank" rule doing its job: every guard here turns a
+// confident answer about the wrong Act back into the bare Public Law link the
+// citation had before.
+const PAREN_ACT_NAME =
+  '(?:(?!\\n[ \\t]*\\n)(?![Ss]ections?\\s)' +
+  `(?!${SUBDIV_UNIT}\\s)` +
+  '(?!\\s*,?\\s*as\\s+(?:amended|added|authorized|enacted|in\\s+effect|so\\s+))' +
+  '[^();])';
+
+const RE_PUBLAW_PAREN = new RegExp(
+  `\\b[Ss]ections?\\s+(\\d+[A-Za-z]*)(${SUBSEC})\\s+of\\s+` +
+    // Either side may carry the chain: "section 702 of division N of the
+    // Consolidated Appropriations Act, 2021 (Public Law 116-260)" writes it
+    // before the name and "…Act, 2018 (division F of Public Law 115-141)" after.
+    `(${SUBDIV_CHAIN})(?:the\\s+)?` +
+    `(${PAREN_ACT_NAME}{5,140}?)` +
+    `\\s*\\(\\s*(${SUBDIV_CHAIN})${PUBLAW_NAME}`,
   'g'
 );
 
@@ -1128,6 +1209,35 @@ function divisionOf(chain) {
   return m ? m[1].toUpperCase() : null;
 }
 
+/**
+ * A subdivision chain as a path, outermost first: the order the law is built in
+ * rather than the order the citation writes it.
+ *
+ * "title II of division A of" is written inside-out, so the segments are
+ * reversed to give ["DIVISION A", "TITLE II"] — which is the shape
+ * `data/plaw`'s table of contents records, and so is directly a prefix test
+ * against it. Normalised to upper case because a bill sets its own headings and
+ * writes "Subtitle A" where it writes "TITLE II"; the unit word is not evidence
+ * about anything, only the level is.
+ *
+ * `outer` is prepended after the reversal — the division RE_ACT_DIVISION matched
+ * separately sits outside everything the chain names.
+ */
+function wherePath(chain, outer) {
+  const steps = [];
+  RE_CHAIN_STEP.lastIndex = 0;
+  let m;
+  while ((m = RE_CHAIN_STEP.exec(String(chain || '')))) {
+    const unit = m[1].toUpperCase().replace(/\.$/, '').replace(/S$/, '').replace(/^DIV$/, 'DIVISION');
+    steps.push(`${unit} ${m[2].toUpperCase()}`);
+  }
+  steps.reverse();
+  if (outer) steps.unshift(String(outer).toUpperCase());
+  // A path that says nothing is no path. The caller falls back to the division
+  // alone, which is what it had before.
+  return steps.length ? steps : null;
+}
+
 function push(out, m, kind, extra) {
   // Some patterns intentionally start with a boundary group (punctuation or a
   // leading space) that isn't part of the citation. Trim it off the offsets so
@@ -1204,7 +1314,8 @@ export function extractCitations(text) {
   for (const { act, re } of RE_ACT_DIVISION) {
     re.lastIndex = 0;
     while ((m = re.exec(text))) {
-      push(out, m, 'act', { act, division: m[1].toUpperCase() });
+      const division = m[2].toUpperCase();
+      push(out, m, 'act', { act, division, where: wherePath(m[1], `DIVISION ${division}`) });
     }
   }
 
@@ -1216,6 +1327,7 @@ export function extractCitations(text) {
         actSection: m[1],
         subsection: m[2] || '',
         division: divisionOf(m[3]),
+        where: wherePath(m[3]),
         ladder: subsectionLadder(m[2]),
       });
     }
@@ -1250,6 +1362,27 @@ export function extractCitations(text) {
       actSection: m[1],
       subsection: m[2] || '',
       division: divisionOf(m[3]),
+      where: wherePath(m[3]),
+      ladder: subsectionLadder(m[2]),
+    });
+  }
+
+  RE_PUBLAW_PAREN.lastIndex = 0;
+  while ((m = RE_PUBLAW_PAREN.exec(text))) {
+    // The parenthetical chain sits next to the Public Law and wins where both
+    // are written; the outer one is the same address said earlier in the phrase.
+    const where = wherePath(m[5]) || wherePath(m[3]);
+    push(out, m, 'publaw', {
+      congress: m[6],
+      law: m[7],
+      actSection: m[1],
+      subsection: m[2] || '',
+      division: divisionOf(m[5]) || divisionOf(m[3]),
+      where,
+      // The short title the bill used. Worth carrying: it is usually the name of
+      // the division itself, which is the one thing "Pub. L. 115-141, division F"
+      // does not tell a reader.
+      shortTitle: m[4].replace(/\s+/g, ' ').trim(),
       ladder: subsectionLadder(m[2]),
     });
   }
