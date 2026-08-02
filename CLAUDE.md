@@ -10,7 +10,7 @@ and is written for a user; this file is for changing it. Read both.
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
 node tools/selftest.mjs                   # 413 checks, no dependencies
-node tools/rendertest.mjs                 # 215 checks, needs `npm i -D linkedom`
+node tools/rendertest.mjs                 # 223 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
@@ -143,7 +143,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 
 ```bash
 node tools/selftest.mjs     # all 413 checks passed
-node tools/rendertest.mjs   # all 215 render checks passed
+node tools/rendertest.mjs   # all 223 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
@@ -573,6 +573,43 @@ through subsection (e), a sentence the bill never mentions. The steps were
 parsed and available the whole time; nothing was asking them. `apply(text, path)`
 takes the path of the passage being drawn, and an op applies only at its own
 scope or below.
+
+**An enacted bill has still done something, and the pane has to show it.**
+The guards below stop an already-applied amendment being drawn twice, and they
+are right — but "nothing to draw" is not "nothing to say". Reading the Fiscal
+Responsibility Act, an instruction that adds two subclauses to 2 U.S.C.
+901(b)(2)(B)(i) drew nothing at all and the panel reported
+"⚠ position not stated" and "not drawn into the text" about language sitting on
+screen a few lines above. The point of the pane is inline visibility; that
+delivered the opposite.
+
+Three separate faults behind one symptom, all of them reporting rather than
+placement:
+
+- A structurally-placed insert lived in **both** `work` and `additions` as two
+  separate objects. The additions copy was handled; the work copy was never
+  marked done, so `unplaced()` reported a stranded insertion for one that had
+  been dealt with. `work` now excludes them outright.
+- The panel had no branch for such an op, so it fell through to the plain
+  `insert` message — "position not stated" about an op whose position is the
+  one thing it knows.
+- A strike whose language is already gone was flagged "⚠ not found verbatim".
+  That is the amendment having *worked*, and warning about it warns about the
+  one thing that went right.
+
+And the missing half: `appliedNodePaths()` names the provisions an enacted
+addition created, from the added block's own leading markers, so `nodeEl` can
+mark them `.was-added`. The reader now sees (XI) and (XII) ruled down the side
+in the insertion colour, titled "Added by this bill — already in force" —
+marked rather than coloured as an insertion, because nothing is being added to
+the law on screen. The law reads that way *because* of this bill, which is
+exactly what someone reading the bill wants to know.
+
+`inLaw` is computed once, at construction, and asked **before** `stale`. Both
+say "this already happened", but one is evidence about this very language and
+the other an inference from the amendment's strikes; where a strike's operand
+simply is not in the provision, asking staleness first reported an addition the
+law demonstrably contains as one that could not be placed.
 
 **Assume the amendment may already have happened.** The Code is current, so an
 *enacted* bill has usually been applied to it: the struck language is gone and

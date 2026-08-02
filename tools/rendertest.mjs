@@ -763,6 +763,67 @@ section('additions at the end');
        ownBody(marked[0]).textContent);
   }
 
+  // ---- an addition the law already contains ------------------------------
+  // The whole point of this pane is inline visibility, and an enacted bill was
+  // getting none: its additions are already in the Code, so nothing is drawn —
+  // correctly, since drawing them would show the provision twice — and the
+  // panel then reported "⚠ position not stated" and "not drawn into the text"
+  // about language sitting on screen. Two bugs behind one symptom: the op lived
+  // in both `work` and `additions` as separate objects, so unplaced() counted
+  // the copy nobody handled; and the panel had no branch for a structurally
+  // placed insert, so it fell through to the "no position" message.
+  {
+    const te =
+      'Section 251(b)(2)(B)(i) of the Balanced Budget and Emergency Deficit Control Act of 1985 is amended--\n' +
+      "    (A) in subclause (IX), by striking ``and'' at the end;\n" +
+      '    (B) by inserting after subclause (X) the following:\n' +
+      "``(XI) for fiscal year 2024, $1,578,000,000 in additional new budget authority.'';\n";
+    const ae = extractAmendments(te, extractCitations(te));
+    // The law as it stands already contains it — this bill is enacted.
+    const lawE = [{
+      marker: '(b)', path: '(b)', heading: '', text: 'Adjustments.',
+      children: [{
+        marker: '(2)', path: '(b)(2)', heading: '', text: '',
+        children: [{
+          marker: '(B)', path: '(b)(2)(B)', heading: '', text: '',
+          children: [{
+            marker: '(i)', path: '(b)(2)(B)(i)', heading: '', text: 'the amounts are—',
+            children: [
+              { marker: '(IX)', path: '(b)(2)(B)(i)(IX)', heading: '', text: 'for fiscal year 2020, $1,309,000,000 in additional new budget authority;', children: [] },
+              { marker: '(X)', path: '(b)(2)(B)(i)(X)', heading: '', text: 'for fiscal year 2021, $1,302,000,000 in additional new budget authority;', children: [] },
+              { marker: '(XI)', path: '(b)(2)(B)(i)(XI)', heading: '', text: 'for fiscal year 2024, $1,578,000,000 in additional new budget authority.', children: [] },
+            ],
+          }],
+        }],
+      }],
+    }];
+    const elE = rc(
+      { source: 'U.S. Code', citation: '2 U.S.C. 901(b)(2)(B)(i)', links: [], tree: lawE,
+        focusPath: '(b)(2)(B)(i)', effect: { ops: ae[0].ops, unmatched: false } },
+      { onScope: () => {} }
+    );
+    const txtE = elE.textContent.replace(/\s+/g, ' ');
+
+    // Nothing drawn: the provision would otherwise appear twice.
+    eq('an already-enacted addition is not drawn again', elE.querySelectorAll('.node.added').length, 0);
+    // But the provision it created is marked, which is the thing that was
+    // missing — an enacted bill looked like it had done nothing at all.
+    const wasAdded = [...elE.querySelectorAll('.node.was-added')];
+    eq('  the provision it created is marked in the law', wasAdded.length, 1);
+    ok('  and it is the right one',
+       /for fiscal year 2024/.test(wasAdded[0].textContent), wasAdded[0].textContent.slice(0, 60));
+    ok('  labelled as this bill\'s work', /already in force/i.test(wasAdded[0].getAttribute('title') || ''),
+       wasAdded[0].getAttribute('title'));
+
+    // And the panel says so, positively, in both rows.
+    ok('the panel reports the addition as done', /already in the law as it stands/.test(txtE), txtE.slice(-260));
+    ok('  and the strike as done, not as a failure',
+       /already struck from the law/.test(txtE) && !/not found verbatim/.test(txtE), txtE.slice(-260));
+    ok('  with no "position not stated"', !/position not stated/.test(txtE), txtE.slice(-260));
+    ok('  and no claim that something was left undrawn',
+       !/not drawn into the text/.test(txtE), txtE.slice(-260));
+  }
+
   // ---- an addition whose provision is off screen -------------------------
   // Scoped to (a)(3) while the pane shows (b), the addition draws nothing. The
   // panel said so, honestly, and then left the reader with nowhere to go.

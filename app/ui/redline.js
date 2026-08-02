@@ -96,8 +96,16 @@ function occurrences(folded, needle) {
  * @param {Array} ops  the amendment's ops, already carrying placement metadata
  */
 export function createRedline(ops, fullText) {
+  // An insert placed structurally belongs to `additions` and to nothing else.
+  // It used to be in both lists as two separate objects: the additions copy was
+  // handled and the work copy was never marked done, so unplaced() reported a
+  // stranded insertion for one that had in fact been dealt with — and the panel
+  // told the reader "not drawn into the text" about language that was already
+  // in the law.
+  const structural = (o) => o.type === 'add-at-end' || (o.type === 'insert' && o.placement === 'after-unit');
   const work = (ops || [])
     .filter((o) => (o.type === 'strike' || o.type === 'insert') && typeof o.text === 'string')
+    .filter((o) => !structural(o))
     .map((o) => ({ ...o, done: false }));
 
   // Additions are placed structurally rather than woven into a run of text.
@@ -116,12 +124,13 @@ export function createRedline(ops, fullText) {
   // so it drew nothing at all. Scoped to (C) itself by scopeUnitInserts(), it
   // lands after (C)'s subtree, which is where the bill puts it.
   const additions = (ops || [])
-    .filter(
-      (o) =>
-        typeof o.text === 'string' &&
-        (o.type === 'add-at-end' || (o.type === 'insert' && o.placement === 'after-unit'))
-    )
-    .map((o) => ({ ...o, done: false }));
+    .filter((o) => typeof o.text === 'string' && structural(o))
+    // `inLaw` is decided here rather than inside additionsAt(), because whether
+    // the law already contains this language has nothing to do with which node
+    // the renderer happens to be laying out when it asks. Deciding it lazily
+    // made appliedNodePaths() depend on walk order, which is the kind of thing
+    // that works until a tree is shaped differently.
+    .map((o) => ({ ...o, done: false, inLaw: alreadyIn(fullText, o.text) }));
 
   // Has this amendment already happened?
   //
@@ -242,9 +251,46 @@ export function createRedline(ops, fullText) {
     for (const op of additions) {
       if (op.done || (op.scope || '') !== (path || '')) continue;
       op.done = true;
+      // `inLaw` is asked FIRST. Both flags say "this has already happened", but
+      // one is evidence about this very language and the other is an inference
+      // from the amendment's strikes. Where they agree the order is immaterial;
+      // where a strike's operand simply is not in the provision, checking
+      // staleness first reported an addition the law demonstrably contains as
+      // one that could not be placed.
+      if (op.inLaw) { op.applied = true; continue; }
       if (stale) { op.staleSkip = true; continue; }
-      if (alreadyIn(fullText, op.text)) { op.applied = true; continue; }
       out.push(op);
+    }
+    return out;
+  }
+
+  /**
+   * The provisions an already-enacted addition put into the law, by path.
+   *
+   * When the Code already contains the added language there is nothing to draw
+   * — drawing it would show the provision twice, once coloured as new. But
+   * "nothing to draw" is not the same as "nothing to say": the reader is
+   * looking at a bill, and the provisions it created are right there on screen,
+   * indistinguishable from law that predates it. These are the paths of those
+   * provisions, so the pane can mark them as this bill's work.
+   *
+   * The added block's own leading markers give the numbers — the same signal
+   * scopeAdditions() reads for depth. An add-at-end op is scoped to the parent,
+   * so its children hang directly off it; an after-unit op is scoped to the
+   * sibling it follows, so they hang off that sibling's parent.
+   */
+  function appliedNodePaths() {
+    const out = new Set();
+    for (const op of additions) {
+      if (!op.inLaw || typeof op.scope !== 'string') continue;
+      const base =
+        op.placement === 'after-unit'
+          ? op.scope.replace(/\([A-Za-z0-9]{1,8}\)$/, '')
+          : op.scope;
+      for (const line of String(op.text).split('\n')) {
+        const m = line.match(/^\s*(?:``|‘‘|["“])?\s*(\([A-Za-z0-9]{1,8}\))/);
+        if (m) out.add(base + m[1]);
+      }
     }
     return out;
   }
@@ -252,6 +298,8 @@ export function createRedline(ops, fullText) {
   return {
     apply,
     additionsAt,
+    appliedNodePaths,
+    isStale: () => stale,
     /** Ops that never found a home, for the panel to report honestly. */
     unplaced: () => work.filter((o) => !o.done),
     // Drawn into the law, which is not the same as dealt with: an addition the

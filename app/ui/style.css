@@ -382,6 +382,12 @@ body {
    is set with `className =` rather than classList.add, which is the hole the
    markup contract above had until it was widened. */
 .prov .node.lead-in { margin-bottom: .85em; }
+/* A provision this bill added, already in force. Marked, not coloured as an
+   insertion: nothing is being added to the law on screen — the law already
+   reads this way, because of this bill. The rule down the side says "this is
+   the bill's work" without claiming it is a pending change. */
+.prov .node.was-added > .body { border-left: 2px solid var(--ins); padding-left: 8px; }
+.prov .node.was-added > .body > .marker { color: var(--ins); }
 .prov .node.dimmed { opacity: .45; }
 .prov .node.dimmed:hover { opacity: 1; }
 

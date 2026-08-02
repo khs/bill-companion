@@ -366,6 +366,14 @@ function nodeEl(node, focusPath, red) {
     hd.textContent = node.heading;
     body.appendChild(hd);
   }
+  // A provision this bill added, already in force. There is nothing to draw
+  // into it — the law reads this way *because* of the bill — but leaving it
+  // unmarked is why an enacted bill looked like it did nothing: the reader sees
+  // the provision and has no way to tell it apart from law that predates it.
+  if (red && red.appliedNodePaths && red.appliedNodePaths().has(node.path)) {
+    el.classList.add('was-added');
+    el.title = 'Added by this bill — already in force';
+  }
   appendMarked(body, node.text, red, node.path);
   el.appendChild(body);
   if (node.children.length) {
@@ -524,10 +532,20 @@ function effect(eff, handlers) {
       row.appendChild(f);
     } else if (op.type === 'strike') {
       const f = document.createElement('span');
+      // "Not found" and "already gone" look identical to a matcher and mean
+      // opposite things to a reader. Where the rest of this amendment is
+      // already in the law, language it strikes being absent is the amendment
+      // having *worked*, and flagging it warns about the one thing that went
+      // right.
+      const enacted =
+        eff.redline &&
+        ((eff.redline.appliedAdditions && eff.redline.appliedAdditions().length > 0) ||
+          (eff.redline.isStale && eff.redline.isStale()));
       if (op.found) { f.className = 'found'; f.textContent = '✓ found in current text'; }
+      else if (enacted) { f.className = 'found'; f.textContent = '✓ already struck from the law'; }
       else { f.className = 'notfound'; f.textContent = '⚠ not found verbatim'; }
       row.appendChild(f);
-    } else if (op.type === 'insert') {
+    } else if (op.type === 'insert' && op.placement !== 'after-unit') {
       // Two different reasons, and saying the wrong one is worse than saying
       // nothing: the bill may not have stated a position at all, or it may have
       // stated one whose anchor text is no longer in the provision.
@@ -536,7 +554,7 @@ function effect(eff, handlers) {
       f.textContent =
         op.replaces != null || op.anchor ? '⚠ anchor text not found' : '⚠ position not stated';
       row.appendChild(f);
-    } else if (op.type === 'add-at-end') {
+    } else if (op.type === 'add-at-end' || op.placement === 'after-unit') {
       // Three reasons an addition isn't drawn, and they mean opposite things.
       // Already in the law is the bill having *succeeded*; the reader should not
       // go hunting for green text, nor conclude the change was missed.
