@@ -820,18 +820,36 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    carried, because "10 U.S.C. 1580 note" is not section 1580.
    Corpus: NDAA amendments 1,387 → 1,517, targeted +61, opSpans +476 (≈3.7 per
    newly-seen instruction), and `uncoveredVerbs` 110 → 32.
-2. **A tail of one-off amendatory phrasings is still unseen.** Was 173 across the
-   twenty-bill corpus — 3.0% of all amendatory verbs, and 110 of them in the
-   NDAA alone — but TODO 1 accounted for 78 of the NDAA's 110, leaving 32
-   there and 95 corpus-wide. Shapes with no shared structure: "the Act entitled ``An Act to
-   render immune from seizure…'' (22 U.S.C. 2459; 79 Stat. 985)", "The heading of
-   such section", "The sixth sentence of section 7(m) of title 4", "Subpart A of
-   part IX of subtitle C of title I of Public Law 115-97". To find them again:
-   walk every `is amended` not inside a parsed amendment, take the ~70 characters
-   before it, normalise digits and markers to `N`/`(X)`, and cluster — every
-   systematic cause has stood out immediately as a double-digit count. What is
-   left is genuinely long-tail, and each further fix risks the middle running
-   somewhere it shouldn't.
+2. **The tail of one-off amendatory phrasings is down to 139, and is now
+   genuinely a tail.** Was 173 at the start of 2026-08-02, with 110 in the NDAA
+   alone. TODO 1 took 78 of those; the appropriations proviso below took 8 more.
+   Re-run the clustering the way this note has always prescribed — walk every
+   `is amended` not inside a parsed amendment, take the ~70 characters before
+   it, normalise digits and markers to `N`/`(X)`, and cluster — and the answer
+   now is **134 distinct shapes with a largest cluster of 4**. By the test this
+   note itself sets ("every systematic cause has stood out immediately as a
+   double-digit count"), there is nothing systematic left in it. Stop looking
+   for one; the remaining work here is one phrasing at a time, and each costs
+   more risk than it returns.
+   The last systematic cause found, for the record: **an appropriations proviso
+   chains amendments after a colon that sits in the wrong place.**
+
+   ```
+   …is amended by striking ``2023'' and inserting ``2024'': Provided further,
+   That section 9(h)(3) of the Richard B. Russell National School Lunch Act
+   (42 U.S.C. 1758(h)(3)) is amended in the first sentence by striking …
+   ```
+
+   `AMEND_BOUNDARY` accepts `:` — but the colon opens the proviso, and the
+   second instruction starts after "That", where no boundary fell. Adding
+   `\bThat\s+` found 8 of the 14, each with a real target and real operations.
+   Two things checked before accepting it: no op span is claimed by two
+   amendments (the preceding instruction's body used to run over these, so the
+   risk was double attribution, not just miscounting), and `amendments` moved
+   +10 against `uncoveredVerbs` -8 — the two extra being verbs that were
+   already inside a previous instruction's over-reaching body and are now heads
+   of their own. "That" is trimmed from the head like the punctuation beside
+   it, so the instruction starts at its target rather than at the conjunction.
 3. **Appropriations acts are navigable.** (Completed 2026-08-02.) Two passes:
    sentence-case section headings earlier in the day, and now the layer between
    a division and its sections. An appropriations act centres the label on a

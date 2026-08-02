@@ -133,7 +133,18 @@ const RE_STAT = /\b(\d{1,3})\s+Stat\.\s*(\d{1,5})/gi;
 // target immediately after one — "(a) In General.--Section 5330 of title 31 ...
 // is amended" — with no space between the period and the dash, so `[.;:]\s+`
 // never fires and the most common shape in the bill goes unseen.
-const AMEND_BOUNDARY = '(?:^|[.;:]\\s+|[—–]\\s*|-{2,}\\s*|\\)\\s+)';
+// "That" is the last of these and the least obvious. An appropriations act
+// chains its amendments inside provisos —
+//
+//   …is amended by striking ``2023'' and inserting ``2024'': Provided further,
+//   That section 9(h)(3) of the Richard B. Russell National School Lunch Act
+//   (42 U.S.C. 1758(h)(3)) is amended in the first sentence by striking …
+//
+// — and the colon that opens the proviso sits before "Provided", not before the
+// target, so no boundary fell where the second instruction actually starts. 14
+// of the 147 amendatory verbs still outside any parsed amendment, and the only
+// double-digit cause left in that set.
+const AMEND_BOUNDARY = '(?:^|[.;:]\\s+|[—–]\\s*|-{2,}\\s*|\\)\\s+|\\bThat\\s+)';
 
 // What the span between the target and "is amended" may not cross. A run-in
 // heading (".--") or a new bill section ("SEC. 205.") means a *different*
@@ -1508,7 +1519,10 @@ export function extractAmendments(text, citations, divisions = []) {
   RE_AMEND_HEAD.lastIndex = 0;
   while ((m = RE_AMEND_HEAD.exec(text))) {
     const raw = m[0];
-    const lead = raw.length - raw.replace(/^[\s.;:—–)-]+/, '').length;
+    // "That" is a boundary like the punctuation beside it, so it is trimmed the
+    // same way — the instruction starts at its target, not at the conjunction
+    // that introduced it.
+    const lead = raw.length - raw.replace(/^(?:[\s.;:—–)-]+|That\s+)+/, '').length;
     heads.push({
       start: m.index + lead,
       headEnd: m.index + raw.length,
@@ -1528,7 +1542,10 @@ export function extractAmendments(text, citations, divisions = []) {
   RE_AMEND_HEAD_EACH.lastIndex = 0;
   while ((m = RE_AMEND_HEAD_EACH.exec(text))) {
     const raw = m[0];
-    const lead = raw.length - raw.replace(/^[\s.;:—–)-]+/, '').length;
+    // "That" is a boundary like the punctuation beside it, so it is trimmed the
+    // same way — the instruction starts at its target, not at the conjunction
+    // that introduced it.
+    const lead = raw.length - raw.replace(/^(?:[\s.;:—–)-]+|That\s+)+/, '').length;
     heads.push({
       start: m.index + lead,
       headEnd: m.index + raw.length,
@@ -1545,7 +1562,10 @@ export function extractAmendments(text, citations, divisions = []) {
   RE_AMEND_HEAD_SUCH.lastIndex = 0;
   while ((m = RE_AMEND_HEAD_SUCH.exec(text))) {
     const raw = m[0];
-    const lead = raw.length - raw.replace(/^[\s.;:—–)-]+/, '').length;
+    // "That" is a boundary like the punctuation beside it, so it is trimmed the
+    // same way — the instruction starts at its target, not at the conjunction
+    // that introduced it.
+    const lead = raw.length - raw.replace(/^(?:[\s.;:—–)-]+|That\s+)+/, '').length;
     heads.push({
       start: m.index + lead,
       headEnd: m.index + raw.length,
@@ -1564,7 +1584,10 @@ export function extractAmendments(text, citations, divisions = []) {
   RE_AMEND_HEAD_UNIT.lastIndex = 0;
   while ((m = RE_AMEND_HEAD_UNIT.exec(text))) {
     const raw = m[0];
-    const lead = raw.length - raw.replace(/^[\s.;:—–)-]+/, '').length;
+    // "That" is a boundary like the punctuation beside it, so it is trimmed the
+    // same way — the instruction starts at its target, not at the conjunction
+    // that introduced it.
+    const lead = raw.length - raw.replace(/^(?:[\s.;:—–)-]+|That\s+)+/, '').length;
     heads.push({
       start: m.index + lead,
       headEnd: m.index + raw.length,
