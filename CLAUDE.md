@@ -861,8 +861,29 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    run-in section is also still the provision's own first clause, because there
    is no heading to have.
 4. **`in the matter preceding subparagraph (A)`** still falls through to the
-   inert internal-ref note. It names a position between provisions, not a
-   subtree; resolving it to the neighbour would be subtly wrong.
+   inert internal-ref note. **734 occurrences across the corpus** — 692
+   "preceding", 42 "following" — so it is the largest single unhandled
+   navigation shape, not a curiosity.
+   The old note called it unresolvable because it "names a position between
+   provisions". That is not quite right, and the semantics are exact: the matter
+   preceding subparagraph (A) is the **lead-in text of (A)'s parent**. If (A) is
+   `(d)(2)(A)`, it is the flush text of `(d)(2)`, the words that introduce the
+   list. So it is addressable; what it is not is a *subtree*.
+   That last distinction is the reason not to do this casually. `RE_NAV` is
+   `\bin\s+(UNIT_PHRASE)` and does not fire here — "the matter preceding" sits
+   between — so pass 2 picks up "subparagraph (A)" as a bare reference and the
+   op never gets scoped at all. Scoping it to the parent is only half a fix,
+   because `apply()` tests `String(path).startsWith(op.scope)`, so an op scoped
+   to `(d)(2)` also applies inside `(d)(2)(A)` — which is precisely the text the
+   phrase excludes. A strike would land in the subparagraph the bill said to
+   stay out of.
+   The shape of the fix, then: a matcher run *before* `RE_NAV` in the
+   navigation pass so it claims the span; resolve the phrase, take the parent of
+   the first address, and emit a step there carrying an `exact` flag; and teach
+   `inScope` in `app/ui/redline.js` to honour that flag with `path === op.scope`.
+   Do it as its own pass with its own corpus diff — the navigation parser is
+   where "a cross-reference inside quoted inserted text reparents everything
+   after it" was learned, and it is the least forgiving code here.
 5. **The CFR branch of `expandRelativeRefs` is exercised, and is dead in
    practice.** (2026-08-02.) It was untested because it is unreachable from bill
    text: across the 34 MB corpus exactly one "is amended" has a CFR reference
