@@ -4,6 +4,7 @@ import { resolveCfr, resolveCfrPart, cfrLinks } from './cfr.js';
 import { resolveUsc, uscLinks } from './usc.js';
 import { findAct } from './popular-names.js';
 import { resolveActSection } from './act-sections.js';
+import { resolvePlaw } from './plaw.js';
 
 const cache = new Map();
 
@@ -21,6 +22,20 @@ export async function resolve(cite) {
   });
   cache.set(key, p);
   return p;
+}
+
+/** The three places a Public Law can be read outside this app. */
+function publawLinks(cite) {
+  return [
+    { label: 'govinfo (text)', href: `https://www.govinfo.gov/link/plaw/${cite.congress}/public/${cite.law}` },
+    { label: 'congress.gov', href: `https://www.congress.gov/public-laws/${cite.congress}th-congress` },
+    {
+      label: 'Statutes at Large',
+      href: `https://www.govinfo.gov/app/search/%7B%22query%22%3A%22${encodeURIComponent(
+        `Public Law ${cite.congress}-${cite.law}`
+      )}%22%7D`,
+    },
+  ];
 }
 
 function cacheKey(c) {
@@ -121,6 +136,13 @@ async function dispatch(cite) {
           }
         }
       }
+      // Not codified, or not codified in a way the index could see. If we hold
+      // the law's own text, that is the only thing left that can answer — and
+      // for an appropriations line, an effective date or a savings clause it is
+      // the *right* answer, since there was never going to be a Code section.
+      const local = await resolvePlaw(cite.congress, cite.law, cite.actSection || '');
+      if (local) return { ...local, links: publawLinks(cite) };
+
       return {
         source: 'Public Law',
         citation: `Pub. L. ${cite.congress}-${cite.law}`,
@@ -133,16 +155,7 @@ async function dispatch(cite) {
           label: `Pub. L. ${cite.congress}-${cite.law} on govinfo`,
           href: `https://www.govinfo.gov/link/plaw/${cite.congress}/public/${cite.law}`,
         },
-        links: [
-          { label: 'govinfo (text)', href: `https://www.govinfo.gov/link/plaw/${cite.congress}/public/${cite.law}` },
-          { label: 'congress.gov', href: `https://www.congress.gov/public-laws/${cite.congress}th-congress` },
-          {
-            label: 'Statutes at Large',
-            href: `https://www.govinfo.gov/app/search/%7B%22query%22%3A%22${encodeURIComponent(
-              `Public Law ${cite.congress}-${cite.law}`
-            )}%22%7D`,
-          },
-        ],
+        links: publawLinks(cite),
       };
     }
 

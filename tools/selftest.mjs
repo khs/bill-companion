@@ -1024,9 +1024,58 @@ section('internal cross-references');
     // Most of a Public Law is never codified. Section 4 of the Consolidated
     // Appropriations Act, 2019 is an appropriations provision with no Code
     // section to point at, and inventing one would be worse than the link.
-    const miss = await resolve(pubs[1]);
-    eq('an uncodified section still declines', miss.external, true);
-    ok('  and hands over the link', /don't play nice/.test(miss.note || ''), miss.note);
+    // ---- and where the Code cannot answer, the law's own text -------------
+    // Most of a Public Law is never codified: 507 citations across the corpus
+    // name a section and only 174 are in the Code. The other 333 are
+    // appropriations lines, effective dates and savings clauses that exist
+    // nowhere but the law itself, which is what data/plaw holds.
+    if (existsSync(join(ROOT, 'data/plaw/116-6/manifest.json'))) {
+      // Section 4 of the Consolidated Appropriations Act, 2019 is a statement
+      // of appropriations. There is no Code section and never will be.
+      const enacted = await resolve(pubs[1]);
+      eq('an uncodified section falls back to the enacted text',
+         enacted.source, 'Public Law (as enacted)');
+      eq('  naming the law and the section', enacted.citation, 'Pub. L. 116-6 § 4');
+      ok('  and carrying its real text',
+         /STATEMENT OF APPROPRIATIONS/i.test(enacted.plaw.entries[0].text),
+         JSON.stringify(enacted.plaw.entries[0].text.slice(0, 80)));
+
+      // A section number is not unique in a Public Law. Every division of an
+      // appropriations act restarts at 101, and the citation does not say
+      // which was meant — so all of them are returned rather than the first.
+      const many = extractCitations(
+        normalizeText('SEC. 2. X.\nFunds under section 101 of Public Law 116-6 shall be used.\n')
+      ).find((c) => c.kind === 'publaw');
+      const multi = await resolve(many);
+      eq('a repeated section number returns every one of them',
+         multi.plaw.entries.length, 6);
+      ok('  each under its own division',
+         new Set(multi.plaw.entries.map((e) => e.ancestors[0])).size === 6,
+         multi.plaw.entries.map((e) => e.ancestors[0]).join(' | '));
+
+      // A law named with no section names the whole Act, not a provision.
+      const whole = extractCitations(
+        normalizeText('SEC. 2. X.\nNothing in Public Law 116-136 applies here.\n')
+      ).find((c) => c.kind === 'publaw');
+      const law = await resolve(whole);
+      eq('a bare Public Law gives its contents', law.plaw.entries, null);
+      ok('  which is its whole table of contents', law.plaw.toc.length === law.plaw.total,
+         `${law.plaw.toc.length} of ${law.plaw.total}`);
+
+      // A section that does not exist is still a link. No guessing.
+      const nope = extractCitations(
+        normalizeText('SEC. 2. X.\nUnder section 9999 of Public Law 116-6 nothing happens.\n')
+      ).find((c) => c.kind === 'publaw');
+      eq('a section the law does not have still declines', (await resolve(nope)).external, true);
+
+      // The editorial apparatus govinfo wraps around a Public Law must not
+      // survive into the text: "SEC. 3. <<NOTE: 1 USC 1 note.>>  REFERENCES TO
+      // ACT." is a heading with a citation wedged through it.
+      const idx = JSON.parse(readFileSync(join(ROOT, 'data/plaw/116-6/manifest.json'), 'utf8'));
+      ok('no <<NOTE:>> marker survives ingest', !JSON.stringify(idx).includes('<<NOTE'));
+      eq('  and the heading it was inside is clean',
+         idx.toc.find((t) => t.num === '3').heading, 'REFERENCES TO ACT');
+    }
     globalThis.fetch = realFetch;
   }
 

@@ -309,6 +309,7 @@ tools/
 corpus/                 corpus.json + baseline.json, and files/ — the bills
 vendor/                 pdf.js, vendored so the app works offline
 data/usc/               the ingested Code: 60,436 sections + acts/, generated
+data/plaw/              10 Public Laws, sharded per section number, generated
 .nojekyll               tells GitHub Pages to serve the tree as-is
 ```
 
@@ -319,9 +320,9 @@ nothing — so it lives here rather than being fetched at build time.
 ## Tests
 
 ```bash
-node tools/selftest.mjs       # 336 checks: parsing, PDF extraction, citations, tree, share links, live eCFR, local data
+node tools/selftest.mjs       # 344 checks: parsing, PDF extraction, citations, tree, share links, live eCFR, local data
 npm i -D linkedom             # once, for the DOM tests
-node tools/rendertest.mjs     # 172 checks: both panes, the redline, additions, resolvers, fallback states, wiring
+node tools/rendertest.mjs     # 178 checks: both panes, the redline, additions, resolvers, fallback states, wiring
 node tools/corpus.mjs         # 30 real bills, every metric diffed against a recorded baseline
 node tools/impact.mjs         # not a test: prints what one bill parses to, resolution included
 ```

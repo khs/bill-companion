@@ -12,6 +12,7 @@ export function renderContext(res, handlers) {
   const root = document.createElement('div');
   if (res.error)   return errorCard(root, res);
   if (res.missing) return missingCard(root, res, handlers);
+  if (res.plaw)    return plawCard(root, res, handlers);
   if (res.external || res.internal) return externalCard(root, res);
 
   // The redline lives for exactly one render pass. Marks are applied to the law
@@ -586,6 +587,96 @@ function missingCard(root, res, handlers) {
   }
   root.appendChild(c);
   if (res.links) root.appendChild(links(res.links));
+  void handlers;
+  return root;
+}
+
+/**
+ * A Public Law, from the text we hold rather than the Code.
+ *
+ * Two shapes: a whole law, which gets its table of contents, and a section,
+ * which gets its text. A section number is not unique in a Public Law — every
+ * division of an appropriations act restarts at 101, so "section 101 of Public
+ * Law 116-6" names six different provisions — so `entries` is a list and all of
+ * them are shown, each under the division it belongs to. Picking one would be a
+ * confident answer to a question the citation does not settle.
+ */
+function plawCard(root, res, handlers) {
+  head(root, res);
+
+  // This text is a snapshot of the day the law passed and is never updated.
+  // Where the Code could have answered it already has — index.js prefers it —
+  // so reaching here means either the section was never codified or it was
+  // codified somewhere the credits do not say. Either way the reader has to
+  // know they are looking at history.
+  const warn = document.createElement('div');
+  warn.className = 'card warn';
+  const wh = document.createElement('h4');
+  wh.textContent = 'As enacted';
+  warn.appendChild(wh);
+  const wp = document.createElement('p');
+  wp.textContent =
+    `${res.plaw.name || res.plaw.law} as it was passed. This is not updated for later ` +
+    `amendments — where a section of this law was codified, the U.S. Code is shown instead.`;
+  warn.appendChild(wp);
+  root.appendChild(warn);
+
+  if (res.plaw.entries && res.plaw.entries.length) {
+    if (res.plaw.entries.length > 1) {
+      root.appendChild(
+        card(
+          'More than one',
+          `This law has ${res.plaw.entries.length} sections numbered ${res.plaw.number} — ` +
+            `one in each of the divisions below. The citation does not say which.`,
+          'warn'
+        )
+      );
+    }
+    for (const e of res.plaw.entries) {
+      const box = document.createElement('div');
+      box.className = 'prov';
+      if (e.ancestors && e.ancestors.length) {
+        const where = document.createElement('p');
+        where.className = 'ctx-sub';
+        where.textContent = e.ancestors.join('  ›  ');
+        box.appendChild(where);
+      }
+      const body = document.createElement('div');
+      body.className = 'node';
+      const span = document.createElement('span');
+      span.className = 'body';
+      span.textContent = e.text;
+      body.appendChild(span);
+      box.appendChild(body);
+      root.appendChild(box);
+    }
+  } else if (res.plaw.toc && res.plaw.toc.length) {
+    // A law named without a section. Its contents, not a guess at which of them
+    // was meant.
+    const c = document.createElement('div');
+    c.className = 'card';
+    const h = document.createElement('h4');
+    h.textContent = `Contents — ${res.plaw.total} sections`;
+    c.appendChild(h);
+    const list = document.createElement('div');
+    list.className = 'links';
+    for (const t of res.plaw.toc.slice(0, 200)) {
+      const s = document.createElement('span');
+      s.className = 'crumb';
+      s.textContent = `Sec. ${t.num}. ${t.heading}`.slice(0, 90);
+      list.appendChild(s);
+    }
+    c.appendChild(list);
+    if (res.plaw.toc.length > 200) {
+      const more = document.createElement('p');
+      more.className = 'dim';
+      more.textContent = `…and ${res.plaw.toc.length - 200} more.`;
+      c.appendChild(more);
+    }
+    root.appendChild(c);
+  }
+
+  if (res.links && res.links.length) root.appendChild(links(res.links));
   void handlers;
   return root;
 }

@@ -1,0 +1,64 @@
+{
+ "laws": [
+  {
+   "id": "114-94",
+   "name": "Fixing America’s Surface Transportation Act",
+   "sections": 443,
+   "total": 443
+  },
+  {
+   "id": "115-141",
+   "name": "Consolidated Appropriations Act, 2018",
+   "sections": 617,
+   "total": 1254
+  },
+  {
+   "id": "115-232",
+   "name": "John S. McCain National Defense Authorization Act for Fiscal Year 2019",
+   "sections": 804,
+   "total": 817
+  },
+  {
+   "id": "116-136",
+   "name": "CARES Act",
+   "sections": 286,
+   "total": 286
+  },
+  {
+   "id": "116-260",
+   "name": "Consolidated Appropriations Act, 2021",
+   "sections": 828,
+   "total": 2092
+  },
+  {
+   "id": "116-6",
+   "name": "Consolidated Appropriations Act, 2019",
+   "sections": 400,
+   "total": 659
+  },
+  {
+   "id": "116-92",
+   "name": "National Defense Authorization Act for Fiscal Year 2020",
+   "sections": 1229,
+   "total": 1246
+  },
+  {
+   "id": "116-94",
+   "name": "Further Consolidated Appropriations Act, 2020",
+   "sections": 193,
+   "total": 368
+  },
+  {
+   "id": "117-103",
+   "name": "Consolidated Appropriations Act, 2022",
+   "sections": 663,
+   "total": 1348
+  },
+  {
+   "id": "117-2",
+   "name": "American Rescue Plan Act of 2021",
+   "sections": 217,
+   "total": 217
+  }
+ ]
+}

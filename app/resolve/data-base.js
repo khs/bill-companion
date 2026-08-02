@@ -32,6 +32,33 @@ export const DATA = (() => {
 })();
 
 /**
+ * Base URL for the sharded Public Law text, without a trailing slash.
+ *
+ * A sibling of DATA rather than a child: `data/usc` and `data/plaw` are two
+ * ingests of two different things. Overridden the same way and for the same
+ * reason — `window.BILL_COMPANION_PLAW` or
+ * <meta name="bill-companion-plaw" content="…"> — so the 45 MB can be moved off
+ * the page's own host without touching code.
+ *
+ * Kept separate from BILL_COMPANION_DATA deliberately. Deriving it by string
+ * surgery on DATA ("swap the trailing /usc for /plaw") works right up until
+ * somebody points DATA at a host that does not follow that shape, and then it
+ * fails silently — every Public Law reverting to an outbound link with nothing
+ * to say why.
+ */
+export const PLAW = (() => {
+  const strip = (s) => String(s).replace(/\/+$/, '');
+  if (typeof globalThis !== 'undefined' && globalThis.BILL_COMPANION_PLAW) {
+    return strip(globalThis.BILL_COMPANION_PLAW);
+  }
+  if (typeof document !== 'undefined' && document.querySelector) {
+    const meta = document.querySelector('meta[name="bill-companion-plaw"]');
+    if (meta && meta.content) return strip(meta.content);
+  }
+  return 'data/plaw';
+})();
+
+/**
  * Is this a working checkout, rather than a deployed copy?
  *
  * Only ever used to decide whether telling someone to run a Python command is

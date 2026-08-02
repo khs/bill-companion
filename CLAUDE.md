@@ -9,11 +9,12 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 336 checks, no dependencies
-node tools/rendertest.mjs                 # 172 checks, needs `npm i -D linkedom`
+node tools/selftest.mjs                   # 344 checks, no dependencies
+node tools/rendertest.mjs                 # 178 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
+node tools/ingest_plaw.mjs                # 10 Public Laws, 45 MB; skips those present
 ```
 
 `bun` should be interchangeable with `node` for all four `.mjs` tools — but only
@@ -141,8 +142,8 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 336 checks passed
-node tools/rendertest.mjs   # all 172 render checks passed
+node tools/selftest.mjs     # all 344 checks passed
+node tools/rendertest.mjs   # all 178 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
@@ -227,6 +228,27 @@ change below is asserted in `selftest.mjs` or `rendertest.mjs` (286 → 328 and
   amendments or diff spans moved at all. Every new section was checked to be an
   indented sentence-case heading and none flush left, per bill, before
   `--update`.
+
+**Public Laws now show text, 2026-08-02.** Two mechanisms, deliberately
+complementary — see the invariants for the ordering rule:
+
+- **`data/usc/acts/` already held 1,737 Public Laws.** Nothing had to be
+  downloaded; the ingester has been filing sections under `pub_l_<c>_<l>` all
+  along and nothing was asking. "Section 12306 of Public Law 113-79" → 7 U.S.C.
+  1632c. 174 of 507 sectioned citations, over 79 distinct Code sections.
+- **`data/plaw/` holds ten laws in full**, sharded per section number by
+  `tools/ingest_plaw.mjs` (45 MB, 5,691 files). This is for the 333 sectioned
+  citations the Code cannot reach — appropriations lines, effective dates,
+  savings clauses, which were never codified and never will be.
+
+Across the corpus, **961 of 3,307 Public Law citations (29%) now show real text
+against none before**, and 244 of 507 sectioned ones (48%). The remaining 71%
+are laws outside the ten, which stay outbound links.
+
+Do not expect a threshold to appear if you add more laws. The ten cover 24% of
+citations, the top twenty-five reach 37%, and there are 602 distinct laws in the
+corpus — the return is close to linear. Add a law when a sample leans on one,
+the way `popular-names.js` grew.
 
 Two things found on the way that were not part of the ask: `lead-in` in
 `render-context.js` had been styled nowhere since the pane was written, and the
@@ -606,6 +628,38 @@ section. The way to reach SSA § 1861 is `enactedAs` and the Act index below, no
 by widening this flag: the flag *assumes* an equivalence, the index *looks one
 up*, and only one of those can be right about the Social Security Act.
 
+**The Code answers for a Public Law where it can; the law's own text answers
+where it cannot, and the two must not be confused.** `data/usc/acts/` gives
+*current* law — the section as it stands now, amendments and all — and
+`data/plaw/` gives the law as enacted, a snapshot never updated. `index.js`
+tries the Code first, because a reader asking about a provision almost always
+wants what it says today, and `plawCard` states "As enacted" outright when it
+falls through. Reversing that order would quietly serve superseded text to
+someone who had no way to tell.
+
+Two things about the shards. **One file per section NUMBER, holding a list** —
+every division of an appropriations act restarts at 101, so "section 101 of
+Public Law 116-6" names six provisions and one-file-per-section would have five
+of them overwrite each other. That is exactly the shard-format problem TODO 6
+still wants solved for the Code itself, and there was no reason to repeat it.
+The pane shows all six under their divisions and says the citation does not
+settle which; picking one would be a confident answer to an unanswerable
+question. And **`<<NOTE: …>>` markers must be stripped at ingest**: govinfo
+annotates the PLAW rendition with the Statutes at Large and Code cites for every
+note it generated, written inline —
+
+```
+SEC. 3. <<NOTE: 1 USC 1 note.>>  REFERENCES TO ACT.
+DIVISION A—DEPARTMENT <<NOTE: …Appropriations Act, 2019.>> OF HOMELAND SECURITY …
+```
+
+— which is apparatus wedged through the middle of a heading. They arrive as
+entities, so tag-stripping does not touch them; they only become text once
+`unwrapPre` decodes. Stripped in `ingest_plaw.mjs` rather than in `unwrapPre`,
+because the enrolled bills in `corpus/files` contain **zero** and widening the
+shared helper would put the corpus baseline at risk to fix a problem it does not
+have.
+
 **A Public Law is an Act, and the index already had it.** `data/usc/acts/`
 contains 1,737 files named `pub_l_<congress>_<law>.json` — the ingester files a
 section under whatever its credit says, and most modern credits say "Pub. L.
@@ -820,8 +874,13 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
      H.J. Res. 31 render as uppercase accent-coloured headings.
    - `<optgroup>` in the jump menu. Native select styling varies by platform and
      nobody has seen it on any of them.
+   And the Public Law pane added the same day is a fourth: `.card.warn` for
+   "As enacted", `.prov` blocks for each section, and a `.links` row reused as a
+   table of contents for up to 200 entries — which is a lot of chips in a row
+   and has never been looked at.
    Ask for a screenshot of the Fiscal Responsibility Act (breadcrumbs, and the
-   run-in sections in division B) before trusting any of it.
+   run-in sections in division B) and of a Public Law citation before trusting
+   any of it.
 12. **`inserting after subparagraph (C) the following` has the sibling problem
    `scopeAdditions` just fixed for additions.** Same shape — the new provision is
    a sibling of the one named, not a child — but insert ops carry anchors and
@@ -845,13 +904,16 @@ app/main.js           wiring; ingest() is the single entry point for bill text
 app/share.js          fragment-encoded share links (deflate + base64url)
 app/parse/            pdf.js · bill.js · citations.js · outline.js  (extraction)
 app/resolve/          cfr.js (live eCFR) · usc.js (local shards) ·
+                      plaw.js (Public Law text) · act-sections.js ·
                       internal.js (refs within the bill) · provision-tree.js ·
-                      popular-names.js · index.js (dispatch)
+                      popular-names.js · data-base.js · index.js (dispatch)
 app/ui/               render-bill.js · render-context.js · redline.js · style.css
-tools/                ingest_usc.py · serve.py · selftest.mjs · rendertest.mjs ·
+tools/                ingest_usc.py · ingest_plaw.mjs · serve.py ·
+                      selftest.mjs · rendertest.mjs ·
                       measure.mjs (shared metrics) · impact.mjs · corpus.mjs
-corpus/               corpus.json + baseline.json (tracked) · files/ (not)
+corpus/               corpus.json + baseline.json · files/ — all tracked
 data/usc/             generated shards, one JSON per section; tracked — it IS the site
+data/plaw/            10 Public Laws, one JSON per section NUMBER; tracked, 45 MB
 ```
 
 Citation kinds: `usc` `cfr` `publaw` `stat` `act` `internal`. Relative addresses

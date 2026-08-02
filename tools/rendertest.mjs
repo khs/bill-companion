@@ -682,6 +682,37 @@ section('resolvers');
   // The alternatives are still offered separately.
   ok('  and the other sources are still listed', (pl.links || []).length === 3, `${(pl.links || []).length}`);
 
+  // ---- and the laws we hold locally --------------------------------------
+  if (existsSync(join(ROOT, 'data/plaw/116-6/manifest.json'))) {
+    const enacted = await resolve({ kind: 'publaw', congress: '116', law: '6', actSection: '4', text: 'section 4 of Public Law 116-6' });
+    const el = renderContext(enacted, {});
+    ok('an uncodified section renders its enacted text',
+       /STATEMENT OF APPROPRIATIONS/i.test(el.textContent), el.textContent.slice(0, 90));
+    // The reader has to know this is history. The text is a snapshot of the day
+    // the law passed and is never updated — where the Code could answer, it
+    // already did, so reaching this pane means nobody has.
+    ok('  under an "As enacted" warning',
+       [...el.querySelectorAll('.card.warn h4')].some((h) => /As enacted/.test(h.textContent)),
+       [...el.querySelectorAll('h4')].map((h) => h.textContent).join(' | '));
+
+    const many = await resolve({ kind: 'publaw', congress: '116', law: '6', actSection: '101', text: 'section 101 of Public Law 116-6' });
+    const manyEl = renderContext(many, {});
+    eq('every section sharing a number is rendered',
+       manyEl.querySelectorAll('.prov').length, 6);
+    ok('  and the ambiguity is stated, not hidden',
+       /More than one/.test(manyEl.textContent) && /6 sections numbered 101/.test(manyEl.textContent),
+       manyEl.textContent.slice(0, 160));
+    ok('  each labelled with the division it is in',
+       [...manyEl.querySelectorAll('.prov .ctx-sub')].length === 6,
+       `${manyEl.querySelectorAll('.prov .ctx-sub').length} labels`);
+
+    const whole = await resolve({ kind: 'publaw', congress: '116', law: '136', text: 'Public Law 116-136' });
+    const wholeEl = renderContext(whole, {});
+    ok('a bare Public Law renders its contents',
+       /Contents — 286 sections/.test(wholeEl.textContent),
+       [...wholeEl.querySelectorAll('h4')].map((h) => h.textContent).join(' | '));
+  }
+
   // Live eCFR through the real resolver: XML parse, section split, ancestry.
   try {
     const cfr = await resolve({ kind: 'cfr', title: '40', part: '60', section: '60.1', subsection: '', text: '40 CFR 60.1' });

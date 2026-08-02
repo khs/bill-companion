@@ -53,7 +53,7 @@ function paragraphs(text, secByStart) {
     // caps-locked orphan line of body text underneath. A section heading closes
     // with a period and a division heading closes at the blank line, which is
     // why only the first stops on its own.
-    if (cur && cur.head && !cur.runIn && !cur.headDone && isHeadingContinuationLine(line)) {
+    if (cur && cur.head && !cur.runIn && !cur.headDone && isHeadingContinuationLine(line, cur.text)) {
       cur.end = end;
       cur.text += /-$/.test(cur.text) ? line.trim() : ` ${line.trim()}`;
       if (cur.terminated && /\.\s*$/.test(cur.text)) cur.headDone = true;

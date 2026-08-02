@@ -211,7 +211,7 @@ export function parseBill(text) {
  * heading in the left pane, styled as body text — is one nobody would connect
  * back to here.
  */
-export function isHeadingContinuationLine(line) {
+export function isHeadingContinuationLine(line, sofar = '') {
   if (!line.trim()) return false;
   if (RE_SECTION.test(line) || RE_DIVISION.test(line)) return false;
   if (/[a-z]/.test(line)) return false; // body text
@@ -222,7 +222,12 @@ export function isHeadingContinuationLine(line) {
   // the legitimate continuation "1933." of "DEFINITIONS UNDER THE SECURITIES
   // ACT OF".
   if (/^\s*[•·]/.test(line)) return false;
-  if (/^\s*\d{1,4}\s*$/.test(line)) return false;
+  // A bare number is a folio — unless the heading so far ends with a comma, in
+  // which case it is plainly unfinished and the number is the rest of it.
+  // "DIVISION A—DEPARTMENT OF HOMELAND SECURITY APPROPRIATIONS ACT," / "2019"
+  // is a real heading in the Consolidated Appropriations Act, 2019, and a folio
+  // never follows a comma.
+  if (/^\s*\d{1,4}\s*$/.test(line) && !/,$/.test(sofar.trimEnd())) return false;
   return /[A-Za-z0-9]/.test(line);
 }
 
@@ -256,7 +261,7 @@ function joinWrappedHeading(lines, i, first, terminated) {
   // COM- / MODITY FUTURES TRADING / COMMISSION" runs to five lines.
   for (let j = i + 1; j < lines.length && j - i <= 6; j++) {
     const l = lines[j];
-    if (!isHeadingContinuationLine(l)) break;
+    if (!isHeadingContinuationLine(l, out)) break;
     // A word broken across the measure keeps its hyphen and loses the space,
     // the same rule guessMeta() uses for a wrapped short title. That leaves
     // "RULE-MAKING" rather than gluing it into "RULEMAKING" — the hyphen may
