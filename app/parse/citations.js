@@ -382,7 +382,12 @@ function scopeOps(ops, steps) {
       if (st.start > op.start) break;
       inForce = st;
     }
-    if (inForce) op.scope = inForce.path;
+    if (inForce) {
+      op.scope = inForce.path;
+      // "in the matter preceding (A)" scopes to the parent but excludes its
+      // children; every other step includes them.
+      if (inForce.exact) op.exact = true;
+    }
   }
 }
 
@@ -700,6 +705,24 @@ const MARKER_LIST = `${MARKER_PATH}(?:\\s*(?:,\\s*|\\band\\b|\\bor\\b|\\bthrough
 const UNIT_PHRASE = `${UNIT_WORDS}\\s+${MARKER_LIST}(?:\\s+of\\s+${UNIT_WORDS}\\s+${MARKER_LIST})*`;
 
 const RE_NAV = new RegExp(`\\bin\\s+(${UNIT_PHRASE})`, 'gi');
+// "in the matter preceding subparagraph (A), by striking ..." — 734 of these
+// across the corpus, 692 "preceding" and 42 "following", which makes it the
+// largest navigation shape nothing handled.
+//
+// It names the flush text of (A)'s PARENT: the words that introduce the list
+// (A) belongs to, or close it. RE_NAV cannot see it because "the matter
+// preceding" sits between "in" and the unit phrase, so pass 2 picked up
+// "subparagraph (A)" as a bare reference and the operation was never scoped at
+// all.
+//
+// "preceding" and "following" resolve to the same place on purpose. Both are
+// the parent's own text; which half is not something the provision tree
+// records, and inventing a distinction it cannot represent would be a claim
+// the data does not support.
+const RE_NAV_MATTER = new RegExp(
+  `\\bin\\s+the\\s+matter\\s+(?:preceding|following)\\s+(${UNIT_PHRASE})`,
+  'gi'
+);
 const RE_REF = new RegExp(`\\b(${UNIT_PHRASE})`, 'gi');
 const RE_PAIR = new RegExp(`(${UNIT_WORDS})\\s+(${MARKER_LIST})`, 'gi');
 const RE_LIST_SEP = /\s*(?:,\s*|\band\b|\bor\b|\bthrough\b|\bto\b)\s*/;
@@ -715,6 +738,26 @@ const RE_LIST_SEP = /\s*(?:,\s*|\band\b|\bor\b|\bthrough\b|\bto\b)\s*/;
  */
 function isInstructionPosition(before) {
   return /(?:^|--|—|–|\bamended\b|[.;:])\s*(?:\([A-Za-z0-9]{1,8}\)\s*)?(?:(?:and|by)\s+)?$/.test(before);
+}
+
+/**
+ * The same question for "in the matter preceding X", which is written
+ * differently.
+ *
+ * A bare unit reference after a comma is a mention, not a step — that is why
+ * isInstructionPosition() stops at "[.;:]" — but "in subsection (d)(2), in the
+ * matter preceding subparagraph (A), by striking …" is the ordinary way this
+ * phrase is written, and rejecting the comma loses most of them.
+ *
+ * The open paren is still rejected, and that is the guard doing real work: 167
+ * of the corpus's 932 occurrences sit inside a parenthetical — "the requirement
+ * described in section 1101(a)(15) (in the matter preceding subparagraph (A))"
+ * — which describes a provision rather than instructing anyone to amend it.
+ */
+function isMatterPosition(before) {
+  return /(?:^|--|—|–|\bamended\b|[.;:,])\s*(?:\([A-Za-z0-9]{1,8}\)\s*)?(?:(?:and|by)\s+)?$/.test(
+    before
+  );
 }
 
 // Statutory hierarchy. The unit word states its own depth, which is what makes
@@ -881,6 +924,7 @@ function extractSteps(text, from, to, basePath) {
 
     // Pass 1: navigation. Records the spans it claims so pass 2 skips them.
     const claimed = [];
+
     RE_NAV.lastIndex = 0;
     let nm;
     while ((nm = RE_NAV.exec(line))) {
@@ -893,6 +937,45 @@ function extractSteps(text, from, to, basePath) {
       // Only the first address of a list advances the cursor.
       current = resolved.addresses[0].levels;
     }
+
+    // Pass 1b: "in the matter preceding X".
+    //
+    // After pass 1 and before pass 2, and both halves of that matter. It needs
+    // the cursor this line's own navigation has already moved — "in subsection
+    // (d)(2), in the matter preceding subparagraph (A)" only has a parent to
+    // name once (d)(2) is in hand — and it has to claim the span before pass 2
+    // reads the "(A)" inside it as a bare reference to the very provision this
+    // instruction identifies itself by staying out of.
+    //
+    // RE_NAV cannot claim it first: it matches "in <unit>", and here "in" is
+    // followed by "the".
+    RE_NAV_MATTER.lastIndex = 0;
+    let mm;
+    while ((mm = RE_NAV_MATTER.exec(line))) {
+      if (!isMatterPosition(line.slice(0, mm.index))) continue;
+      const resolved = resolvePhrase(unitPairs(mm[1]), current);
+      if (!resolved || !resolved.addresses.length) continue;
+      const levels = resolved.addresses[0].levels;
+      // No parent, no matter. "In the matter preceding subsection (a)" would be
+      // the section's own opening text, which is not addressable as a path.
+      if (levels.length < 2) continue;
+      const parent = levels.slice(0, -1);
+      claimed.push([mm.index, mm.index + mm[0].length]);
+      steps.push({
+        start: lineStart + mm.index,
+        end: lineStart + mm.index + mm[0].length,
+        text: line.slice(mm.index, mm.index + mm[0].length),
+        unit: 'matter',
+        markers: resolved.addresses[0].item,
+        path: parent.map((l) => l.marker).join(''),
+        // The whole point. An op scoped here belongs to the parent's own text
+        // and NOT to its children — "preceding subparagraph (A)" excludes (A)
+        // by name. See inScope() in app/ui/redline.js.
+        exact: true,
+      });
+      current = parent;
+    }
+
 
     // Pass 2: bare references anywhere else on the line, except inside an
     // inline quoted operand — "by striking ``paragraph (3)''" quotes the words,

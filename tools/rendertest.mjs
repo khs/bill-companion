@@ -673,6 +673,56 @@ section('additions at the end');
        (flatI.match(/\(B\) an option;/g) || []).length, 1);
   }
 
+  // ---- "in the matter preceding subparagraph (A)" ------------------------
+  // The phrase names the parent's own lead-in text and excludes the children by
+  // name. Scoping to the parent is only half of it: apply() tests
+  // `path.startsWith(op.scope)`, so without the exact flag the strike also
+  // reaches inside (A) — the one place the instruction says not to touch.
+  {
+    const tm =
+      'Section 1905 of title 18, United States Code, is amended--\n' +
+      '    (1) in subsection (d)(2), in the matter preceding subparagraph (A), ' +
+      "by striking ``covered'' and inserting ``eligible''.\n";
+    const am = extractAmendments(tm, extractCitations(tm));
+    const strike = am[0].ops.find((o) => o.type === 'strike');
+    eq('the strike is scoped to the parent', strike.scope, '(d)(2)');
+    eq('  and marked exact', strike.exact, true);
+
+    // The word appears in BOTH the parent's lead and inside (A). Only the lead
+    // may be marked.
+    const lawM = [{
+      marker: '(d)', path: '(d)', heading: '', text: 'Exceptions.',
+      children: [{
+        marker: '(2)', path: '(d)(2)', heading: '',
+        text: 'A covered disclosure is one that—',
+        children: [
+          { marker: '(A)', path: '(d)(2)(A)', heading: '', text: 'is made to a covered person; and', children: [] },
+          { marker: '(B)', path: '(d)(2)(B)', heading: '', text: 'is in writing.', children: [] },
+        ],
+      }],
+    }];
+    const elM = rc(
+      { source: 'U.S. Code', citation: '18 U.S.C. 1905', links: [], tree: lawM, focusPath: '',
+        effect: { ops: am[0].ops, unmatched: false } },
+      { onScope: () => {} }
+    );
+    const dels = [...elM.querySelectorAll('.del')];
+    eq('the strike is drawn exactly once', dels.length, 1);
+    // Which node it landed in is the assertion that matters — and it has to be
+    // asked of each node's OWN body. Nodes nest, so the parent's textContent
+    // includes every subparagraph beneath it and "did a node containing this
+    // text get a mark?" answers yes for the parent no matter where the mark is.
+    const ownBody = (n) => n.querySelector(':scope > .body');
+    const marked = [...elM.querySelectorAll('.node')].filter((n) => ownBody(n)?.querySelector('.del'));
+    eq('exactly one node carries the strike', marked.length, 1);
+    ok('  and it is the parent, in its own lead-in text',
+       /disclosure is one that/.test(ownBody(marked[0]).textContent),
+       ownBody(marked[0]).textContent);
+    ok('  not the subparagraph the phrase excludes by name',
+       !/is made to a covered person/.test(ownBody(marked[0]).textContent),
+       ownBody(marked[0]).textContent);
+  }
+
   // ---- an addition whose provision is off screen -------------------------
   // Scoped to (a)(3) while the pane shows (b), the addition draws nothing. The
   // panel said so, honestly, and then left the reader with nowhere to go.

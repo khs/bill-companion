@@ -10,7 +10,7 @@ and is written for a user; this file is for changing it. Read both.
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
 node tools/selftest.mjs                   # 379 checks, no dependencies
-node tools/rendertest.mjs                 # 204 checks, needs `npm i -D linkedom`
+node tools/rendertest.mjs                 # 210 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
@@ -143,7 +143,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 
 ```bash
 node tools/selftest.mjs     # all 379 checks passed
-node tools/rendertest.mjs   # all 204 render checks passed
+node tools/rendertest.mjs   # all 210 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
@@ -860,30 +860,35 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    label, so nothing distinguishes them from a centred phrase. `heading` for a
    run-in section is also still the provision's own first clause, because there
    is no heading to have.
-4. **`in the matter preceding subparagraph (A)`** still falls through to the
-   inert internal-ref note. **734 occurrences across the corpus** — 692
-   "preceding", 42 "following" — so it is the largest single unhandled
-   navigation shape, not a curiosity.
-   The old note called it unresolvable because it "names a position between
-   provisions". That is not quite right, and the semantics are exact: the matter
-   preceding subparagraph (A) is the **lead-in text of (A)'s parent**. If (A) is
-   `(d)(2)(A)`, it is the flush text of `(d)(2)`, the words that introduce the
-   list. So it is addressable; what it is not is a *subtree*.
-   That last distinction is the reason not to do this casually. `RE_NAV` is
-   `\bin\s+(UNIT_PHRASE)` and does not fire here — "the matter preceding" sits
-   between — so pass 2 picks up "subparagraph (A)" as a bare reference and the
-   op never gets scoped at all. Scoping it to the parent is only half a fix,
-   because `apply()` tests `String(path).startsWith(op.scope)`, so an op scoped
-   to `(d)(2)` also applies inside `(d)(2)(A)` — which is precisely the text the
-   phrase excludes. A strike would land in the subparagraph the bill said to
-   stay out of.
-   The shape of the fix, then: a matcher run *before* `RE_NAV` in the
-   navigation pass so it claims the span; resolve the phrase, take the parent of
-   the first address, and emit a step there carrying an `exact` flag; and teach
-   `inScope` in `app/ui/redline.js` to honour that flag with `path === op.scope`.
-   Do it as its own pass with its own corpus diff — the navigation parser is
-   where "a cross-reference inside quoted inserted text reparents everything
-   after it" was learned, and it is the least forgiving code here.
+4. **`in the matter preceding subparagraph (A)` scopes its operations.**
+   (Fixed 2026-08-02.) 734 occurrences across the corpus, the largest
+   navigation shape nothing handled. The old note called it unresolvable
+   because it "names a position between provisions"; that was wrong. It names
+   the **lead-in text of (A)'s parent** — the words introducing the list (A)
+   belongs to — which is exactly addressable. What it is not is a subtree.
+   Both halves were needed. `RE_NAV` matches "in <unit>" and here "in" is
+   followed by "the", so the phrase was never navigation and pass 2 read the
+   "(A)" inside it as a bare reference to the very provision the instruction
+   identifies itself by staying out of. And scoping to the parent alone is only
+   half a fix, because `apply()` tests `path.startsWith(op.scope)` — so the op
+   carries `exact`, and `inScope` compares with `===` for it.
+   Three things that were wrong first and are worth keeping:
+   - It runs **after** the navigation pass, not before. "in subsection (d)(2),
+     in the matter preceding subparagraph (A)" only has a parent to name once
+     (d)(2) is in hand, and running first left it with no context and silently
+     skipping every one.
+   - It needs its own position test. `isInstructionPosition` stops at
+     `[.;:]` because a bare reference after a comma is a mention — but the
+     comma is how this phrase is normally written. `isMatterPosition` admits
+     it and still rejects the open paren, which is doing real work: 167 of the
+     932 raw occurrences sit inside a parenthetical ("the requirement described
+     in section 1101(a)(15) (in the matter preceding subparagraph (A))") and
+     describe a provision rather than instructing anyone to amend it.
+   - "preceding" and "following" resolve alike, on purpose. Both are the
+     parent's own text; which half is not something the provision tree records.
+   Corpus: `steps` +365 and `refs` -365 across 22 bills, each bill's decrease
+   equal to its increase — the same phrases, reclassified from inert mentions
+   to navigation that scopes something.
 5. **The CFR branch of `expandRelativeRefs` is exercised, and is dead in
    practice.** (2026-08-02.) It was untested because it is unreachable from bill
    text: across the 34 MB corpus exactly one "is amended" has a CFR reference

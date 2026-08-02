@@ -1463,14 +1463,18 @@ if (existsSync(substitutePath)) {
        String((its[1] || {}).scope));
   }
 
-  eq('substitute: composes the navigation steps', ams.reduce((n, a) => n + a.steps.length, 0), 22);
-  // 30, not 35. Five unit phrases sit inside quoted law the bill is *inserting*
+  // 23, not 22: one "in the matter preceding …" moved from refs to steps when
+  // that phrase started scoping operations instead of sitting inert. The two
+  // counts move together and in opposite directions — across the corpus, every
+  // bill's refs fell by exactly what its steps gained.
+  eq('substitute: composes the navigation steps', ams.reduce((n, a) => n + a.steps.length, 0), 23);
+  // 29, not 34. Five unit phrases sit inside quoted law the bill is *inserting*
   // — "…identified in clauses (i) through (vi) of subparagraph (A) of this
   // paragraph" says outright that it means the new provision — and composing
   // those against the instruction's target addressed existing law that has
   // nothing to do with them. They stay internal, where locateInternal finds them
   // a few lines up in the quoted block.
-  eq('  and the in-place references', ams.reduce((n, a) => n + a.refs.length, 0), 30);
+  eq('  and the in-place references', ams.reduce((n, a) => n + a.refs.length, 0), 29);
   eq('  into relative addresses', expandRelativeRefs(cs, ams).filter((c) => c.relative).length, 49);
 
   // Named targets, not just counts — a step composed onto the wrong subtree

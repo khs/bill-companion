@@ -156,7 +156,13 @@ export function createRedline(ops, fullText) {
    */
   function apply(text, path = '') {
     if (!text || !work.length) return [{ type: 'keep', text: text || '' }];
-    const inScope = (op) => !op.scope || String(path).startsWith(op.scope);
+    // An op normally applies at its own scope or anywhere below it. "In the
+    // matter preceding subparagraph (A)" is the exception: it names the
+    // parent's own text and excludes the subparagraphs, so a strike scoped
+    // there must not be allowed to land inside (A) — which is exactly the text
+    // the instruction identifies itself by staying out of.
+    const inScope = (op) =>
+      !op.scope || (op.exact ? String(path) === op.scope : String(path).startsWith(op.scope));
     const folded = fold(text);
     const dels = [];
     const inss = [];
