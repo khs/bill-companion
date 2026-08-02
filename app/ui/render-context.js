@@ -107,11 +107,41 @@ export function renderContext(res, handlers) {
 
   // --- CFR shape: one or more flat sections --------------------------------
   if (res.sections) {
-    for (const s of res.sections.slice(0, 40)) {
+    // Capped because a CFR part can run to hundreds of sections and rendering
+    // all of them is slow and unreadable. It always said so; what it did not do
+    // was offer any way to see the rest, which made the cap a dead end for
+    // anyone who actually wanted section 51 of 200.
+    const CAP = 40;
+    const all = handlers.showAllSections || res.sections.length <= CAP;
+    for (const s of all ? res.sections : res.sections.slice(0, CAP)) {
       root.appendChild(cfrSection(s, s === res.focus, res));
     }
-    if (res.sections.length > 40) {
-      root.appendChild(card('Truncated', `Showing the first 40 of ${res.sections.length} sections in this part.`, ''));
+    if (!all) {
+      const c = document.createElement('div');
+      c.className = 'card';
+      const h = document.createElement('h4');
+      h.textContent = 'Truncated';
+      c.appendChild(h);
+      const p = document.createElement('p');
+      p.textContent = `Showing the first ${CAP} of ${res.sections.length} sections in this part.`;
+      c.appendChild(p);
+      if (handlers.onShowAll) {
+        const row = document.createElement('div');
+        row.className = 'links';
+        const b = document.createElement('span');
+        b.className = 'crumb clickable';
+        b.textContent = `Show all ${res.sections.length}`;
+        b.setAttribute('role', 'button');
+        b.tabIndex = 0;
+        const go = () => handlers.onShowAll();
+        b.addEventListener('click', go);
+        b.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+        });
+        row.appendChild(b);
+        c.appendChild(row);
+      }
+      root.appendChild(c);
     }
   }
 

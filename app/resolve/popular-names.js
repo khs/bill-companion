@@ -111,6 +111,50 @@ export const POPULAR_NAMES = [
       'Commodity Exchange Act section numbers do NOT match their 7 U.S.C. numbers ' +
       '(e.g. CEA § 4 = 7 U.S.C. 6, CEA § 5 = 7 U.S.C. 7). Use the parenthetical U.S.C. cite in the bill.',
   },
+
+  // ---- derived from the corpus, 2026-08-02 --------------------------------
+  // Not typed from memory. Congress states an Act's codified range itself, in
+  // the parenthetical it writes beside the name — "the Foreign Assistance Act
+  // of 1961 (22 U.S.C. 2151 et seq.)" — so these were extracted from the 27
+  // corpus bills and kept only where at least 5 citations agreed and at least
+  // 90% of them named the same section. Each was then checked against the
+  // ingested Code: the shard exists, and its heading reads like the head of an
+  // Act ("Short title", "Congressional findings", "Purposes", "Definitions").
+  //
+  // `enactedAs` is deliberately absent. That field turns on Act-relative
+  // section lookup, and it has to be the Act as the Code's own credits spell
+  // it — verified against a real shard, one at a time. Guessing it would point
+  // citations at real but unrelated provisions, which is the one outcome worse
+  // than not resolving. These entries do what the rest of the table does:
+  // land the reader at the start of the Act.
+  { name: "Alaska Native Claims Settlement Act", pattern: 'Alaska\\s+Native\\s+Claims\\s+Settlement\\s+Act', title: '43', section: '1601', range: '1601 et seq.' },
+  { name: "Bank Holding Company Act of 1956", pattern: 'Bank\\s+Holding\\s+Company\\s+Act(?:\\s+of\\s+1956)?', title: '12', section: '1841', range: '1841 et seq.' },
+  { name: "Carl D. Perkins Career and Technical Education Act of 2006", pattern: 'Carl\\s+D\\.\\s+Perkins\\s+Career\\s+and\\s+Technical\\s+Education\\s+Act(?:\\s+of\\s+2006)?', title: '20', section: '2301', range: '2301 et seq.' },
+  { name: "Child Nutrition Act of 1966", pattern: 'Child\\s+Nutrition\\s+Act(?:\\s+of\\s+1966)?', title: '42', section: '1771', range: '1771 et seq.' },
+  { name: "Department of Energy Organization Act", pattern: 'Department\\s+of\\s+Energy\\s+Organization\\s+Act', title: '42', section: '7101', range: '7101 et seq.' },
+  { name: "Export Control Reform Act of 2018", pattern: 'Export\\s+Control\\s+Reform\\s+Act(?:\\s+of\\s+2018)?', title: '50', section: '4801', range: '4801 et seq.' },
+  { name: "Federal Credit Reform Act of 1990", pattern: 'Federal\\s+Credit\\s+Reform\\s+Act(?:\\s+of\\s+1990)?', title: '2', section: '661', range: '661 et seq.' },
+  { name: "Federal Crop Insurance Act", pattern: 'Federal\\s+Crop\\s+Insurance\\s+Act', title: '7', section: '1501', range: '1501 et seq.' },
+  { name: "Federal Land Policy and Management Act of 1976", pattern: 'Federal\\s+Land\\s+Policy\\s+and\\s+Management\\s+Act(?:\\s+of\\s+1976)?', title: '43', section: '1701', range: '1701 et seq.' },
+  { name: "Federal Trade Commission Act", pattern: 'Federal\\s+Trade\\s+Commission\\s+Act', title: '15', section: '41', range: '41 et seq.' },
+  { name: "Foreign Narcotics Kingpin Designation Act", pattern: 'Foreign\\s+Narcotics\\s+Kingpin\\s+Designation\\s+Act', title: '21', section: '1901', range: '1901 et seq.' },
+  { name: "Housing and Community Development Act of 1974", pattern: 'Housing\\s+and\\s+Community\\s+Development\\s+Act(?:\\s+of\\s+1974)?', title: '42', section: '5301', range: '5301 et seq.' },
+  { name: "Indian Self-Determination Act of 1975", pattern: 'Indian\\s+Self-Determination\\s+Act(?:\\s+of\\s+1975)?', title: '25', section: '5301', range: '5301 et seq.' },
+  { name: "International Emergency Economic Powers Act", pattern: 'International\\s+Emergency\\s+Economic\\s+Powers\\s+Act', title: '50', section: '1701', range: '1701 et seq.' },
+  { name: "Investment Advisers Act of 1940", pattern: 'Investment\\s+Advisers\\s+Act(?:\\s+of\\s+1940)?', title: '15', section: '80b-1', range: '80b-1 et seq.' },
+  { name: "Low-Income Home Energy Assistance Act of 1981", pattern: 'Low-Income\\s+Home\\s+Energy\\s+Assistance\\s+Act(?:\\s+of\\s+1981)?', title: '42', section: '8621', range: '8621 et seq.' },
+  { name: "Marine Mammal Protection Act of 1972", pattern: 'Marine\\s+Mammal\\s+Protection\\s+Act(?:\\s+of\\s+1972)?', title: '16', section: '1361', range: '1361 et seq.' },
+  { name: "Mineral Leasing Act", pattern: 'Mineral\\s+Leasing\\s+Act', title: '30', section: '181', range: '181 et seq.' },
+  { name: "National Emergencies Act", pattern: 'National\\s+Emergencies\\s+Act', title: '50', section: '1601', range: '1601 et seq.' },
+  { name: "National Science Foundation Act of 1950", pattern: 'National\\s+Science\\s+Foundation\\s+Act(?:\\s+of\\s+1950)?', title: '42', section: '1861', range: '1861 et seq.' },
+  { name: "Outer Continental Shelf Lands Act", pattern: 'Outer\\s+Continental\\s+Shelf\\s+Lands\\s+Act', title: '43', section: '1331', range: '1331 et seq.' },
+  { name: "Public Lands Corps Act of 1993", pattern: 'Public\\s+Lands\\s+Corps\\s+Act(?:\\s+of\\s+1993)?', title: '16', section: '1721', range: '1721 et seq.' },
+  { name: "Railway Labor Act", pattern: 'Railway\\s+Labor\\s+Act', title: '45', section: '151', range: '151 et seq.' },
+  { name: "Richard B. Russell National School Lunch Act", pattern: 'Richard\\s+B\\.\\s+Russell\\s+National\\s+School\\s+Lunch\\s+Act', title: '42', section: '1751', range: '1751 et seq.' },
+  { name: "Robert T. Stafford Disaster Relief and Emergency Assistance Act", pattern: 'Robert\\s+T\\.\\s+Stafford\\s+Disaster\\s+Relief\\s+and\\s+Emergency\\s+Assistance\\s+Act', title: '42', section: '5121', range: '5121 et seq.' },
+  { name: "Securities Investor Protection Act of 1970", pattern: 'Securities\\s+Investor\\s+Protection\\s+Act(?:\\s+of\\s+1970)?', title: '15', section: '78aaa', range: '78aaa et seq.' },
+  { name: "United States Housing Act of 1937", pattern: 'United\\s+States\\s+Housing\\s+Act(?:\\s+of\\s+1937)?', title: '42', section: '1437', range: '1437 et seq.' },
+  { name: "Wilderness Act", pattern: 'Wilderness\\s+Act', title: '16', section: '1131', range: '1131 et seq.' },
 ];
 
 /** Look up an Act by a name the bill used. Returns the table entry or null. */

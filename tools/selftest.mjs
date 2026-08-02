@@ -316,6 +316,38 @@ section('relative navigation inside amendments');
   ok('clause (i) becomes a resolvable citation',
      rel.some((c) => c.subsection === '(b)(3)(A)(i)' && c.section === '2605'),
      JSON.stringify(rel.map((c) => c.subsection)));
+
+  // The CFR branch of the same code. expandRelativeRefs admits `cfr` targets as
+  // well as `usc` ones — `t.kind !== 'usc' && t.kind !== 'cfr'` — and every test
+  // until now used a U.S. Code target, so half that condition had never run.
+  //
+  // Driven from a synthetic amendment rather than from bill text, because there
+  // is no bill text that reaches it: across the 34 MB corpus exactly one
+  // "is amended" has a CFR reference anywhere near it, and that one is an
+  // Organic Foods Production Act instruction that merely mentions a regulation.
+  // Bills amend statutes; agencies amend regulations. The branch is kept
+  // because a citation to a reg is perfectly resolvable and costs one clause —
+  // but it is exercised here, not pretended into a fixture.
+  const cfrTarget = {
+    kind: 'cfr', title: '40', part: '60', section: '60.13', subsection: '',
+    text: '40 CFR 60.13',
+  };
+  const relC = expandRelativeRefs(
+    [{ kind: 'internal', id: 'i0', start: 0, end: 5, text: 'dummy' }],
+    [{
+      id: 'a0', target: cfrTarget,
+      steps: [{ text: 'paragraph (2)', start: 100, end: 113, path: '(e)(2)', unit: 'paragraph', markers: ['(2)'] }],
+      refs: [],
+    }]
+  ).filter((c) => c.relative);
+  eq('a relative address composes against a CFR target', relC.length, 1);
+  eq('  keeping the CFR kind', relC[0].kind, 'cfr');
+  eq('  its title, not a U.S. Code one', relC[0].title, '40');
+  eq('  its section', relC[0].section, '60.13');
+  eq('  and the composed path', relC[0].subsection, '(e)(2)');
+  ok('  with a relative id, like every composed address',
+     String(relC[0].id).startsWith('r'), String(relC[0].id));
+  ok('  marked as derived rather than written down', relC[0].relative === true);
 }
 {
   // A cross-reference inside quoted text must not hijack the cursor.

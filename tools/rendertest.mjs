@@ -481,6 +481,41 @@ section('Act-relative derivation');
   ok('  without a numbering caveat, the gap being closed',
      !/Numbering caveat/.test(txt), txt.slice(0, 200));
 
+  // ---- a CFR part longer than the cap ------------------------------------
+  // The cap exists because a part can run to hundreds of sections. It always
+  // said it was truncating; it just gave the reader nowhere to go from there.
+  {
+    const many = Array.from({ length: 90 }, (_, i) => ({
+      number: `60.${i + 1}`, heading: `Section ${i + 1}`, tree: [], paragraphs: [`Text of ${i + 1}.`],
+    }));
+    let asked = false;
+    const capped = rc(
+      { source: 'CFR', citation: '40 CFR part 60', links: [], sections: many },
+      { onScope: () => {}, onShowAll: () => { asked = true; } }
+    );
+    eq('a long CFR part is capped', capped.querySelectorAll('.prov').length, 40);
+    ok('  and says how much it is hiding', /Showing the first 40 of 90/.test(capped.textContent),
+       capped.textContent.slice(0, 160));
+    const more = [...capped.querySelectorAll('.crumb.clickable')].find((e) => /Show all 90/.test(e.textContent));
+    ok('  with a way to see the rest', !!more, 'no show-all control');
+    more.dispatchEvent(new window.Event('click'));
+    ok('  which asks for it', asked);
+
+    const full = rc(
+      { source: 'CFR', citation: '40 CFR part 60', links: [], sections: many },
+      { onScope: () => {}, showAllSections: true, onShowAll: () => {} }
+    );
+    ok('once shown, nothing is truncated', !/Showing the first/.test(full.textContent),
+       full.textContent.slice(0, 120));
+    // A part inside the cap must not offer a control that does nothing.
+    const small = rc(
+      { source: 'CFR', citation: '40 CFR part 60', links: [], sections: many.slice(0, 5) },
+      { onScope: () => {}, onShowAll: () => {} }
+    );
+    ok('a short part says nothing about truncation', !/Showing the first/.test(small.textContent),
+       small.textContent.slice(0, 120));
+  }
+
   // ---- two sections, one number ------------------------------------------
   // The pane has to say so, and has to let the reader read the other one.
   // Named by heading and credit, because a bare "alternative 2" tells nobody

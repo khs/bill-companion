@@ -47,7 +47,8 @@ if (EMBEDDED) document.documentElement.dataset.embed = '';
 
 const state = {
   bill: null, citations: [], amendments: [],
-  activeEl: null, current: null, scopePath: null, history: [], jumpEl: null,
+  activeEl: null, current: null, scopePath: null, showAllSections: false,
+  history: [], jumpEl: null,
 };
 
 // ------------------------------------------------------------------ status
@@ -158,6 +159,8 @@ async function onCite(cite, el, opts = {}) {
 
   state.current = { cite, amend: opts.amend || null };
   state.scopePath = null;
+  // Per-citation, like the scope: opening a new CFR part starts capped again.
+  state.showAllSections = false;
 
   els.ctxSrc.textContent = 'loading…';
   els.ctxBody.replaceChildren(placeholder('Looking up ' + cite.text + '…'));
@@ -219,6 +222,8 @@ function paint(res) {
     renderContext(res, {
       scopePath: state.scopePath,
       onScope: (p) => { state.scopePath = p; paint(res); },
+      showAllSections: state.showAllSections,
+      onShowAll: () => { state.showAllSections = true; paint(res); },
       // Swap in one of the other sections carrying this number, keeping the one
       // being replaced in the list so the reader can go back. The focus is
       // cleared rather than carried across: the cited subsection belongs to the

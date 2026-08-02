@@ -9,8 +9,8 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 349 checks, no dependencies
-node tools/rendertest.mjs                 # 192 checks, needs `npm i -D linkedom`
+node tools/selftest.mjs                   # 356 checks, no dependencies
+node tools/rendertest.mjs                 # 198 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
@@ -142,8 +142,8 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 349 checks passed
-node tools/rendertest.mjs   # all 192 render checks passed
+node tools/selftest.mjs     # all 356 checks passed
+node tools/rendertest.mjs   # all 198 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
@@ -837,8 +837,18 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
 4. **`in the matter preceding subparagraph (A)`** still falls through to the
    inert internal-ref note. It names a position between provisions, not a
    subtree; resolving it to the neighbour would be subtly wrong.
-5. **Relative refs are only exercised against USC targets.** `expandRelativeRefs`
-   accepts CFR targets too, but nothing tests that path.
+5. **The CFR branch of `expandRelativeRefs` is exercised, and is dead in
+   practice.** (2026-08-02.) It was untested because it is unreachable from bill
+   text: across the 34 MB corpus exactly one "is amended" has a CFR reference
+   anywhere near it, and that one is an Organic Foods Production Act instruction
+   that merely mentions a regulation. Neither `Section 60.13 of title 40, Code
+   of Federal Regulations, is amended` nor `40 CFR 60.13 is amended` produces an
+   amendment at all — `RE_CFR` does not know the "section X of title N" form and
+   `RE_AMEND_HEAD` does not admit a CFR target. Deliberately left that way:
+   bills amend statutes, agencies amend regulations, and adding head forms for
+   a shape with no demand is how false positives get in. The branch is now
+   driven from a synthetic amendment in `selftest.mjs` so the code is covered
+   without a fixture pretending bills do this.
 6. **Seven duplicate section numbers now keep both.** (Fixed 2026-08-02.) Two
    different Public Laws each added a "§ 3598"; one shard per number meant the
    second one written replaced the first and the pane showed whichever came
@@ -860,11 +870,26 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    safe: `PAY-` + `AS-YOU-GO` must keep its hyphen where `REG-` + `ISTRATION`
    must lose it, and nothing in the text says which is which. Documented in
    README as a known limit.
-8. **CFR part views cap at 40 sections**, silently beyond that.
-9. **Popular names cover ~46 Acts**, not the full OLRC table. The Commodity
-   Exchange Act was missing until the CLARITY Act pass, where it was the single
-   most-cited Act in the bill — 52 cites resolving to nothing. When a sample
-   leans on an Act, check the table first.
+8. **CFR part views still cap at 40 sections, but not silently and not
+   finally.** (2026-08-02.) The "silently" in the old note was already wrong —
+   it said "Showing the first 40 of N" — but it gave the reader nowhere to go,
+   which made the cap a dead end for anyone who wanted section 51 of 200. There
+   is a "Show all N" control now, per-citation like the scope. The cap itself
+   stays: a part can run to hundreds of sections and rendering them all by
+   default is slow and unreadable.
+9. **Popular names cover 78 Acts**, up from 50, and still not the full OLRC
+   table. The 28 added on 2026-08-02 were *derived, not typed*: Congress states
+   an Act's codified range in the parenthetical beside the name — "the Foreign
+   Assistance Act of 1961 (22 U.S.C. 2151 et seq.)" — so they were extracted
+   from the corpus and kept only where at least 5 citations agreed and at least
+   90% named the same section, then checked against the ingested Code for a
+   shard whose heading reads like the head of an Act. That is the method to
+   reuse. None carries `enactedAs`: that field turns on Act-relative section
+   lookup and has to be verified against a real shard's source credit one at a
+   time, and guessing it points citations at real but unrelated provisions.
+   Corpus effect: +1,000 act citations across 28 bills, `citations` moving by
+   exactly the `byKind.act` delta on every one, and two amendments that now
+   resolve a target.
 10. **Share links are long** — 117 KB bill → 35 KB URL. Fine in a doc or ticket,
    wraps in chat/mail. Shorter would need a backend, which is a different product.
 11. **No visual verification has ever happened.** Colours, spacing, dark mode, the
