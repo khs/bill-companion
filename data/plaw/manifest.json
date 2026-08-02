@@ -1,6 +1,60 @@
 {
  "laws": [
   {
+   "id": "110-246",
+   "name": "Food, Conservation, and Energy Act of 2008",
+   "sections": 623,
+   "total": 623
+  },
+  {
+   "id": "111-148",
+   "name": "Patient Protection and Affordable Care Act",
+   "sections": 442,
+   "total": 442
+  },
+  {
+   "id": "112-141",
+   "name": "Moving Ahead for Progress in the 21st Century Act",
+   "sections": 383,
+   "total": 383
+  },
+  {
+   "id": "113-235",
+   "name": "Consolidated and Further Continuing Appropriations Act, 2015",
+   "sections": 559,
+   "total": 996
+  },
+  {
+   "id": "113-76",
+   "name": "Consolidated Appropriations Act, 2014",
+   "sections": 559,
+   "total": 885
+  },
+  {
+   "id": "113-79",
+   "name": "Agricultural Act of 2014",
+   "sections": 455,
+   "total": 455
+  },
+  {
+   "id": "114-113",
+   "name": "Consolidated Appropriations Act, 2016",
+   "sections": 649,
+   "total": 1330
+  },
+  {
+   "id": "114-322",
+   "name": "Water Infrastructure Improvements for the Nation Act",
+   "sections": 240,
+   "total": 240
+  },
+  {
+   "id": "114-328",
+   "name": "National Defense Authorization Act for Fiscal Year 2017",
+   "sections": 961,
+   "total": 986
+  },
+  {
    "id": "114-94",
    "name": "Fixing America’s Surface Transportation Act",
    "sections": 443,
@@ -19,6 +73,30 @@
    "total": 817
   },
   {
+   "id": "115-31",
+   "name": "Consolidated Appropriations Act, 2017",
+   "sections": 592,
+   "total": 1071
+  },
+  {
+   "id": "115-334",
+   "name": "Agriculture Improvement Act of 2018",
+   "sections": 503,
+   "total": 503
+  },
+  {
+   "id": "115-91",
+   "name": "National Defense Authorization Act for Fiscal Year 2018",
+   "sections": 772,
+   "total": 785
+  },
+  {
+   "id": "116-127",
+   "name": "Families First Coronavirus Response Act",
+   "sections": 58,
+   "total": 58
+  },
+  {
    "id": "116-136",
    "name": "CARES Act",
    "sections": 286,
@@ -29,6 +107,12 @@
    "name": "Consolidated Appropriations Act, 2021",
    "sections": 828,
    "total": 2092
+  },
+  {
+   "id": "116-283",
+   "name": "William M. (Mac) Thornberry National Defense Authorization Act for Fiscal Year 2021",
+   "sections": 1254,
+   "total": 1267
   },
   {
    "id": "116-6",
@@ -59,6 +143,12 @@
    "name": "American Rescue Plan Act of 2021",
    "sections": 217,
    "total": 217
+  },
+  {
+   "id": "117-58",
+   "name": "Infrastructure Investment and Jobs Act",
+   "sections": 630,
+   "total": 630
   }
  ]
 }

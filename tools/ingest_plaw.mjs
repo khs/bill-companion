@@ -33,17 +33,22 @@ const imp = (p) => import(pathToFileURL(join(ROOT, p)).href);
 
 const OUT = join(ROOT, 'data/plaw');
 
-// The ten most-cited Public Laws across the 27 bills in the regression corpus,
-// with their citation counts. Regenerate the ranking with:
+// The twenty-five most-cited Public Laws across the 27 bills in the regression
+// corpus, with their citation counts. Regenerate the ranking with:
 //
 //   walk every bill, extractCitations, count kind === 'publaw' by congress-law
 //
-// Worth knowing before adding more: this is a long tail. These ten cover 24% of
-// the corpus's 3,307 Public Law citations and the top twenty-five only reach
-// 37%, across 602 distinct laws. There is no 80/20 point — adding laws buys a
-// roughly linear return, so add them when a sample leans on one rather than
-// expecting a threshold. `data/usc/acts/` is the broad mechanism; this is the
+// Worth knowing before adding more: this is a long tail, and it does not have a
+// knee. Ten laws cover 24% of the corpus's 3,307 Public Law citations,
+// twenty-five cover 37%, and there are 602 distinct laws — the return is close
+// to linear the whole way down, so there is no threshold to reach for. Add a
+// law when a sample leans on one, the way popular-names.js grew.
+// `data/usc/acts/` is the broad mechanism, covering 1,737 laws; this is the
 // deep one.
+// `name` is a label for the console and the manifest, nothing resolves through
+// it, and it is checked against what the law calls itself — see nameCheck()
+// below. Rank and count are the derivation, kept so the next person can see
+// where the cut fell rather than guessing.
 const LAWS = [
   { id: '116-260', cites: 133, name: 'Consolidated Appropriations Act, 2021' },
   { id: '115-232', cites: 121, name: 'John S. McCain National Defense Authorization Act for Fiscal Year 2019' },
@@ -55,6 +60,22 @@ const LAWS = [
   { id: '116-136', cites: 48, name: 'CARES Act' },
   { id: '116-6', cites: 42, name: 'Consolidated Appropriations Act, 2019' },
   { id: '117-103', cites: 42, name: 'Consolidated Appropriations Act, 2022' },
+  // 11–25.
+  { id: '115-31', cites: 39, name: 'Consolidated Appropriations Act, 2017' },
+  { id: '115-91', cites: 39, name: 'National Defense Authorization Act for Fiscal Year 2018' },
+  { id: '116-283', cites: 36, name: 'William M. (Mac) Thornberry National Defense Authorization Act for Fiscal Year 2021' },
+  { id: '117-58', cites: 31, name: 'Infrastructure Investment and Jobs Act' },
+  { id: '115-334', cites: 30, name: 'Agriculture Improvement Act of 2018' },
+  { id: '113-79', cites: 29, name: 'Agricultural Act of 2014' },
+  { id: '112-141', cites: 28, name: 'Moving Ahead for Progress in the 21st Century Act' },
+  { id: '114-113', cites: 27, name: 'Consolidated Appropriations Act, 2016' },
+  { id: '113-235', cites: 27, name: 'Consolidated and Further Continuing Appropriations Act, 2015' },
+  { id: '111-148', cites: 27, name: 'Patient Protection and Affordable Care Act' },
+  { id: '113-76', cites: 26, name: 'Consolidated Appropriations Act, 2014' },
+  { id: '114-322', cites: 25, name: 'Water Infrastructure Improvements for the Nation Act' },
+  { id: '114-328', cites: 25, name: 'National Defense Authorization Act for Fiscal Year 2017' },
+  { id: '110-246', cites: 24, name: 'Food, Conservation, and Energy Act of 2008' },
+  { id: '116-127', cites: 22, name: 'Families First Coronavirus Response Act' },
 ];
 
 const b = (s) => `\x1b[1m${s}\x1b[0m`;
@@ -63,6 +84,34 @@ const red = (s) => `\x1b[31m${s}\x1b[0m`;
 
 /** Same rule as slug() in app/resolve/usc.js, and it must stay that way. */
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '_');
+
+/**
+ * Does the name in LAWS match what the law calls itself?
+ *
+ * The entries above are typed by hand from a citation-frequency ranking, and a
+ * wrong one is the kind of error nothing else would ever surface — the id is
+ * what resolves, so a mislabelled law would sit in the manifest looking
+ * authoritative and be wrong only where a human read it. The law states its own
+ * short title in section 1, which parseBill already extracts, so the check is
+ * free. Compared loosely: the short title is "Consolidated Appropriations Act,
+ * 2019" where a name may carry an alternate ("CARES Act"), and either is fine
+ * as long as they are recognisably the same Act.
+ */
+function nameCheck(name, shortTitle) {
+  if (!shortTitle) return null;
+  const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const a = norm(name);
+  const b = norm(shortTitle);
+  if (a === b || a.includes(b) || b.includes(a)) return null;
+  // An acronym short title ("CARES Act") against a spelled-out name, or the
+  // reverse. Accept when the significant words of the shorter appear in the
+  // longer, which is what "recognisably the same Act" amounts to here.
+  const words = (s) => s.split(' ').filter((w) => w.length > 3 && w !== 'act');
+  const [short, long] = a.length < b.length ? [a, b] : [b, a];
+  const hits = words(short).filter((w) => long.includes(w)).length;
+  if (words(short).length && hits / words(short).length >= 0.6) return null;
+  return shortTitle;
+}
 
 const srcUrl = (congress, law) =>
   `https://www.govinfo.gov/content/pkg/PLAW-${congress}publ${law}/html/PLAW-${congress}publ${law}.htm`;
@@ -160,7 +209,12 @@ async function shard(entry, { unwrapPre, parseBill, normalizeText }) {
   const onDisk = readdirSync(dir).filter((f) => f !== 'manifest.json').length;
   if (onDisk !== byNumber.size) throw new Error(`manifest says ${byNumber.size}, disk has ${onDisk}`);
 
-  return { sections: byNumber.size, total: bill.sections.length, shortTitle: bill.meta.shortTitle };
+  return {
+    sections: byNumber.size,
+    total: bill.sections.length,
+    shortTitle: bill.meta.shortTitle,
+    mismatch: nameCheck(entry.name, bill.meta.shortTitle),
+  };
 }
 
 const args = process.argv.slice(2);
@@ -178,6 +232,7 @@ if (!wanted.length) {
 }
 
 const done = [];
+const mismatches = [];
 for (const entry of wanted) {
   const dir = join(OUT, entry.id);
   if (!force && existsSync(join(dir, 'manifest.json'))) {
@@ -190,6 +245,11 @@ for (const entry of wanted) {
   try {
     const r = await shard(entry, { unwrapPre, parseBill, normalizeText });
     console.log(`${r.sections} section numbers, ${r.total} sections`);
+    if (r.mismatch) {
+      console.log(`      ${red('name mismatch')} — LAWS says ${JSON.stringify(entry.name)},`);
+      console.log(`      the law says ${JSON.stringify(r.mismatch)}`);
+      mismatches.push(`${entry.id}: ${entry.name} != ${r.mismatch}`);
+    }
     done.push({ ...entry, sections: r.sections, total: r.total });
   } catch (err) {
     console.log(red(`failed: ${err.message}`));

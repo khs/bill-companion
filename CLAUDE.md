@@ -14,7 +14,7 @@ node tools/rendertest.mjs                 # 178 checks, needs `npm i -D linkedom
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
-node tools/ingest_plaw.mjs                # 10 Public Laws, 45 MB; skips those present
+node tools/ingest_plaw.mjs                # 25 Public Laws, 106 MB; skips those present
 ```
 
 `bun` should be interchangeable with `node` for all four `.mjs` tools — but only
@@ -236,19 +236,19 @@ complementary — see the invariants for the ordering rule:
   downloaded; the ingester has been filing sections under `pub_l_<c>_<l>` all
   along and nothing was asking. "Section 12306 of Public Law 113-79" → 7 U.S.C.
   1632c. 174 of 507 sectioned citations, over 79 distinct Code sections.
-- **`data/plaw/` holds ten laws in full**, sharded per section number by
-  `tools/ingest_plaw.mjs` (45 MB, 5,691 files). This is for the 333 sectioned
+- **`data/plaw/` holds twenty-five laws in full**, sharded per section number
+  by `tools/ingest_plaw.mjs` (106 MB, 14,386 files). This is for the 333 sectioned
   citations the Code cannot reach — appropriations lines, effective dates,
   savings clauses, which were never codified and never will be.
 
-Across the corpus, **961 of 3,307 Public Law citations (29%) now show real text
-against none before**, and 244 of 507 sectioned ones (48%). The remaining 71%
-are laws outside the ten, which stay outbound links.
+Across the corpus, **1,357 of 3,307 Public Law citations (41%) now show real
+text against none before**, and 306 of 507 sectioned ones (60%). The remaining
+59% are laws outside the twenty-five, which stay outbound links.
 
-Do not expect a threshold to appear if you add more laws. The ten cover 24% of
-citations, the top twenty-five reach 37%, and there are 602 distinct laws in the
-corpus — the return is close to linear. Add a law when a sample leans on one,
-the way `popular-names.js` grew.
+Do not expect a threshold to appear if you add more laws. Ten cover 24% of
+citations, twenty-five reach 37%, and there are 602 distinct laws in the corpus
+— the return is close to linear the whole way down. Add a law when a sample
+leans on one, the way `popular-names.js` grew.
 
 Two things found on the way that were not part of the ask: `lead-in` in
 `render-context.js` had been styled nowhere since the pane was written, and the
@@ -913,7 +913,7 @@ tools/                ingest_usc.py · ingest_plaw.mjs · serve.py ·
                       measure.mjs (shared metrics) · impact.mjs · corpus.mjs
 corpus/               corpus.json + baseline.json · files/ — all tracked
 data/usc/             generated shards, one JSON per section; tracked — it IS the site
-data/plaw/            10 Public Laws, one JSON per section NUMBER; tracked, 45 MB
+data/plaw/            25 Public Laws, one JSON per section NUMBER; tracked, 106 MB
 ```
 
 Citation kinds: `usc` `cfr` `publaw` `stat` `act` `internal`. Relative addresses

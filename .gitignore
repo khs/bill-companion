@@ -11,7 +11,7 @@
 # Regenerate rather than hand-edit:
 #   python tools/ingest_usc.py --titles all   # data/usc/
 #   python tools/ingest_usc.py --acts-only    # just data/usc/acts/
-#   node tools/ingest_plaw.mjs                # data/plaw/  (45 MB, 10 laws)
+#   node tools/ingest_plaw.mjs                # data/plaw/  (106 MB, 25 laws)
 #   node tools/corpus.mjs fetch               # corpus/files/
 
 # Dev-only dependency for tools/rendertest.mjs (the app itself has none).

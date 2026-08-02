@@ -309,7 +309,7 @@ tools/
 corpus/                 corpus.json + baseline.json, and files/ — the bills
 vendor/                 pdf.js, vendored so the app works offline
 data/usc/               the ingested Code: 60,436 sections + acts/, generated
-data/plaw/              10 Public Laws, sharded per section number, generated
+data/plaw/              25 Public Laws, sharded per section number, generated
 .nojekyll               tells GitHub Pages to serve the tree as-is
 ```
 
