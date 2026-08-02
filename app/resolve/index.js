@@ -105,8 +105,15 @@ function cacheKey(c) {
   // `where` for the third time: it is the division plus every level below it, so
   // "section 702 of subtitle A of title VII of division N" and "section 702 of
   // division N" agree on `division` and name different provisions.
+  // `shortTitle` for the fourth. It narrows a section to the division whose
+  // heading it names, so "section 505 of the Department of Homeland Security
+  // Appropriations Act, 2018 (Public Law 115-141)" resolves to division F and a
+  // bare "section 505 of Public Law 115-141" must still show all five. Without
+  // it the first clicked answered for both — and the wrong way round, since the
+  // bare citation would inherit a division nothing in it named.
   return [c.kind, c.title, c.part, c.section, c.subsection, c.congress, c.law, c.volume, c.page,
-          c.act && c.act.name, c.actSection, c.division, c.where && c.where.join('>')]
+          c.act && c.act.name, c.actSection, c.division, c.where && c.where.join('>'),
+          c.shortTitle]
     .filter(Boolean)
     .join('|');
 }
@@ -180,7 +187,7 @@ async function dispatch(cite) {
       if (cite.actSection) {
         const pl = publawIdOf(act);
         if (pl) {
-          const local = await resolvePlaw(pl.congress, pl.law, cite.actSection, cite.where);
+          const local = await resolvePlaw(pl.congress, pl.law, cite.actSection, cite.where, cite.shortTitle);
           if (local) return { ...local, actName: act.name };
         }
       }
@@ -240,7 +247,8 @@ async function dispatch(cite) {
         cite.congress,
         cite.law,
         cite.actSection || '',
-        cite.where
+        cite.where,
+        cite.shortTitle
       );
       if (local) return { ...local, links: publawLinks(cite) };
 

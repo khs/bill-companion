@@ -1013,6 +1013,65 @@ section('internal cross-references');
   eq('"section 4 of this Act" finds that bill section', s4 && s4.section.num, '4');
   ok('  and labels it', /FUNDING/.test(s4.label), s4.label);
 
+  // ---- a section number is not unique, on the resolving side --------------
+  // Every division of an appropriations act restarts its numbering, so H.J.
+  // Res. 31 has six Sec. 505s and taking the first by number answered from
+  // division A for a reference written in division C. 81 across the corpus,
+  // none of them hedged — the pane said a flat "Section 505 of this bill."
+  // The bills state the rule themselves: "any reference to ``this Act''
+  // contained in any division of this Act shall be treated as referring only
+  // to the provisions of that division."
+  const omni = normalizeText(
+    'DIVISION A--FIRST\n\nSEC. 101. ALPHA.\nThe alpha provision.\n\n' +
+    'SEC. 505. AVAILABILITY.\nDivision A money rules.\n\n' +
+    'DIVISION C--THIRD\n\nSEC. 505. LIMITATION.\nDivision C money rules.\n\n' +
+    'SEC. 720. REFERENCE.\nSubject to section 505 of this Act, funds are provided.\n'
+  );
+  const ob = parseBill(omni);
+  const oref = extractCitations(omni).filter((c) => c.kind === 'internal' && c.section === '505').pop();
+  const oloc = locateInternal(ob, oref);
+  ok('"section N of this Act" resolves inside its own division',
+     oloc && /LIMITATION/.test(oloc.label), oloc && oloc.label);
+  // A bill with no divisions must be unaffected: first-by-number is all there is.
+  const flatBill = normalizeText(
+    'SECTION 1. SHORT TITLE.\nOne.\n\nSEC. 505. ONLY.\nThe only 505.\n\n' +
+    'SEC. 9. REF.\nSubject to section 505 of this Act, funds are provided.\n'
+  );
+  const fb = parseBill(flatBill);
+  const fref = extractCitations(flatBill).find((c) => c.kind === 'internal' && c.section === '505');
+  ok('  and a bill with no divisions is unaffected',
+     /ONLY/.test(locateInternal(fb, fref).label), locateInternal(fb, fref).label);
+
+  // ---- a unit phrase that names its own section is not internal -----------
+  // "Subsection (g) of section 6695 is amended" — RE_INTERNAL matched the head
+  // unit and had no lookahead, so "of section 6695" was discarded and the bare
+  // "(g)" was hunted down somewhere in the bill. 1,460 across the corpus, 616
+  // answered with no hedge at all. The address is external and the amendment
+  // head already reads it; the chip was purely a wrong answer.
+  const unitOf = normalizeText(
+    'SEC. 2. X.\n(g) Something else entirely.\nSubsection (g) of section 6695 is amended to read as follows.\n'
+  );
+  eq('a unit phrase naming its own section is not an internal reference',
+     extractCitations(unitOf).filter((c) => c.kind === 'internal' && c.subsection === '(g)').length, 0);
+  // Except where the bill says the section is its own, which IS an address
+  // inside the bill and is ownRef rather than dropped.
+  const ownSec = normalizeText(
+    'SECTION 1. SHORT TITLE.\nOne.\n\nSEC. 503. RULES.\n(a) The first rule.\n(b) The second.\n\n' +
+    'SEC. 9. REF.\nNotwithstanding subsection (a) of section 503 of this Act, funds are provided.\n'
+  );
+  const ob2 = parseBill(ownSec);
+  const ownRef = extractCitations(ownSec)
+    .find((c) => c.kind === 'internal' && c.refType === 'section' && c.section === '503');
+  eq('  but "of section N of this Act" composes into one address',
+     ownRef && ownRef.subsection, '(a)');
+  ok('  spanning the whole phrase',
+     ownRef && /^subsection \(a\) of section 503 of this Act$/.test(ownRef.text),
+     JSON.stringify(ownRef && ownRef.text));
+  const cloc = ownRef && locateInternal(ob2, ownRef);
+  ok('  and landing on that subsection',
+     cloc && /first rule/.test(ownSec.slice(cloc.start, cloc.start + 40)),
+     JSON.stringify(cloc && ownSec.slice(cloc.start, cloc.start + 40)));
+
   // New law refers to itself. A paragraph the bill is adding says "For purposes
   // of subparagraph (A)", meaning subparagraph (A) OF THE PARAGRAPH BEING ADDED
   // — which does not exist in the Code yet. Composed against the instruction's
@@ -1420,6 +1479,36 @@ section('internal cross-references');
     eq('  labelled as the start of the Act, not as the provision',
        uncRes.isActStart, true);
 
+    // ---- a short title names a division, and the law says so itself --------
+    // "Section 532 of the Department of Homeland Security Appropriations Act,
+    // 2018 (Public Law 115-141)" writes no division letter, and that Act IS
+    // division F. The law prints the mapping on the division heading, so no
+    // table has to be authored. 10 citations across the corpus narrow to
+    // exactly one this way. This is the half of the division problem the
+    // written-out form could not reach.
+    const byTitle = extractCitations(normalizeText(
+      'SEC. 2. X.\nUnder section 532 of the Department of Homeland Security ' +
+      'Appropriations Act, 2018 (Public Law 115-141) funds are available.\n'
+    )).filter((x) => x.kind === 'publaw').sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
+    const btRes = await resolve(byTitle);
+    eq('a division short title narrows a repeated section number',
+       btRes.plaw.entries.length, 1);
+    eq('  out of the three the law holds', btRes.plaw.of, 3);
+    ok('  landing in the division the title names',
+       /^DIVISION F\b/.test(btRes.plaw.entries[0].ancestors[0]),
+       btRes.plaw.entries[0].ancestors[0]);
+    ok('  and it is the DHS provision, not Commerce/Justice',
+       /Secretary of Homeland Security/.test(btRes.plaw.entries[0].text),
+       String(btRes.plaw.entries[0].text).replace(/s+/g, " ").slice(0, 90));
+    // The memo must not serve this answer to a citation that named no division.
+    // Same family as `actSection`, `division` and `where` before it: a key
+    // missing a field is indistinguishable from a resolver bug.
+    const bare141 = extractCitations(
+      normalizeText('SEC. 2. X.\nUnder section 532 of Public Law 115-141 funds are available.\n')
+    ).find((x) => x.kind === 'publaw');
+    eq('  and a bare citation to the same section still shows all of them',
+       (await resolve(bare141)).plaw.entries.length, 3);
+
     // ---- the bracketed credit form --------------------------------------
     // "(Pub. L. 85-536, § 2[7], July 18, 1958, 72 Stat. 387)". The Small
     // Business Act *is* section 2 of that law, so the OLRC writes the Act's own
@@ -1644,7 +1733,16 @@ section('internal cross-references');
     // "(2)" belonging to a different appropriations section. It now sits in its
     // own 364-character section, which contains no (2), and declines. A
     // reference out to another Act should resolve to nothing.
-    eq('locates the internal refs it can', hits.length, 73);
+    //
+    // 73 until a unit phrase naming its own section stopped being read as an
+    // internal reference. The one lost is the heading "Paragraph (2) of Section
+    // 102.--Section 102(2) of the National Environmental Policy Act…", where
+    // "Paragraph (2)" alone had been pointing at an unrelated "(2) in
+    // subparagraph (B), by striking ``insure''" several sections away. The
+    // address the sentence actually states is NEPA § 102(2), and the
+    // act-relative matcher has it. 1,460 of these across the corpus, 616 of them
+    // answered with no hedge at all.
+    eq('locates the internal refs it can', hits.length, 72);
     ok('  which is most of them', hits.length >= rc.length * 0.75, `${hits.length}/${rc.length}`);
 
     // Every target must land on an outline marker, or on the head of the bill

@@ -3,11 +3,11 @@
   "chars": 119726,
   "sections": 120,
   "divisions": 14,
-  "citations": 326,
+  "citations": 322,
   "byKind": {
    "act": 62,
    "usc": 45,
-   "internal": 92,
+   "internal": 88,
    "publaw": 127
   },
   "amendments": 18,
@@ -32,11 +32,11 @@
   "chars": 84832,
   "sections": 9,
   "divisions": 0,
-  "citations": 154,
+  "citations": 132,
   "byKind": {
    "act": 1,
    "usc": 4,
-   "internal": 149
+   "internal": 127
   },
   "amendments": 0,
   "targeted": 0,
@@ -86,12 +86,12 @@
   "chars": 475095,
   "sections": 63,
   "divisions": 9,
-  "citations": 749,
+  "citations": 740,
   "byKind": {
    "act": 153,
    "usc": 202,
    "publaw": 3,
-   "internal": 389,
+   "internal": 380,
    "stat": 2
   },
   "amendments": 20,
@@ -145,10 +145,10 @@
   "chars": 863854,
   "sections": 153,
   "divisions": 24,
-  "citations": 2126,
+  "citations": 2020,
   "byKind": {
    "act": 210,
-   "internal": 1631,
+   "internal": 1525,
    "usc": 274,
    "publaw": 8,
    "stat": 3
@@ -176,11 +176,11 @@
   "chars": 3251237,
   "sections": 631,
   "divisions": 112,
-  "citations": 6983,
+  "citations": 6938,
   "byKind": {
    "act": 539,
    "usc": 1508,
-   "internal": 4638,
+   "internal": 4593,
    "publaw": 216,
    "stat": 81,
    "cfr": 1
@@ -208,10 +208,10 @@
   "chars": 780824,
   "sections": 227,
   "divisions": 58,
-  "citations": 2119,
+  "citations": 2051,
   "byKind": {
    "usc": 407,
-   "internal": 1190,
+   "internal": 1122,
    "act": 414,
    "publaw": 96,
    "stat": 12
@@ -239,11 +239,11 @@
   "chars": 1059989,
   "sections": 287,
   "divisions": 33,
-  "citations": 2725,
+  "citations": 2656,
   "byKind": {
    "act": 624,
    "usc": 736,
-   "internal": 1247,
+   "internal": 1178,
    "publaw": 112,
    "stat": 4,
    "cfr": 2
@@ -299,9 +299,9 @@
   "chars": 97126,
   "sections": 31,
   "divisions": 13,
-  "citations": 266,
+  "citations": 257,
   "byKind": {
-   "internal": 145,
+   "internal": 136,
    "usc": 72,
    "act": 42,
    "publaw": 6,
@@ -329,13 +329,13 @@
   "chars": 4843073,
   "sections": 1270,
   "divisions": 336,
-  "citations": 10466,
+  "citations": 9815,
   "byKind": {
    "act": 353,
    "usc": 1756,
    "publaw": 464,
    "stat": 242,
-   "internal": 7651
+   "internal": 7000
   },
   "amendments": 1517,
   "targeted": 1122,
@@ -360,10 +360,10 @@
   "chars": 770504,
   "sections": 217,
   "divisions": 49,
-  "citations": 1883,
+  "citations": 1811,
   "byKind": {
    "act": 320,
-   "internal": 1021,
+   "internal": 949,
    "usc": 482,
    "publaw": 58,
    "stat": 2
@@ -391,11 +391,11 @@
   "chars": 1629679,
   "sections": 503,
   "divisions": 63,
-  "citations": 4603,
+  "citations": 4569,
   "byKind": {
    "act": 213,
    "usc": 1222,
-   "internal": 3043,
+   "internal": 3009,
    "publaw": 99,
    "stat": 26
   },
@@ -422,12 +422,12 @@
   "chars": 1241175,
   "sections": 266,
   "divisions": 53,
-  "citations": 1998,
+  "citations": 1947,
   "byKind": {
    "act": 198,
    "usc": 485,
    "publaw": 80,
-   "internal": 1223,
+   "internal": 1172,
    "stat": 12
   },
   "amendments": 140,
@@ -453,13 +453,13 @@
   "chars": 2271931,
   "sections": 559,
   "divisions": 101,
-  "citations": 3919,
+  "citations": 3797,
   "byKind": {
    "act": 573,
    "usc": 1307,
    "publaw": 457,
    "stat": 72,
-   "internal": 1498,
+   "internal": 1376,
    "cfr": 12
   },
   "amendments": 332,
@@ -512,9 +512,9 @@
   "chars": 797343,
   "sections": 177,
   "divisions": 32,
-  "citations": 1699,
+  "citations": 1686,
   "byKind": {
-   "internal": 947,
+   "internal": 934,
    "act": 150,
    "usc": 354,
    "publaw": 114,
@@ -543,11 +543,11 @@
   "chars": 128661,
   "sections": 58,
   "divisions": 26,
-  "citations": 426,
+  "citations": 390,
   "byKind": {
    "act": 123,
    "usc": 124,
-   "internal": 179
+   "internal": 143
   },
   "amendments": 20,
   "targeted": 20,
@@ -570,10 +570,10 @@
   "chars": 5244482,
   "sections": 1864,
   "divisions": 291,
-  "citations": 9757,
+  "citations": 9490,
   "byKind": {
    "usc": 2863,
-   "internal": 4542,
+   "internal": 4275,
    "publaw": 830,
    "act": 1378,
    "stat": 119,
@@ -602,11 +602,11 @@
   "chars": 2907331,
   "sections": 442,
   "divisions": 68,
-  "citations": 7067,
+  "citations": 6871,
   "byKind": {
    "act": 1334,
    "usc": 1055,
-   "internal": 4610,
+   "internal": 4414,
    "publaw": 53,
    "stat": 15
   },
@@ -633,10 +633,10 @@
   "chars": 575249,
   "sections": 130,
   "divisions": 9,
-  "citations": 1369,
+  "citations": 1237,
   "byKind": {
    "act": 25,
-   "internal": 1293,
+   "internal": 1161,
    "usc": 48,
    "publaw": 2,
    "stat": 1
@@ -663,12 +663,12 @@
   "chars": 2738522,
   "sections": 544,
   "divisions": 54,
-  "citations": 5625,
+  "citations": 5592,
   "byKind": {
    "act": 903,
    "publaw": 26,
    "usc": 1409,
-   "internal": 3270,
+   "internal": 3237,
    "stat": 11,
    "cfr": 6
   },
@@ -695,11 +695,11 @@
   "chars": 1252664,
   "sections": 131,
   "divisions": 9,
-  "citations": 3202,
+  "citations": 3196,
   "byKind": {
    "act": 554,
    "usc": 567,
-   "internal": 2040,
+   "internal": 2034,
    "publaw": 25,
    "stat": 16
   },
@@ -757,10 +757,10 @@
   "chars": 278477,
   "sections": 89,
   "divisions": 28,
-  "citations": 553,
+  "citations": 545,
   "byKind": {
    "usc": 116,
-   "internal": 413,
+   "internal": 405,
    "act": 18,
    "publaw": 5,
    "stat": 1
@@ -819,10 +819,10 @@
   "chars": 794688,
   "sections": 216,
   "divisions": 35,
-  "citations": 2168,
+  "citations": 2152,
   "byKind": {
    "act": 300,
-   "internal": 1259,
+   "internal": 1243,
    "usc": 581,
    "publaw": 21,
    "stat": 7
@@ -850,10 +850,10 @@
   "chars": 416510,
   "sections": 158,
   "divisions": 18,
-  "citations": 912,
+  "citations": 905,
   "byKind": {
    "act": 72,
-   "internal": 489,
+   "internal": 482,
    "publaw": 34,
    "usc": 310,
    "stat": 6,
@@ -881,11 +881,11 @@
   "chars": 1492185,
   "sections": 660,
   "divisions": 52,
-  "citations": 2134,
+  "citations": 2100,
   "byKind": {
    "act": 293,
    "publaw": 448,
-   "internal": 389,
+   "internal": 355,
    "usc": 960,
    "stat": 41,
    "cfr": 3

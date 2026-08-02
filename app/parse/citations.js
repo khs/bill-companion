@@ -1199,6 +1199,38 @@ const RE_INTERNAL = new RegExp(
   'gi'
 );
 
+// A unit phrase that names its own section is not an internal reference.
+//
+// "Subsection (g) of section 6695 is amended", "Paragraph (2) of section 529A(b)",
+// "subparagraph (A) of section 152(b)(3)" — RE_INTERNAL matches the head unit and
+// stops, because it has no lookahead for what follows, so the half of the address
+// that says WHICH section is thrown away. `locateInternal` then goes looking for a
+// same-shaped marker in the bill and finds one: 1,460 of these across the corpus,
+// 931 answered with something in the bill and 616 of those with no hedge at all.
+// Every one is a confident answer about the wrong provision — "Subsection (g) of
+// section 6695" pointed at a subsection (g) of whatever the reader was near.
+//
+// The address is external and the amendment machinery already reads it:
+// RE_AMEND_HEAD_UNIT composes "Subsection (g) of section 6695" onto the target,
+// so the instruction's own tag carries the right provision. Dropping the chip
+// leaves that standing and removes the wrong one — blank beats wrong.
+//
+// "of such section" is included because it is the same phrase with the number
+// elided, and elided is not absent: TODO 1's `impliedSuchUnit` resolves it.
+const RE_UNIT_OF_SECTION = /^\s*of\s+(?:such\s+)?(?:section|title)\b/i;
+
+// The one form of it that IS internal, and is then composed rather than dropped:
+// "subsection (a) of section 503 of this Act". The bill says whose section 503 it
+// means, so the address is complete and points inside the bill. 13 across the
+// corpus against 1,531 that name someone else's section or say nothing — which is
+// why the default is to drop. The unit named first is the innermost, so its
+// marker goes on the END of the section's own path: "Subparagraph (B) of section
+// 1313(a)(6) of this Act" is 1313(a)(6)(B).
+const RE_UNIT_OF_THIS_SECTION = new RegExp(
+  `^\\s*of\\s+(?:such\\s+)?section\\s+(\\d+[A-Za-z]*)(${SUBSEC})\\s+of\\s+this\\s+(Act|title)`,
+  'i'
+);
+
 // ---------------------------------------------------------------------------
 // Extraction
 // ---------------------------------------------------------------------------
@@ -1402,12 +1434,28 @@ export function extractCitations(text) {
         scope: (m[4] || 'Act').toLowerCase(),
       });
     } else {
-      push(out, m, 'internal', {
-        refType: (m[5] || '').toLowerCase(),
-        section: '',
-        subsection: m[6] || '',
-        scope: 'section',
-      });
+      const tail = text.slice(m.index + m[0].length, m.index + m[0].length + 80);
+      const own = RE_UNIT_OF_THIS_SECTION.exec(tail);
+      if (own) {
+        // The whole phrase is one address. Span it all, so the chip covers what
+        // the reader sees as the citation rather than just its first two words.
+        const whole = m[0] + own[0];
+        const sub = `${own[2] || ''}${m[6] || ''}`;
+        push(out, { 0: whole, index: m.index }, 'internal', {
+          refType: 'section',
+          section: own[1],
+          subsection: sub,
+          scope: (own[3] || 'Act').toLowerCase(),
+          ladder: subsectionLadder(sub),
+        });
+      } else if (!RE_UNIT_OF_SECTION.test(tail)) {
+        push(out, m, 'internal', {
+          refType: (m[5] || '').toLowerCase(),
+          section: '',
+          subsection: m[6] || '',
+          scope: 'section',
+        });
+      }
     }
   }
 

@@ -146,7 +146,30 @@ function underPath(ancestors, want) {
  *   not held, or it holds no section by that number — so the caller falls
  *   through to the outbound link exactly as before.
  */
-export async function resolvePlaw(congress, law, section, where) {
+/**
+ * The division a short title names, where the law's own headings say so.
+ *
+ * "Section 532 of the Department of Homeland Security Appropriations Act, 2018
+ * (Public Law 115-141)" names its division without writing the letter: that Act
+ * IS division F, and the law prints the mapping on the division itself —
+ * `DIVISION F—DEPARTMENT OF HOMELAND SECURITY APPROPRIATIONS ACT, 2018`. So the
+ * short title the bill used is an exact substring of the heading, and no table
+ * of division short titles has to be authored or maintained. This is the half of
+ * the division problem that could not be closed by reading the citation alone.
+ *
+ * Only an unambiguous hit counts. Two divisions answering to one title means the
+ * title does not settle it, and the reader gets every candidate as before —
+ * which is the same rule the written-out division follows.
+ */
+function narrowByTitle(entries, shortTitle) {
+  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const want = norm(shortTitle);
+  if (want.length < 12) return null;
+  const hit = entries.filter((e) => norm((e.ancestors || [])[0] || '').includes(want));
+  return hit.length === 1 ? hit : null;
+}
+
+export async function resolvePlaw(congress, law, section, where, shortTitle) {
   if (!(await havePlaw(congress, law))) return null;
   const index = await loadPlawIndex(congress, law);
   if (!index) return null;
@@ -167,15 +190,30 @@ export async function resolvePlaw(congress, law, section, where) {
   if (!shard || !shard.entries || !shard.entries.length) return null;
 
   const all = shard.entries;
-  const narrowed = where ? all.filter((e) => underPath(e.ancestors, where)) : [];
+  let narrowed = where ? all.filter((e) => underPath(e.ancestors, where)) : [];
+  let by = narrowed.length && narrowed.length < all.length ? where.join(' › ') : null;
+  // What the citation gets suffixed with — the outermost level only, since that
+  // is the one that decides which of several same-numbered sections is meant.
+  let label = by ? pretty(where[0]) : null;
+
+  // The written-out path first, because it is the citation saying so outright.
+  // Only where it said nothing does the short title get a turn.
+  if (!by && all.length > 1 && shortTitle) {
+    const byTitle = narrowByTitle(all, shortTitle);
+    if (byTitle) {
+      narrowed = byTitle;
+      const heading = (byTitle[0].ancestors || [])[0] || '';
+      by = heading || shortTitle;
+      label = heading ? pretty(unitLabel(heading)) : null;
+    }
+  }
   const entries = narrowed.length ? narrowed : all;
-  const by = narrowed.length && narrowed.length < all.length ? where.join(' › ') : null;
 
   return {
     source: 'Public Law (as enacted)',
     citation:
       `Pub. L. ${lawId(congress, law)}` +
-      (by ? `, ${pretty(where[0])}` : '') +
+      (label ? `, ${label}` : '') +
       ` § ${section}`,
     plaw: { ...index, toc: null, number: section, entries, narrowedBy: by, of: all.length },
     asEnacted: true,

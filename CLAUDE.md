@@ -9,7 +9,7 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 449 checks, no dependencies
+node tools/selftest.mjs                   # 460 checks, no dependencies
 node tools/rendertest.mjs                 # 263 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
@@ -142,7 +142,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 449 checks passed
+node tools/selftest.mjs     # all 460 checks passed
 node tools/rendertest.mjs   # all 263 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
@@ -1337,6 +1337,72 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    division, and declined a provision it had already correctly identified. This
    was a silent decline before item 18 made it reachable, and it will be silent
    again if the cut at `as added` is ever removed.
+
+20. **A unit phrase that names its own section is not an internal reference.**
+   (Fixed 2026-08-02, from a second Haiku spot-check — 371 resolutions, 19
+   flagged, 11 surviving an adversarial pass.) `RE_INTERNAL` matched
+   `(subsection|paragraph|subparagraph|clause) (markers)` with **no lookahead for
+   what follows**, so in "Subsection (g) of section 6695 is amended" the head
+   unit became a bare internal citation and `of section 6695` — the half of the
+   address that says which section — was discarded. `locateInternal` then went
+   hunting for a same-shaped marker in the bill and found one.
+   **2,010 across the corpus**, 931 of them answered with something in the bill
+   and 616 with no hedge at all. Dedupe could not save them: the internal cite's
+   span is just the first two words, so it overlaps nothing that outranks it.
+   The address is external and the amendment head already reads it —
+   `RE_AMEND_HEAD_UNIT` composes the phrase onto the target — so dropping the
+   chip leaves the right answer standing and removes the wrong one. Blank beats
+   wrong.
+   The one form that is **internal** gets composed instead of dropped:
+   "subsection (a) of section 503 of this Act" is a complete address pointing
+   inside the bill. 13 of those against 1,531 that name someone else's section
+   or say nothing, which is why the default is to drop. The unit named first is
+   the innermost, so its marker goes on the *end* of the section's own path —
+   "Subparagraph (B) of section 1313(a)(6) of this Act" is 1313(a)(6)(B) — and
+   the citation spans the whole phrase rather than its first two words.
+   Watch the window: the phrase wraps across the 72-column measure ("of \n
+   <24 spaces>such section"), so the lookahead reads 80 characters. A 40-char
+   window misses the wrapped ones, which is a silent partial fix.
+
+21. **A section number is not unique — on the resolving side too.**
+   (Fixed 2026-08-02.) The same invariant already tracked for `#sec-N` anchors,
+   broken again in `locateInternal`: `bill.sections.find((s) => s.num === …)`
+   takes the first by number, so a "section 505 of this Act" written in division
+   C was answered from division A. **81 across the corpus, none of them hedged**
+   — the pane said a flat "Section 505 of this bill."
+   This is not a heuristic to be tuned. The bills state the rule themselves, in
+   their own section 3:
+
+   ```
+   any reference to ``this Act'' contained in any division of this Act shall be
+   treated as referring only to the provisions of that division.
+   ```
+
+   So `sectionByNumber()` prefers a same-number section sharing the citing
+   section's outermost ancestor, and falls back to first-by-number — which is
+   what a bill with no divisions does on every reference, and must keep doing.
+
+22. **A division's short title is written on the division.** (Added
+   2026-08-02, closing the half of item 15 that was left open.) "Section 532 of
+   the Department of Homeland Security Appropriations Act, 2018 (Public Law
+   115-141)" names its division without writing the letter, because that Act
+   *is* division F — and the law prints the mapping on the heading itself:
+   `DIVISION F—DEPARTMENT OF HOMELAND SECURITY APPROPRIATIONS ACT, 2018`. The
+   short title is an exact substring of the heading, so `narrowByTitle()` is a
+   lookup in shipped data and **no table of division short titles has to be
+   authored or maintained** — the same reason the Act index is trustworthy.
+   10 citations across the corpus narrow to exactly one this way; the three
+   reported all sat in Pub. L. 115-141, where §532 has 3 candidates, §534 has 2
+   and §505 has 5.
+   Two guards. Only an **unambiguous** hit counts — two divisions answering to
+   one title means the title does not settle it, and the reader gets every
+   candidate as before. And the **written-out path wins**: a citation that names
+   the division outright is the citation saying so, and the short title only
+   gets a turn where it said nothing.
+   `cacheKey` needs `shortTitle` for the fourth time in this file's history. A
+   memo keyed on too little is indistinguishable from a resolver bug, and here
+   it fails the dangerous way round: without it a bare "section 505 of Public
+   Law 115-141" inherits a division nothing in it named.
 
 
 ---

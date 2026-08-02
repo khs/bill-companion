@@ -137,13 +137,46 @@ function parentSpan(text, from, to, offset, depth) {
  * @param {object} cite  an `internal` citation
  * @returns {{start:number, label:string, why:string, section:object|null}|null}
  */
+/** The outermost unit a section sits in — its division, where it has one. */
+function divisionOf(sec) {
+  return (sec && sec.ancestors && sec.ancestors[0] && sec.ancestors[0].label) || '';
+}
+
+/**
+ * Which "section 708 of this Act" is meant.
+ *
+ * A section number is not unique — the tracked invariant, here on the resolving
+ * side rather than the rendering side. Every division of an appropriations act
+ * restarts at 101, so H.J. Res. 31 has six Sec. 505s, and taking the first by
+ * number answered from division A for a reference written in division C. 81 of
+ * these across the corpus, none of them hedged: the pane said a flat "Section
+ * 505 of this bill."
+ *
+ * The rule is not a heuristic. These bills state it themselves, in their own
+ * section 3:
+ *
+ *   any reference to ``this Act'' contained in any division of this Act shall
+ *   be treated as referring only to the provisions of that division.
+ *
+ * So a reference resolves inside its own division first, and only falls back to
+ * a bill-wide search when its division has no section by that number — which is
+ * what a bill with no divisions at all does on every reference.
+ */
+function sectionByNumber(bill, cite) {
+  const hits = bill.sections.filter((s) => s.num === cite.section);
+  if (hits.length < 2) return hits[0] || null;
+  const from = sectionAt(bill, cite.start);
+  const want = divisionOf(from);
+  return (want && hits.find((s) => divisionOf(s) === want)) || hits[0];
+}
+
 export function locateInternal(bill, cite) {
   const text = bill.text;
 
   // "section 4(a) of this Act" / "section 3 of this title" — a section of the
   // bill itself, which we can name exactly.
   if (cite.refType === 'section' && cite.section) {
-    const sec = bill.sections.find((s) => s.num === cite.section);
+    const sec = sectionByNumber(bill, cite);
     if (!sec) return null;
     let start = sec.start;
     let why = `Section ${cite.section} of this bill.`;
