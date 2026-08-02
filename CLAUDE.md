@@ -10,7 +10,7 @@ and is written for a user; this file is for changing it. Read both.
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
 node tools/selftest.mjs                   # 426 checks, no dependencies
-node tools/rendertest.mjs                 # 223 checks, needs `npm i -D linkedom`
+node tools/rendertest.mjs                 # 240 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
@@ -143,7 +143,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 
 ```bash
 node tools/selftest.mjs     # all 426 checks passed
-node tools/rendertest.mjs   # all 223 render checks passed
+node tools/rendertest.mjs   # all 240 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
@@ -631,6 +631,37 @@ word-bounded: bills strike operands as short as `or`, and a plain `indexOf`
 struck the "or" inside "for". One occurrence is marked, not all — `each place it
 appears` and `at the end` are the two cases where the bill says otherwise, and
 `at the end` takes the *last* match.
+
+**The parent of a top-level subsection is the whole section, and some sections
+are enormous.** The pane opens the cited provision's parent so it reads in
+context, which is the point of the ladder — but 42 U.S.C. 603 is 58,000
+characters across 323 nodes, so "section 403(c) of the Social Security Act"
+opened all of it and left the reader to find (c). `defaultScope()` now measures
+the candidate scope and falls back to the cited provision itself past
+`SCOPE_BUDGET`: 603(c) renders 5,377 characters instead of 58,101, and
+1395x(s)(2) renders 10,670 instead of 196,417. Measured in characters of
+rendered text rather than node count, because that is what has to be scrolled
+past — thirty one-line nodes are nothing and three thousand-word ones are not.
+
+The pane also scrolls to the cited provision, and **not with
+`scrollIntoView()`**: inside a scrollable pane that is implemented as "bring
+this into the viewport", which in Firefox and Chrome also scrolls the page
+behind it and moves the bill in the other pane. Adding the delta between the
+two bounding rectangles moves this container and nothing else, and behaves the
+same in all three browsers. The anchor has to be set in *two* places — the
+focused node renders through `nodeEl` normally, but through the ancestor ladder
+when the scope IS the focus.
+
+**A source credit is a list, and printing it as a paragraph destroys it.**
+42 U.S.C. 603 carries 2,660 characters in 33 clauses; 15 U.S.C. 636 carries
+7,427. As one block a reader scrolling into the middle sees
+")(A), (B), (2)(V), June 18, 2008, 122 Stat. 1664" and has no way to tell what
+it is supposed to mean. `parseCredit()` splits on the semicolons the OLRC
+already puts there — first clause enacting, the rest amending, the same rule
+the Act index is built on — and states the two facts that carry the value:
+what enacted the provision, and when it was last touched. The other clauses go
+behind a count. Where the enacting section is bracketed (`§ 2[7]`) the summary
+shows the Act's own number, because that is what a bill cites.
 
 **An internal cross-reference is scoped to its parent, not to the nearest
 match.** `locateInternal` finds where "clause (ii)" points by walking back to the

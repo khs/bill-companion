@@ -146,7 +146,7 @@ export function renderContext(res, handlers) {
   }
 
   if (res.effect) root.appendChild(effect(res.effect, handlers));
-  if (res.sourceCredit) root.appendChild(card('Source credit', res.sourceCredit, ''));
+  if (res.sourceCredit) root.appendChild(sourceCredit(res.sourceCredit));
   if (res.notes && res.notes.length) root.appendChild(notesCard(res.notes));
   if (res.links && res.links.length) root.appendChild(links(res.links));
   if (res.asOf) {
@@ -241,10 +241,35 @@ function crumbs(list, res, handlers) {
 }
 
 /** Default view: the parent of the cited subsection, so siblings are visible. */
+/**
+ * How much of the section to open on arrival.
+ *
+ * The parent of the cited provision, because a subsection read without its
+ * lead-in is usually meaningless — that is the whole idea of the ladder.
+ *
+ * But the parent of a top-level subsection is the entire section, and some
+ * sections are enormous: 42 U.S.C. 603 is 86 KB across 323 nodes, so citing
+ * "section 403(c) of the Social Security Act" opened all of it and left the
+ * reader to find (c) themselves. Where the parent is that big, open the cited
+ * provision itself instead; the ladder is one click away and the crumb above
+ * says where it sits.
+ *
+ * Measured in characters of rendered text rather than node count, because that
+ * is what the reader has to scroll past — 30 nodes of one line each is nothing,
+ * and 3 nodes of a thousand words is not.
+ */
+const SCOPE_BUDGET = 6000;
+
 function defaultScope(res) {
   const p = res.focusPath || '';
   const parts = p.match(/\([A-Za-z0-9]{1,8}\)/g) || [];
-  return parts.slice(0, -1).join('');
+  const parent = parts.slice(0, -1).join('');
+  if (!p || !res.tree) return parent;
+  const under = parent ? findNode(res.tree, parent) : null;
+  const size = parent
+    ? (under ? flattenText(under).length : 0)
+    : (res.lead || '').length + res.tree.reduce((n, x) => n + flattenText(x).length, 0);
+  return size > SCOPE_BUDGET ? p : parent;
 }
 
 function ladder(res, scope, handlers) {
@@ -301,6 +326,11 @@ function provision(res, scope) {
   for (const a of above) {
     const p = document.createElement('div');
     p.className = 'node on-path';
+    // The cited provision can render here rather than through nodeEl: when the
+    // scope IS the focus, the focus heads the ancestor ladder and its children
+    // are the body. It still needs the anchor, or the pane has nothing to
+    // scroll to.
+    if (a.path === res.focusPath && !document.getElementById('ctx-focus')) p.id = 'ctx-focus';
     const body = document.createElement('span');
     body.className = 'body';
     const mk = document.createElement('span');
@@ -345,6 +375,9 @@ function nodeEl(node, focusPath, red) {
   const el = document.createElement('div');
   el.className = 'node';
   if (focusPath) {
+    // The id the pane scrolls to. Only the focused node gets one, and only
+    // once — nodeEl runs for every node in the tree.
+    if (node.path === focusPath && !document.getElementById('ctx-focus')) el.id = 'ctx-focus';
     if (node.path === focusPath) el.classList.add('focus');
     else if (focusPath.startsWith(node.path)) el.classList.add('on-path');
     else if (!node.path.startsWith(focusPath)) el.classList.add('dimmed');
@@ -634,6 +667,113 @@ function effect(eff, handlers) {
     c.appendChild(p);
   }
   return c;
+}
+
+/**
+ * The Code's provenance line, read rather than dumped.
+ *
+ * A source credit is one long parenthetical naming the act that enacted the
+ * section and then every act that has amended it since, separated by
+ * semicolons. On a heavily-amended provision that is a wall: 42 U.S.C. 603
+ * carries 2,660 characters in 33 clauses, and printed as one paragraph it is
+ * genuinely unreadable — a reader who scrolls into the middle of it sees
+ * ")(A), (B), (2)(V), June 18, 2008, 122 Stat. 1664" and cannot tell what it is
+ * supposed to mean.
+ *
+ * The information is worth keeping; the presentation was not. Two facts carry
+ * almost all of the value — what enacted this provision, and when it was last
+ * touched — so those are stated in words, and the other thirty-one clauses go
+ * behind a count for anyone tracing a particular amendment.
+ */
+function sourceCredit(credit) {
+  const c = document.createElement('div');
+  c.className = 'card';
+  const h = document.createElement('h4');
+  h.textContent = 'Where this provision comes from';
+  c.appendChild(h);
+
+  const parsed = parseCredit(credit);
+  const p = document.createElement('p');
+  p.textContent = parsed.summary;
+  c.appendChild(p);
+
+  if (parsed.amendments.length) {
+    const row = document.createElement('div');
+    row.className = 'links';
+    const b = document.createElement('span');
+    b.className = 'crumb clickable';
+    b.textContent = `All ${parsed.amendments.length} amendments`;
+    b.setAttribute('role', 'button');
+    b.tabIndex = 0;
+    const list = document.createElement('div');
+    list.className = 'credit-list';
+    list.hidden = true;
+    for (const a of parsed.amendments) {
+      const li = document.createElement('div');
+      li.textContent = a;
+      list.appendChild(li);
+    }
+    const toggle = () => {
+      list.hidden = !list.hidden;
+      b.textContent = list.hidden ? `All ${parsed.amendments.length} amendments` : 'Hide amendments';
+    };
+    b.addEventListener('click', toggle);
+    b.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+    row.appendChild(b);
+    c.appendChild(row);
+    c.appendChild(list);
+  }
+  return c;
+}
+
+/** A date at the end of a credit clause: "Aug. 22, 1996". */
+const RE_CREDIT_DATE = /([A-Z][a-z]{2,8}\.?\s+\d{1,2},\s+\d{4})/g;
+const RE_CREDIT_LAW = /(Pub\. L\. \d+[–—-]\d+|[A-Z][a-z]{2,8}\.?\s+\d{1,2},\s+\d{4},\s+ch\.\s+\d+[A-Za-z]?)/;
+
+/**
+ * Split a credit into the act that enacted the provision and the acts that
+ * amended it.
+ *
+ * Only the first clause is the enacting one — the same rule the Act index is
+ * built on, and for the same reason: what follows a semicolon is a later
+ * amending act, and reading those as the origin attributes a section to
+ * whichever law last touched it.
+ */
+function parseCredit(credit) {
+  const body = String(credit || '').trim().replace(/^\(/, '').replace(/\)$/, '');
+  const clauses = body.split(';').map((s) => s.trim()).filter(Boolean);
+  if (!clauses.length) return { summary: String(credit || ''), amendments: [] };
+
+  const first = clauses[0];
+  const enacted = (RE_CREDIT_LAW.exec(first) || [])[1];
+  // "§ 2[7]" is the Code's way of writing the Act's own section 7 inside
+  // section 2 of the enacting law. The bracketed number is the one a reader
+  // recognises — it is what the Act calls itself and what a bill cites.
+  const secm = /§+\s*([0-9][0-9A-Za-z.\-–—]*)(?:\[([^\]]+)\])?/.exec(first);
+  const sec = secm ? secm[2] || secm[1] : undefined;
+  const added = /as added\s+(Pub\. L\. \d+[–—-]\d+)/.exec(first);
+
+  const amendments = clauses.slice(1).map((s) => s.replace(/^amended\s+/, ''));
+  const last = amendments[amendments.length - 1] || '';
+  const lastLaw = (RE_CREDIT_LAW.exec(last) || [])[1];
+  const dates = last.match(RE_CREDIT_DATE);
+  const lastDate = dates ? dates[dates.length - 1] : null;
+
+  const parts = [];
+  if (enacted) parts.push(`Enacted by ${enacted}${sec ? `, § ${sec}` : ''}`);
+  else parts.push(first);
+  if (added) parts.push(`added by ${added[1]}`);
+  if (amendments.length === 1) {
+    parts.push(`amended once${lastLaw ? ` by ${lastLaw}` : ''}${lastDate ? ` (${lastDate})` : ''}`);
+  } else if (amendments.length > 1) {
+    parts.push(
+      `amended ${amendments.length} times, most recently${lastLaw ? ` by ${lastLaw}` : ''}` +
+        `${lastDate ? ` (${lastDate})` : ''}`
+    );
+  }
+  return { summary: `${parts.join('; ')}.`, amendments };
 }
 
 function notesCard(notes) {

@@ -556,6 +556,81 @@ section('Act-relative derivation');
        small.textContent.slice(0, 120));
   }
 
+  // ---- a citation into an enormous section --------------------------------
+  // The pane opens the cited provision's PARENT, so it reads in context. For a
+  // top-level subsection the parent is the whole section — and 42 U.S.C. 603 is
+  // 58,000 characters across 323 nodes, so "section 403(c) of the Social
+  // Security Act" opened all of it and left the reader to find (c).
+  {
+    const big = (n) => ({
+      marker: `(${n})`, path: `(${n})`, heading: '', text: 'x'.repeat(9000), children: [],
+    });
+    const res = {
+      source: 'U.S. Code', citation: '42 U.S.C. 603(c)', links: [], lead: '',
+      tree: [big('a'), big('b'), { marker: '(c)', path: '(c)', heading: '', text: 'the cited text', children: [] }],
+      focusPath: '(c)', citedPath: '(c)',
+    };
+    const el = rc(res, { onScope: () => {} });
+    const prov = [...el.querySelectorAll('.prov')].reduce((n, p) => n + p.textContent.length, 0);
+    ok('a citation into a huge section does not open all of it', prov < 4000, `${prov} characters`);
+    ok('  but does show the provision cited', /the cited text/.test(el.textContent),
+       el.textContent.slice(0, 120));
+    ok('  with an anchor for the pane to scroll to', !!el.querySelector('#ctx-focus'));
+    eq('  and exactly one of them', el.querySelectorAll('#ctx-focus').length, 1);
+
+    // A section small enough to read whole is still shown whole — the point is
+    // the budget, not a blanket rule.
+    const small = {
+      source: 'U.S. Code', citation: '42 U.S.C. 7401(a)', links: [], lead: '',
+      tree: [
+        { marker: '(a)', path: '(a)', heading: '', text: 'findings', children: [] },
+        { marker: '(b)', path: '(b)', heading: '', text: 'purposes', children: [] },
+      ],
+      focusPath: '(a)', citedPath: '(a)',
+    };
+    ok('a small section is still shown whole', /purposes/.test(rc(small, { onScope: () => {} }).textContent));
+  }
+
+  // ---- the source credit --------------------------------------------------
+  // 42 U.S.C. 603 carries 2,660 characters of provenance in 33 clauses. Printed
+  // as one paragraph it is unreadable: scrolling into the middle of it shows
+  // ")(A), (B), (2)(V), June 18, 2008, 122 Stat. 1664" and nothing about what
+  // that is supposed to mean.
+  {
+    const credit =
+      '(Aug. 14, 1935, ch. 531, title IV, § 403, as added Pub. L. 104–193, title I, ' +
+      '§ 103(a)(1), Aug. 22, 1996, 110 Stat. 2115; amended Pub. L. 104–327, § 1(b), ' +
+      'Oct. 19, 1996, 110 Stat. 4002; Pub. L. 110–275, title III, § 301(b), July 15, 2008, ' +
+      '122 Stat. 2594; Pub. L. 117–2, title IX, § 9201, Mar. 11, 2021, 135 Stat. 124.)';
+    const el = rc(
+      { source: 'U.S. Code', citation: '42 U.S.C. 603', links: [], tree: [], sourceCredit: credit },
+      { onScope: () => {} }
+    );
+    const cardEl = [...el.querySelectorAll('.card')].find((x) =>
+      /comes from/.test(x.querySelector('h4')?.textContent || '')
+    );
+    ok('the credit is summarised, not dumped', !!cardEl, 'no credit card');
+    const summary = cardEl.querySelector('p').textContent;
+    ok('  naming what enacted it', /Aug\. 14, 1935, ch\. 531/.test(summary), summary);
+    ok('  and the law that added this section', /added by Pub\. L\. 104–193/.test(summary), summary);
+    ok('  and how often it has been amended', /amended 3 times/.test(summary), summary);
+    ok('  and when it was last touched', /Pub\. L\. 117–2 \(Mar\. 11, 2021\)/.test(summary), summary);
+    ok('  in one sentence, not 2,660 characters', summary.length < 200, `${summary.length} chars`);
+
+    // The rest is kept, behind a count, for anyone tracing one amendment.
+    const list = cardEl.querySelector('.credit-list');
+    eq('every amending act is still there', list.children.length, 3);
+    eq('  hidden until asked for', list.hidden, true);
+    const btn = cardEl.querySelector('.crumb.clickable');
+    eq('  behind a control that says how many', btn.textContent, 'All 3 amendments');
+    btn.dispatchEvent(new window.Event('click'));
+    eq('  which reveals them', list.hidden, false);
+    ok('  and offers to hide them again', /Hide/.test(btn.textContent), btn.textContent);
+    // Only the FIRST clause is the enacting one; the rest are amendments.
+    ok('the enacting clause is not listed as an amendment',
+       !list.textContent.includes('as added'), list.textContent.slice(0, 90));
+  }
+
   // ---- two sections, one number ------------------------------------------
   // The pane has to say so, and has to let the reader read the other one.
   // Named by heading and credit, because a bare "alternative 2" tells nobody

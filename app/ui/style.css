@@ -331,6 +331,14 @@ body {
 .op-repeal { background: var(--err-soft); color: var(--err); border-color: transparent; font-weight: 700; }
 .billtext.filtered p:not(.has-amend):not(.sec-head) { display: none; }
 
+/* The full amendment history, behind a count. Monospaced digits and one act
+   per line: this is a list to scan for a particular Public Law, not prose. */
+.credit-list { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; }
+.credit-list > div {
+  font-size: 11.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums;
+  padding-left: 10px; border-left: 1px solid var(--rule);
+}
+
 /* --------------------------------------------------------- context pane */
 .srcbadge {
   font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;

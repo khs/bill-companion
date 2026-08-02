@@ -257,7 +257,22 @@ function paint(res) {
       },
     })
   );
+  // Top of the pane by default; the cited provision when there is one and it
+  // is not already the first thing on screen.
+  //
+  // Deliberately not scrollIntoView(): inside a scrollable pane it is
+  // implemented as "bring this into the viewport", which in Firefox and Chrome
+  // also scrolls the page behind it, moving the bill in the other pane. Adding
+  // the delta between the two rectangles moves this container and nothing else,
+  // and behaves the same in all three browsers.
   els.ctxBody.scrollTop = 0;
+  const focus = els.ctxBody.querySelector('#ctx-focus');
+  if (focus && focus.getBoundingClientRect) {
+    const pane = els.ctxBody.getBoundingClientRect();
+    const box = focus.getBoundingClientRect();
+    const delta = box.top - pane.top - 12;
+    if (delta > 4) els.ctxBody.scrollTop += delta;
+  }
 }
 
 /** Match the amendment's struck language against the text we resolved. */
