@@ -24,6 +24,28 @@ export async function resolve(cite) {
   return p;
 }
 
+/**
+ * Does the section the index found sit in the division the bill named?
+ *
+ * An omnibus Public Law restarts its section numbering in every division, so
+ * "section 110 of Public Law 114-113" names two different provisions and the
+ * Act index — keyed on the bare number — returns whichever one was codified.
+ * That is how "Section 110(a) of the Department of Commerce Appropriations
+ * Act, 2016 (Public Law 114-113)", which is division B, resolved to
+ * 6 U.S.C. 1509, whose credit reads "Pub. L. 114-113, div. N, title I, § 110".
+ * A real provision, about cybersecurity information sharing, and not the one
+ * cited.
+ *
+ * The Code prints the division in the credit, so the check is free: if the
+ * credit names one and the citation did not name the same one, the number is
+ * ambiguous and this declines. A credit with no division cannot disagree.
+ */
+function divisionAgrees(cite, credit) {
+  const m = /\bdiv\.?\s+([A-Z]{1,2})\b/.exec(String(credit || ''));
+  if (!m) return true;
+  return Boolean(cite.division) && cite.division === m[1].toUpperCase();
+}
+
 /** The three places a Public Law can be read outside this app. */
 function publawLinks(cite) {
   return [
@@ -43,8 +65,14 @@ function cacheKey(c) {
   // Security Act" and "section 1862 of the Social Security Act" key alike — same
   // kind, same Act, no `section` of their own — and the second citation would be
   // served the first one's provision out of the cache.
+  // `division` is load-bearing for the same reason, and was missed for the same
+  // reason. "Section 110 of division N of Public Law 114-113" and "Section 110
+  // of Public Law 114-113" are the same kind, the same law and the same section
+  // — they differ only in whether the division is named, which is precisely
+  // what decides whether the answer is 6 U.S.C. 1509 or a decline. Without it
+  // the first of the two to be clicked answered for both.
   return [c.kind, c.title, c.part, c.section, c.subsection, c.congress, c.law, c.volume, c.page,
-          c.act && c.act.name, c.actSection]
+          c.act && c.act.name, c.actSection, c.division]
     .filter(Boolean)
     .join('|');
 }
@@ -123,7 +151,7 @@ async function dispatch(cite) {
             section: at.section,
             subsection: cite.subsection || '',
           });
-          if (!res.missing && !res.error) {
+          if (!res.missing && !res.error && divisionAgrees(cite, res.sourceCredit)) {
             return {
               ...res,
               viaActSection: {

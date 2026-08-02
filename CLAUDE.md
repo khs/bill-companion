@@ -9,7 +9,7 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 364 checks, no dependencies
+node tools/selftest.mjs                   # 371 checks, no dependencies
 node tools/rendertest.mjs                 # 204 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
@@ -142,7 +142,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 364 checks passed
+node tools/selftest.mjs     # all 371 checks passed
 node tools/rendertest.mjs   # all 204 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
@@ -955,15 +955,33 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    control offers (a)(3), that it widens to (a), and that at (a) the block is
    actually on screen — because asserting only the first would have passed
    against a control that did nothing.
-14. **A "U.S.C. N note" citation still resolves to section N.** The citations
-   are flagged (`c.note`) and "such" anaphora refuses to chain off one, which
-   is what TODO 1 needed — but nothing else acts on the flag yet, so clicking
-   "10 U.S.C. 1580 note" still opens section 1580, a real provision that is not
-   the one cited. 815 of the corpus's 12,918 U.S.C. citations (6.3%) are of
-   this form. The honest behaviour is to say the citation names a note under
-   that section and offer the section as context rather than as the answer;
-   the Act cite beside it ("section 235 of the NDAA for FY2020") is usually the
-   better target and is already extracted.
+14. **A "U.S.C. N note" citation no longer poses as section N.** (Fixed
+   2026-08-02.) A note is uncodified law printed *beneath* a section, and 319
+   amendments across the corpus targeted one — showing a real provision that is
+   not the one cited. "Section 602(b)(3)(F) of the Afghan Allies Protection Act
+   of 2009 (8 U.S.C. 1101 note)" pointed at 8 U.S.C. 1101, the INA's
+   *Definitions* section, and then composed every navigation step against it:
+   "clause (i)" became 8 U.S.C. 1101(i). **764 composed addresses removed**,
+   every one of them a confident answer about the wrong statute.
+   Notes are skipped in the target chain and the Public Law beside them is used
+   instead, carrying the section number the instruction named, so it resolves
+   through the same Act index and local text "section N of Public Law X-Y" uses.
+   Corpus: targeted -95, relative -764, nothing else moved.
+
+15. **An omnibus Public Law's section numbers are not addresses on their own.**
+   Every division restarts the numbering, so "section 110 of Public Law 114-113"
+   names one provision in division B and another in division N — and the Act
+   index, keyed on the bare number, returns whichever was codified. That is how
+   "Section 110(a) of the Department of Commerce Appropriations Act, 2016"
+   (division B) resolved to 6 U.S.C. 1509, whose credit reads "div. N, title I,
+   § 110". The Code prints the division in the credit, so `divisionAgrees()`
+   checks the two and declines where they disagree; the citation matcher now
+   captures "of division G of" because that phrase is half the address.
+   Still open: a citation that names the division only through a *division's
+   short title* ("the Department of Commerce Appropriations Act, 2016" IS
+   division B) cannot be checked this way, and those decline rather than
+   resolve. Mapping division short titles to division letters would fix it, and
+   `data/plaw/` has the structure to do it for the 25 laws it holds.
 
 
 ---

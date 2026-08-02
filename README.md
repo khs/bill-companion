@@ -237,7 +237,7 @@ Bills are parsed entirely in your browser. Nothing is uploaded.
 |---|---|---|
 | **CFR** | Live [eCFR API](https://www.ecfr.gov/developers/documentation/api/v1) | Serves `access-control-allow-origin: *`, so the browser calls it directly. Always current — no snapshot to go stale. Nothing to pre-ingest. |
 | **U.S. Code** | Pre-ingested from [uscode.house.gov](https://uscode.house.gov/download/download.shtml) USLM XML | No CORS-open API exists for the Code, so it has to be local. |
-| **Public Laws** | The Code's own source credits, then an outbound link | "Section 12306 of Public Law 113-79" resolves to 7 U.S.C. 1632c, because the Code says so on the section itself. 1,737 Public Laws are indexed this way. A section that was never codified — most of an appropriations act — still gets the link. |
+| **Public Laws** | The Code's own source credits, then 25 laws held locally, then an outbound link | "Section 12306 of Public Law 113-79" resolves to 7 U.S.C. 1632c, because the Code says so on the section itself. 1,737 Public Laws are indexed this way. A section that was never codified — most of an appropriations act — still gets the link. |
 | **Statutes at Large** | Outbound links | govinfo and congress.gov both refuse cross-origin browser requests. |
 
 You expected the CFR would need pre-ingesting. It doesn't, and shouldn't — eCFR is
@@ -320,7 +320,7 @@ nothing — so it lives here rather than being fetched at build time.
 ## Tests
 
 ```bash
-node tools/selftest.mjs       # 364 checks: parsing, PDF extraction, citations, tree, share links, live eCFR, local data
+node tools/selftest.mjs       # 371 checks: parsing, PDF extraction, citations, tree, share links, live eCFR, local data
 npm i -D linkedom             # once, for the DOM tests
 node tools/rendertest.mjs     # 204 checks: both panes, the redline, additions, resolvers, fallback states, wiring
 node tools/corpus.mjs         # 30 real bills, every metric diffed against a recorded baseline

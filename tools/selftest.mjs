@@ -1168,6 +1168,50 @@ section('internal cross-references');
       eq('  and the heading it was inside is clean',
          idx.toc.find((t) => t.num === '3').heading, 'REFERENCES TO ACT');
     }
+  // ---- a note is not the section it sits under ---------------------------
+  // "Section 602(b)(3)(F) of the Afghan Allies Protection Act of 2009 (8 U.S.C.
+  // 1101 note)" targeted 8 U.S.C. 1101 — the INA's *Definitions* section — and
+  // then composed every navigation step against it: "clause (i)" became
+  // 8 U.S.C. 1101(i), a real provision about something else entirely. 319
+  // amendments targeted a note this way, carrying 764 composed addresses.
+  {
+    const tnote = normalizeText(
+      'SEC. 2. X.\n' +
+      'Section 602(b)(3) of the Afghan Allies Protection Act of 2009 (8 U.S.C. 1101 note; ' +
+      "Public Law 111-8) is amended--\n    (1) in clause (i), by striking ``old'' and inserting ``new''.\n"
+    );
+    const cn = extractCitations(tnote);
+    const an = extractAmendments(tnote, cn);
+    ok('the note citation is not the target',
+       !an[0].target || !an[0].target.note, JSON.stringify(an[0].target && an[0].target.text));
+    eq('  the Public Law beside it is', an[0].target && an[0].target.kind, 'publaw');
+    eq('  carrying the section the instruction named', an[0].target && an[0].target.actSection, '602');
+    // And nothing composes against the note's section any more.
+    const rel = expandRelativeRefs(cn, an).filter((c) => c.relative);
+    ok('no address is composed onto the note\'s section',
+       !rel.some((c) => c.kind === 'usc' && c.section === '1101'),
+       JSON.stringify(rel.map((c) => `${c.kind} ${c.section}${c.subsection}`)));
+
+    // An omnibus restarts its numbering in every division, so the section
+    // number alone is not an address. The Code prints the division in its
+    // credit, and where the two disagree this declines rather than guessing.
+    const amb = extractCitations(
+      normalizeText('SEC. 2. X.\nSection 110 of Public Law 114-113 is amended.\n')
+    ).find((c) => c.kind === 'publaw');
+    const ambRes = await resolve(amb);
+    ok('a division-ambiguous Public Law section does not resolve to the Code',
+       !ambRes.viaActSection,
+       JSON.stringify(ambRes.viaActSection && ambRes.viaActSection.codified));
+    // Naming the division is what makes it an address.
+    const named = extractCitations(
+      normalizeText('SEC. 2. X.\nSection 110 of division N of Public Law 114-113 is amended.\n')
+    ).find((c) => c.kind === 'publaw');
+    eq('  and naming the division is captured', named.division, 'N');
+    const namedRes = await resolve(named);
+    eq('  which lets it resolve', namedRes.viaActSection && namedRes.viaActSection.codified,
+       '6 U.S.C. 1509');
+  }
+
     globalThis.fetch = realFetch;
   }
 

@@ -105,7 +105,10 @@ const RE_PUBLAW = new RegExp(`\\b${PUBLAW_NAME}`, 'gi');
 // This is a *longer* match over the same span as RE_PUBLAW, at the same rank, so
 // dedupe() keeps it — the same mechanism the Act-relative form relies on.
 const RE_PUBLAW_SECTION = new RegExp(
-  `\\b[Ss]ections?\\s+(\\d+[A-Za-z]*)(${SUBSEC})\\s+of\\s+${PUBLAW_NAME}`,
+  `\\b[Ss]ections?\\s+(\\d+[A-Za-z]*)(${SUBSEC})\\s+of\\s+` +
+  // An omnibus restarts its numbering in every division, so "of division G of"
+  // is not decoration — it is the half of the address that disambiguates.
+  `(?:[Dd]iv(?:ision)?\\.?\\s+([A-Z]{1,2})\\s+of\\s+)?${PUBLAW_NAME}`,
   'g'
 );
 
@@ -1090,10 +1093,11 @@ export function extractCitations(text) {
   RE_PUBLAW_SECTION.lastIndex = 0;
   while ((m = RE_PUBLAW_SECTION.exec(text))) {
     push(out, m, 'publaw', {
-      congress: m[3],
-      law: m[4],
+      congress: m[4],
+      law: m[5],
       actSection: m[1],
       subsection: m[2] || '',
+      division: m[3] ? m[3].toUpperCase() : null,
       ladder: subsectionLadder(m[2]),
     });
   }
@@ -1348,6 +1352,40 @@ function impliedSuchUnit(h, lastTarget) {
   };
 }
 
+/**
+ * A Public Law target, carrying the section number the instruction named.
+ *
+ * "Section 105(f)(1) of the Gulf of Mexico Energy Security Act of 2006
+ * (43 U.S.C. 1331 note; Public Law 109-432) is amended" is an amendment to
+ * section 105 of Pub. L. 109-432. The bare Public Law citation says which law
+ * but not which section, and the section number is sitting in the head — so it
+ * is attached, and resolve() then answers through the same Act-section index
+ * and local Public Law text that "section N of Public Law X-Y" uses.
+ *
+ * A shallow copy, because resolve() memoises by citation and the same Public
+ * Law is cited from many instructions with different sections.
+ */
+function publawTarget(h, cite) {
+  if (!cite) return null;
+  if (cite.kind !== 'publaw' || !h.section || cite.actSection) return cite;
+  // Which division the instruction named, if any. An omnibus Public Law
+  // restarts its section numbering in every division — Pub. L. 114-113 has a
+  // section 110 in division B and another in division N — so the number alone
+  // does not identify a provision. resolveActSection() answers from the Code's
+  // credits, which state the division; this is what lets the resolver check
+  // the two against each other instead of trusting the number. See the
+  // division guard in app/resolve/index.js.
+  const head = (h.inner || '') + (h.unit || '') + ' ' + (h.middle || '');
+  const dm = head.match(/\bdiv(?:ision)?\.?\s+([A-Z]{1,2})\b/i);
+  return {
+    ...cite,
+    actSection: h.section,
+    subsection: h.subsection || '',
+    ladder: subsectionLadder(h.subsection || ''),
+    division: dm ? dm[1].toUpperCase() : null,
+  };
+}
+
 function ircScopes(text, divisions) {
   RE_1986_CODE.lastIndex = 0;
   const out = [];
@@ -1488,14 +1526,21 @@ export function extractAmendments(text, citations, divisions = []) {
     // instruction as amending nothing at all. 153 amendments across the corpus,
     // and nearly every one in a public-lands bill, where uncodified Public Law
     // sections are the normal thing to amend.
+    //
+    // A "note" citation is NOT one of those. "Section 203(c) of the Judicial
+    // Improvements Act of 1990 (Public Law 101-650; 28 U.S.C. 133 note)" names
+    // an uncodified provision printed beneath 28 U.S.C. 133; the section itself
+    // is "Appointment and number of district judges", which is a real provision
+    // about something else. 319 amendments across the corpus targeted a note
+    // this way and every one of them showed the wrong law. The parenthetical
+    // almost always carries a Public Law beside it, and that IS the target —
+    // so notes are skipped here and picked up by the publaw branch below,
+    // carrying the head's own section number.
+    const inHead = (c) => c.start >= h.start && c.start < h.headEnd;
     const target =
-      citations.find(
-        (c) => (c.kind === 'usc' || c.kind === 'cfr') && c.start >= h.start && c.start < h.headEnd
-      ) ||
-      citations.find((c) => c.kind === 'act' && c.start >= h.start && c.start < h.headEnd) ||
-      citations.find(
-        (c) => (c.kind === 'publaw' || c.kind === 'stat') && c.start >= h.start && c.start < h.headEnd
-      ) ||
+      citations.find((c) => (c.kind === 'usc' || c.kind === 'cfr') && !c.note && inHead(c)) ||
+      citations.find((c) => c.kind === 'act' && inHead(c)) ||
+      publawTarget(h, citations.find((c) => (c.kind === 'publaw' || c.kind === 'stat') && inHead(c))) ||
       impliedIrc(h, ircRanges) ||
       impliedSuch(h, citations) ||
       impliedSuchUnit(h, lastTarget) ||

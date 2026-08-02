@@ -158,7 +158,7 @@
   "distributed": 0,
   "steps": 226,
   "refs": 278,
-  "relative": 477,
+  "relative": 476,
   "ops": {
    "add-at-end": 124,
    "insert": 327,
@@ -186,11 +186,11 @@
    "cfr": 1
   },
   "amendments": 595,
-  "targeted": 482,
+  "targeted": 479,
   "distributed": 7,
   "steps": 729,
   "refs": 948,
-  "relative": 1548,
+  "relative": 1412,
   "ops": {
    "strike": 619,
    "insert": 798,
@@ -217,11 +217,11 @@
    "stat": 12
   },
   "amendments": 291,
-  "targeted": 288,
+  "targeted": 285,
   "distributed": 0,
   "steps": 207,
   "refs": 266,
-  "relative": 462,
+  "relative": 449,
   "ops": {
    "strike": 276,
    "insert": 324,
@@ -249,11 +249,11 @@
    "cfr": 2
   },
   "amendments": 184,
-  "targeted": 151,
+  "targeted": 147,
   "distributed": 0,
   "steps": 156,
   "refs": 221,
-  "relative": 317,
+  "relative": 303,
   "ops": {
    "strike": 174,
    "insert": 222,
@@ -308,11 +308,11 @@
    "stat": 1
   },
   "amendments": 27,
-  "targeted": 25,
+  "targeted": 24,
   "distributed": 0,
   "steps": 39,
   "refs": 22,
-  "relative": 61,
+  "relative": 51,
   "ops": {
    "strike": 25,
    "insert": 36,
@@ -338,11 +338,11 @@
    "internal": 7651
   },
   "amendments": 1517,
-  "targeted": 1140,
+  "targeted": 1122,
   "distributed": 0,
   "steps": 1189,
   "refs": 2791,
-  "relative": 2862,
+  "relative": 2634,
   "ops": {
    "insert": 2392,
    "strike": 1686,
@@ -369,11 +369,11 @@
    "stat": 2
   },
   "amendments": 148,
-  "targeted": 128,
+  "targeted": 127,
   "distributed": 0,
   "steps": 51,
   "refs": 126,
-  "relative": 139,
+  "relative": 123,
   "ops": {
    "strike": 85,
    "insert": 121,
@@ -400,11 +400,11 @@
    "stat": 26
   },
   "amendments": 792,
-  "targeted": 760,
+  "targeted": 756,
   "distributed": 0,
   "steps": 811,
   "refs": 961,
-  "relative": 1731,
+  "relative": 1660,
   "ops": {
    "redesignate": 106,
    "insert": 1017,
@@ -431,11 +431,11 @@
    "stat": 12
   },
   "amendments": 140,
-  "targeted": 130,
+  "targeted": 128,
   "distributed": 0,
   "steps": 167,
   "refs": 202,
-  "relative": 361,
+  "relative": 355,
   "ops": {
    "insert": 184,
    "redesignate": 23,
@@ -463,11 +463,11 @@
    "cfr": 12
   },
   "amendments": 329,
-  "targeted": 305,
+  "targeted": 299,
   "distributed": 0,
   "steps": 201,
   "refs": 300,
-  "relative": 467,
+  "relative": 430,
   "ops": {
    "strike": 355,
    "insert": 393,
@@ -521,11 +521,11 @@
    "stat": 134
   },
   "amendments": 127,
-  "targeted": 121,
+  "targeted": 120,
   "distributed": 0,
   "steps": 104,
   "refs": 176,
-  "relative": 157,
+  "relative": 136,
   "ops": {
    "insert": 159,
    "strike": 126,
@@ -580,11 +580,11 @@
    "cfr": 25
   },
   "amendments": 839,
-  "targeted": 776,
+  "targeted": 755,
   "distributed": 0,
   "steps": 632,
   "refs": 940,
-  "relative": 1452,
+  "relative": 1334,
   "ops": {
    "strike": 797,
    "insert": 1013,
@@ -611,11 +611,11 @@
    "stat": 15
   },
   "amendments": 854,
-  "targeted": 731,
+  "targeted": 722,
   "distributed": 0,
   "steps": 549,
   "refs": 698,
-  "relative": 1001,
+  "relative": 976,
   "ops": {
    "insert": 771,
    "add-at-end": 385,
@@ -646,7 +646,7 @@
   "distributed": 0,
   "steps": 58,
   "refs": 562,
-  "relative": 613,
+  "relative": 607,
   "ops": {
    "add-at-end": 115,
    "redesignate": 50,
@@ -673,11 +673,11 @@
    "cfr": 6
   },
   "amendments": 575,
-  "targeted": 545,
+  "targeted": 541,
   "distributed": 0,
   "steps": 407,
   "refs": 596,
-  "relative": 900,
+  "relative": 886,
   "ops": {
    "add-at-end": 221,
    "strike": 496,
@@ -704,11 +704,11 @@
    "stat": 16
   },
   "amendments": 284,
-  "targeted": 247,
+  "targeted": 240,
   "distributed": 0,
   "steps": 344,
   "refs": 229,
-  "relative": 483,
+  "relative": 472,
   "ops": {
    "redesignate": 17,
    "strike": 404,
@@ -770,7 +770,7 @@
   "distributed": 0,
   "steps": 58,
   "refs": 71,
-  "relative": 85,
+  "relative": 84,
   "ops": {
    "strike": 88,
    "insert": 95,
@@ -797,11 +797,11 @@
    "publaw": 15
   },
   "amendments": 104,
-  "targeted": 100,
+  "targeted": 98,
   "distributed": 0,
   "steps": 71,
   "refs": 143,
-  "relative": 155,
+  "relative": 146,
   "ops": {
    "repeal": 4,
    "strike": 87,
@@ -828,11 +828,11 @@
    "stat": 7
   },
   "amendments": 394,
-  "targeted": 380,
+  "targeted": 371,
   "distributed": 0,
   "steps": 236,
   "refs": 531,
-  "relative": 741,
+  "relative": 716,
   "ops": {
    "redesignate": 44,
    "strike": 367,
@@ -895,7 +895,7 @@
   "distributed": 0,
   "steps": 5,
   "refs": 21,
-  "relative": 16,
+  "relative": 14,
   "ops": {
    "strike": 29,
    "insert": 35,
