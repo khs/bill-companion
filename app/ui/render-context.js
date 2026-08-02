@@ -95,7 +95,9 @@ export function renderContext(res, handlers) {
         card(
           'Subsection not present',
           `The bill cites ${escapeText(res.focusPath)}, but the current text of this ` +
-            `section has no such subsection. That usually means the bill is adding it.`,
+            `section has no such subsection. That usually means the bill is adding it — ` +
+            `or that the law has been edited since the bill was written, and the ` +
+            `subsection it names has been renumbered or repealed.`,
           'warn'
         )
       );
@@ -776,6 +778,51 @@ function parseCredit(credit) {
   return { summary: `${parts.join('; ')}.`, amendments };
 }
 
+/**
+ * USLM's `topic` attribute, for the notes that have no heading of their own.
+ *
+ * These are XML identifiers, and they were being printed at the reader
+ * verbatim: "effectiveDateOfAmendment: Amendment by Pub. L. 113-128…",
+ * "referencesInText: …", "historicalAndRevision: …". A label is supposed to
+ * tell someone what they are looking at, and a camelCase attribute name tells
+ * them what schema it came out of.
+ *
+ * Only a fallback. A note's own <heading> is better than any of these — it says
+ * "Effective Date of 2014 Amendment" where the topic says
+ * "effectiveDateOfAmendment" — so it wins whenever there is one.
+ */
+const NOTE_TOPICS = {
+  amendments: 'Amendments',
+  changeOfName: 'Change of name',
+  codification: 'Codification',
+  editorialNotes: 'Editorial note',
+  effectiveDate: 'Effective date',
+  effectiveDateOfAmendment: 'Effective date of amendment',
+  execDoc: 'Executive document',
+  executiveOrder: 'Executive order',
+  historicalAndRevision: 'Historical and revision notes',
+  miscellaneous: 'Note',
+  priorProvisions: 'Prior provisions',
+  prospectiveAmendment: 'Prospective amendment',
+  referencesInText: 'References in text',
+  removalDescription: 'Removal',
+  repeals: 'Repeals',
+  savings: 'Savings provision',
+  shortTitle: 'Short title',
+  shortTitleOfAmendment: 'Short title of amendment',
+  statutoryNotes: 'Statutory note',
+  transferOfFunctions: 'Transfer of functions',
+};
+
+/** Last resort: split a camelCase identifier into words. */
+function humanTopic(topic) {
+  const t = String(topic || '').trim();
+  if (!t || t === 'note') return 'Note';
+  if (NOTE_TOPICS[t]) return NOTE_TOPICS[t];
+  const words = t.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 function notesCard(notes) {
   const c = document.createElement('div');
   c.className = 'card';
@@ -783,9 +830,25 @@ function notesCard(notes) {
   h.textContent = `Notes (${notes.length})`;
   c.appendChild(h);
   for (const n of notes.slice(0, 6)) {
+    if (typeof n === 'string') {
+      const p = document.createElement('p');
+      p.textContent = n;
+      c.appendChild(p);
+      continue;
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'note';
+    const label = document.createElement('span');
+    label.className = 'notehead';
+    // The note's own heading first: it is written for a reader and is specific
+    // to this note ("Effective Date of 2014 Amendment"), where the topic is a
+    // category shared by thousands.
+    label.textContent = n.heading || humanTopic(n.topic);
+    wrap.appendChild(label);
     const p = document.createElement('p');
-    p.textContent = typeof n === 'string' ? n : `${n.topic || 'note'}: ${n.text || ''}`;
-    c.appendChild(p);
+    p.textContent = n.text || '';
+    wrap.appendChild(p);
+    c.appendChild(wrap);
   }
   return c;
 }

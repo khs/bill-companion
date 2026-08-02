@@ -10,7 +10,7 @@ and is written for a user; this file is for changing it. Read both.
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
 node tools/selftest.mjs                   # 426 checks, no dependencies
-node tools/rendertest.mjs                 # 240 checks, needs `npm i -D linkedom`
+node tools/rendertest.mjs                 # 263 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
@@ -143,7 +143,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 
 ```bash
 node tools/selftest.mjs     # all 426 checks passed
-node tools/rendertest.mjs   # all 240 render checks passed
+node tools/rendertest.mjs   # all 263 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
@@ -652,6 +652,25 @@ same in all three browsers. The anchor has to be set in *two* places — the
 focused node renders through `nodeEl` normally, but through the ancestor ladder
 when the scope IS the focus.
 
+**A note's heading is a child element, so `itertext()` eats it.** Every note in
+the Code arrived with its heading glued to the front of its body —
+"References in Text" + "Section 603(a)(5)(K)…" as
+`References in TextSection 603(a)(5)(K)…`, "Amendments" + "2021—" as
+`Amendments2021—`. `note_body()` skips the `<heading>` child and the heading is
+stored beside the text. Notes with a heading and no body at all are dropped:
+those are USLM's group dividers ("Editorial Notes", "Statutory Notes and
+Related Subsidiaries"), which say nothing on their own and were consuming slots
+among the ten notes kept per section.
+
+**A `topic` attribute is a schema identifier, not a label.** The pane printed
+them at the reader verbatim — "effectiveDateOfAmendment: Amendment by Pub. L.
+113-128…", "historicalAndRevision: …", "referencesInText: …" — which tells
+someone what XML it came out of and nothing about what they are looking at.
+`NOTE_TOPICS` names the twenty that occur, `humanTopic()` splits anything else
+into words rather than falling back to camelCase, and the note's **own heading
+wins whenever it has one**: "Effective Date of 2014 Amendment" is specific to
+that note where the topic is a category shared by two thousand others.
+
 **A source credit is a list, and printing it as a paragraph destroys it.**
 42 U.S.C. 603 carries 2,660 characters in 33 clauses; 15 U.S.C. 636 carries
 7,427. As one block a reader scrolling into the middle sees
@@ -898,6 +917,37 @@ legitimately ("the following new section (and amending the table of sections
 accordingly):", three real additions a broader guard threw away).
 
 ---
+
+## The export
+
+`app/export.js` writes the reading session as one HTML file. Three promises,
+and each is a constraint on how it is built rather than a feature bolted on:
+
+- **It makes no requests.** No `<link>`, no `<script src>`, no fonts, no
+  images. The stylesheet is inlined from `document.styleSheets`, the app's
+  fonts are system stacks already, and the favicon is a data URI. A
+  cross-origin sheet that cannot be read is *skipped* rather than linked —
+  losing the styling is better than a file that reaches out when opened.
+- **It does not change.** Every citation is resolved at export time and its
+  provision baked in. The live app reads the Code as it stands today, which is
+  right there and wrong for a record of what a bill said against the law it was
+  written to change. The header states the date for that reason.
+- **It is the same view.** The app's own markup and stylesheet, so the bill
+  reads as it did on screen, chips and amendment blocks intact.
+
+Two implementation notes worth keeping. Contexts are **deduped by the same key
+`resolve()` uses**: a bill cites the same provision many times, and rendering
+one panel per citation multiplies the file by the repetition rate — 338
+citations in the Fiscal Responsibility Act reach 210 distinct provisions, and
+the file is 2.45 MB rather than 4 MB. And the bill goes in as `outerHTML` of a
+DOM node, never as a template string, so nothing in a pasted bill can be read
+as markup; `rendertest.mjs` pastes a bill whose short title is a `<script>` tag
+and asserts it survives as text.
+
+Delivered as a Blob and an object URL, not a `data:` URL — Chrome refuses a
+`data:` navigation of this size outright and others truncate it — and the URL
+is revoked on a timer, because revoking synchronously races the download in
+Firefox.
 
 ## Testing discipline
 
@@ -1209,6 +1259,7 @@ index.html            UI + boot diagnostic (classic script, runs when modules fa
 embed-example.html    host page for trying the iframe embed; not part of the app
 app/main.js           wiring; ingest() is the single entry point for bill text
 app/share.js          fragment-encoded share links (deflate + base64url)
+app/export.js         one self-contained offline HTML file of the whole reading
 app/parse/            pdf.js · bill.js · citations.js · outline.js  (extraction)
 app/resolve/          cfr.js (live eCFR) · usc.js (local shards) ·
                       plaw.js (Public Law text) · act-sections.js ·

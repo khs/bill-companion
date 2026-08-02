@@ -9,6 +9,7 @@ import { renderContext } from './ui/render-context.js';
 import { flattenText } from './resolve/provision-tree.js';
 import { locateInternal } from './resolve/internal.js';
 import { buildShareUrl, readSharedBill, SAFE_URL_LENGTH } from './share.js';
+import { buildExport } from './export.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -17,7 +18,7 @@ const els = {
   billBody: $('bill-body'), ctxBody: $('ctx-body'), ctxSrc: $('ctx-src'), ctxBack: $('ctx-back'),
   status: $('status'), meta: $('billmeta'), metaDesig: $('meta-desig'), metaShort: $('meta-short'),
   jump: $('jump'), onlyAmend: $('only-amend'), split: $('split'), gutter: $('gutter'),
-  themeBtn: $('theme-btn'), shareBtn: $('share-btn'),
+  themeBtn: $('theme-btn'), shareBtn: $('share-btn'), exportBtn: $('export-btn'),
   modal: $('paste-modal'), pasteArea: $('paste-area'), pasteOk: $('paste-ok'), pasteCancel: $('paste-cancel'),
   fullBtn: $('full-btn'), aboutBtn: $('about-btn'), aboutModal: $('about-modal'),
   aboutOk: $('about-ok'), embedSnippet: $('embed-snippet'), embedCopy: $('embed-copy'),
@@ -106,6 +107,7 @@ function ingest(raw) {
 
   els.meta.hidden = false;
   els.shareBtn.hidden = false;
+  els.exportBtn.hidden = false;
   els.metaDesig.textContent = bill.meta.designation || '—';
   els.metaShort.textContent = bill.meta.shortTitle || '';
 
@@ -361,6 +363,47 @@ els.ctxBack.addEventListener('click', () => {
   if (!prev) return;
   const el = document.querySelector(`.cite[data-cid="${prev.cite.id}"]`);
   onCite(prev.cite, el, { amend: prev.amend, noHistory: true });
+});
+
+els.exportBtn.addEventListener('click', async () => {
+  if (!state.bill) return;
+  els.exportBtn.disabled = true;
+  try {
+    status('Resolving every citation for the export…', true);
+    const html = await buildExport({
+      bill: state.bill,
+      citations: state.citations,
+      billEl: els.billBody.querySelector('.billtext'),
+      resolve,
+      renderContext,
+      onProgress: (done, total) => status(`Export: resolved ${done} of ${total} provisions…`),
+    });
+    // A Blob and an object URL, not a data: URL — a data: URL of several MB is
+    // refused outright by Chrome and truncated by others, and this file is
+    // several MB by design.
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const name = (state.bill.meta.shortTitle || state.bill.meta.designation || 'bill')
+      .replace(/[^A-Za-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 60);
+    a.download = `${name || 'bill'}-companion.html`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Revoked on a later turn of the event loop: revoking synchronously races
+    // the download in Firefox, which has not necessarily read the blob yet.
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    const mb = (blob.size / 1048576).toFixed(1);
+    status(`Exported ${mb} MB — opens offline, and shows the law as it stands today.`, false);
+  } catch (err) {
+    status('', false);
+    showFatal(`Could not build the export: ${err.message}`);
+  } finally {
+    els.exportBtn.disabled = false;
+  }
 });
 
 els.jump.addEventListener('change', (e) => {

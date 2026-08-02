@@ -121,6 +121,26 @@ def body_text(el: ET.Element) -> str:
     return re.sub(r"\s+", " ", "".join(parts)).strip()
 
 
+def note_body(note: ET.Element) -> str:
+    """A note's text without its heading.
+
+    The heading is a child element, so itertext() swallows it into the front of
+    the body with no separator. Callers need the two apart: the heading is the
+    only label a reader can use — "Effective Date of 2014 Amendment" says far
+    more than the topic attribute "effectiveDateOfAmendment" — and glued to the
+    body it is not a label at all.
+    """
+    parts: list[str] = []
+    if note.text:
+        parts.append(note.text)
+    for child in note:
+        if local(child.tag) != "heading":
+            parts.append("".join(child.itertext()))
+        if child.tail:
+            parts.append(child.tail)
+    return re.sub(r"\s+", " ", "".join(parts)).strip()
+
+
 def marker_of(el: ET.Element) -> str:
     num = el.find(f"{USLM}num")
     if num is None:
@@ -410,9 +430,20 @@ def build_section(el: ET.Element, title: str, ancestors: list[dict], release: st
 
     notes = []
     for note in el.findall(f"{USLM}notes/{USLM}note"):
-        text = itertext_clean(note)
+        # Heading and body, kept apart. Flattening the whole <note> ran them
+        # together: "References in Text" + "Section 603(a)(5)(K)…" arrived as
+        # "References in TextSection 603(a)(5)(K)…" and "Amendments" + "2021—"
+        # as "Amendments2021—". Every note in the Code read like that.
+        heading = itertext_clean(note.find(f"{USLM}heading"))
+        text = note_body(note)
+        # A note with a heading and no body is one of USLM's group dividers
+        # ("Editorial Notes", "Statutory Notes and Related Subsidiaries"). It
+        # says nothing on its own, and it was consuming slots among the ten
+        # notes kept below.
         if text:
-            notes.append({"topic": note.get("topic") or "note", "text": text[:1200]})
+            notes.append(
+                {"topic": note.get("topic") or "note", "heading": heading, "text": text[:1200]}
+            )
 
     return {
         "title": title,

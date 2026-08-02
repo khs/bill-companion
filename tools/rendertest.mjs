@@ -51,6 +51,14 @@ globalThis.Option = function Option(text, value) {
   return o;
 };
 globalThis.localStorage = { getItem: () => null, setItem: () => {} };
+// linkedom has no CSSOM, so document.styleSheets is empty and the export would
+// inline nothing. Report the real stylesheet the way a browser does, so the
+// "it carries its own styling" check is testing the builder rather than the
+// harness.
+Object.defineProperty(document, 'styleSheets', {
+  configurable: true,
+  value: [{ cssRules: [{ cssText: readFileSync(join(ROOT, 'app/ui/style.css'), 'utf8') }] }],
+});
 globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
 
 section('CSS / markup contract');
@@ -1121,6 +1129,132 @@ section('resolvers');
   }
 
   globalThis.fetch = realFetch;
+}
+
+// --- notes -----------------------------------------------------------------
+section('notes');
+{
+  const { renderContext: rcn } = await imp('app/ui/render-context.js');
+  // Two faults, both of which made the notes unreadable. The label was USLM's
+  // `topic` attribute printed raw — "effectiveDateOfAmendment: …" — and the
+  // note's own heading was flattened into the front of its body with no
+  // separator, so it arrived as "References in TextSection 603(a)(5)(K)…".
+  const el = rcn(
+    {
+      source: 'U.S. Code', citation: '42 U.S.C. 603', links: [], tree: [],
+      notes: [
+        { topic: 'referencesInText', heading: 'References in Text', text: 'Section 603(a)(5)(K) of this title, referred to in…' },
+        { topic: 'effectiveDateOfAmendment', heading: 'Effective Date of 2014 Amendment', text: 'Amendment by Pub. L. 113–128 effective…' },
+        { topic: 'historicalAndRevision', heading: '', text: 'Based on title 5, U.S.C., 1964 ed.' },
+        { topic: 'someNewTopicUslmInvented', heading: '', text: 'body of it' },
+      ],
+    },
+    { onScope: () => {} }
+  );
+  const heads = [...el.querySelectorAll('.notehead')].map((h) => h.textContent);
+  eq('every note gets a label', heads.length, 4);
+  eq('  the note\'s own heading when it has one', heads[0], 'References in Text');
+  ok('  which is the specific one, not the category',
+     heads[1] === 'Effective Date of 2014 Amendment', heads[1]);
+  eq('  a readable name for the topic when it has not', heads[2], 'Historical and revision notes');
+  // An unknown topic must not fall back to raw camelCase.
+  eq('  and an unmapped topic is still split into words', heads[3], 'Some new topic uslm invented');
+  ok('no label is a raw camelCase identifier',
+     !heads.some((h) => /^[a-z]+[A-Z]/.test(h)), heads.join(' | '));
+  // The heading leads in its own element; the body does not repeat it. Asked of
+  // the <p> rather than the note's textContent, because textContent runs
+  // sibling elements together with no separator and would report a glue that
+  // the markup does not have — which is a different bug from the one fixed.
+  const first = el.querySelector('.note');
+  const body = first.querySelector('p').textContent;
+  ok('the body does not begin with the heading',
+     !body.startsWith('References in Text'), JSON.stringify(body.slice(0, 60)));
+  ok('  and the body is still there', /^Section 603\(a\)\(5\)\(K\)/.test(body),
+     JSON.stringify(body.slice(0, 60)));
+  eq('  with the heading in its own element',
+     first.querySelector('.notehead').textContent, 'References in Text');
+}
+
+// --- export ----------------------------------------------------------------
+section('export');
+{
+  // The export makes three promises, and each is checkable. It is worth
+  // checking them mechanically rather than by reading the builder, because
+  // every one of them is broken by adding a single line somewhere else — a
+  // web font in the stylesheet, an <img>, a lazily-fetched anything.
+  const { buildExport } = await imp('app/export.js');
+  const { renderContext: rcx } = await imp('app/ui/render-context.js');
+
+  const t =
+    'SECTION 1. SHORT TITLE.\n' +
+    "This Act may be cited as the ``Export Test Act''.\n" +
+    'SEC. 2. AMENDMENT.\n' +
+    "Section 7401 of title 42, United States Code, is amended by striking ``smog''.\n";
+  const b = parseBill(normalizeText(t));
+  const cs = extractCitations(normalizeText(t));
+  const el = renderBill(b, cs, extractAmendments(normalizeText(t), cs), () => {}, () => {});
+
+  const html = await buildExport({
+    bill: b,
+    citations: cs,
+    billEl: el,
+    // Stand in for the resolver: what matters here is the shape of the file,
+    // not which provision came back.
+    resolve: async (c) => ({ source: 'U.S. Code', citation: c.text, links: [], tree: [], lead: 'text of the law' }),
+    renderContext: rcx,
+  });
+
+  ok('the export is a whole document', /^<!doctype html>/i.test(html), html.slice(0, 40));
+  // 1. No requests.
+  const refs = [
+    ...html.matchAll(/<link\b[^>]*href=["']([^"']+)["']/gi),
+    ...html.matchAll(/<script\b[^>]*src=["']([^"']+)["']/gi),
+    ...html.matchAll(/<img\b[^>]*src=["']([^"']+)["']/gi),
+  ]
+    .map((m) => m[1])
+    .filter((u) => !/^data:/i.test(u));
+  eq('it references nothing off the page', refs.join(', '), '');
+  eq('  no stylesheet url() to fetch', (html.match(/url\((?!['"]?data:)/gi) || []).length, 0);
+  eq('  and nothing that could fetch at runtime',
+     (html.match(/\bfetch\s*\(|XMLHttpRequest|import\s*\(/g) || []).length, 0);
+  // 2. It carries its own styling, or it is not the same view.
+  ok('it inlines the stylesheet', /\.billtext/.test(html) && /<style>/.test(html),
+     `${html.length} chars`);
+  // 3. Every chip either opens something or is visibly inert. A chip that
+  //    looks live and does nothing is the failure this guards.
+  const doc = parseHTML(html).document;
+  const chips = [...doc.querySelectorAll('.cite')];
+  ok('it has the bill\'s chips', chips.length > 0, `${chips.length}`);
+  eq('  every one of them resolves to a panel or is marked dead',
+     chips.filter((c) => !c.hasAttribute('data-ctx') && !c.classList.contains('cite-dead')).length, 0);
+  ok('  and the panels are in the file', doc.querySelectorAll('.ctxpanel').length > 0);
+  eq('  hidden until one is chosen',
+     [...doc.querySelectorAll('.ctxpanel')].filter((p) => !p.hasAttribute('hidden')).length, 0);
+  // The bill itself, not a summary of it.
+  eq('the bill keeps its sections', doc.querySelectorAll('.sec-head').length, b.sections.length);
+  ok('  and its text', /Export Test Act/.test(html), html.slice(0, 90));
+  // It says what it is. A snapshot that does not admit to being one invites
+  // someone to read stale law as current.
+  ok('it says it is a snapshot of a date', /Snapshot taken \d{4}-\d{2}-\d{2}/.test(html),
+     (html.match(/Snapshot[^<]*/) || [''])[0]);
+
+  // Pasted text can never become markup: the bill goes in through the DOM.
+  const nasty = normalizeText(
+    'SECTION 1. SHORT TITLE.\nThis Act may be cited as the ``<script>alert(1)</script> Act\'\'.\n'
+  );
+  const nb = parseBill(nasty);
+  const ncs = extractCitations(nasty);
+  const nhtml = await buildExport({
+    bill: nb,
+    citations: ncs,
+    billEl: renderBill(nb, ncs, [], () => {}, () => {}),
+    resolve: async () => ({ source: 'x', citation: 'x', links: [], tree: [] }),
+    renderContext: rcx,
+  });
+  ok('a bill cannot inject markup into its own export',
+     !/<script>alert\(1\)<\/script>/.test(nhtml), 'raw script tag survived from the bill text');
+  ok('  though the words are still there to read, escaped',
+     /&lt;script&gt;alert\(1\)/.test(nhtml), 'the text was lost entirely');
 }
 
 // --- the paste flow, driven through main.js exactly as a user does it -------
