@@ -1233,6 +1233,52 @@ section('internal cross-references');
       eq(`${name} § ${sec}`, at && `${at.title} U.S.C. ${at.section}`, `${t} U.S.C. ${s}`);
     }
 
+    // ---- the subdivision chain --------------------------------------------
+    // "section 2118(a) of title II of division A of Public Law 116-136".
+    // Congress walks down as many levels as it needs, and matching only the
+    // bare "division X of" form lost the citation ENTIRELY rather than
+    // partially: with the chain unmatched the whole pattern failed and only
+    // "Public Law 116-136" survived, taking the section number with it. 489
+    // citations carry a chain; 135 of them are not the plain division form.
+    for (const [phrase, want] of [
+      ['section 2118(a) of title II of division A of Public Law 116-136', '15 U.S.C. 9034(a)'],
+      ['section 4003(b) of division A of Public Law 116-136', '15 U.S.C. 9042(b)'],
+      ['section 2118(a) of title II of division A of the CARES Act', '15 U.S.C. 9034(a)'],
+    ]) {
+      const c = extractCitations(normalizeText(`SEC. 2. X.\nFunds under ${phrase} are available.\n`))
+        .find((x) => x.kind === 'publaw' || x.kind === 'act');
+      ok(`"${phrase.slice(0, 46)}…" spans the whole phrase`, c && c.text === phrase,
+         JSON.stringify(c && c.text));
+      eq('  and reads the division out of the chain', c && c.division, 'A');
+      eq('  resolving to the provision', (await resolve(c)).citation, want);
+    }
+    // The credit says "div. A, title II, § 2118", so the division guard had a
+    // division to agree with — which is what makes this resolution trustworthy
+    // rather than a lucky hit on a repeated number.
+    const chained = extractCitations(
+      normalizeText('SEC. 2. X.\nUnder section 2118(a) of title II of division A of Public Law 116-136.\n')
+    ).find((x) => x.kind === 'publaw');
+    ok('  landing on the provision the credit names',
+       /fraud prevention/i.test((await resolve(chained)).heading || ''),
+       (await resolve(chained)).heading);
+
+    // A section and a division together: the section is the specific one.
+    // Answering with the division's contents hands back a list of hundreds
+    // when the citation named one of them.
+    const both = extractCitations(
+      normalizeText('SEC. 2. X.\nUnder section 5001 of division A of the CARES Act.\n')
+    ).find((x) => x.kind === 'act');
+    const bothRes = await resolve(both);
+    eq('a named section beats a named division', bothRes.citation, 'Pub. L. 116-136 § 5001');
+    ok('  and it is the section, not the division listing',
+       bothRes.plaw && Array.isArray(bothRes.plaw.entries), JSON.stringify(!!bothRes.plaw));
+    // A division with no section still gives the division.
+    const divOnly = extractCitations(
+      normalizeText('SEC. 2. X.\nUnder division A of the CARES Act.\n')
+    ).find((x) => x.kind === 'act');
+    eq('a division with no section still gives the division',
+       (await resolve(divOnly)).citation, 'Pub. L. 116-136, division A');
+
     // ---- the bracketed credit form --------------------------------------
     // "(Pub. L. 85-536, § 2[7], July 18, 1958, 72 Stat. 387)". The Small
     // Business Act *is* section 2 of that law, so the OLRC writes the Act's own

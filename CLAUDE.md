@@ -9,7 +9,7 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 413 checks, no dependencies
+node tools/selftest.mjs                   # 426 checks, no dependencies
 node tools/rendertest.mjs                 # 223 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
@@ -142,7 +142,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 413 checks passed
+node tools/selftest.mjs     # all 426 checks passed
 node tools/rendertest.mjs   # all 223 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
@@ -774,6 +774,31 @@ only reach the head of the Act. 130 sections carry the form. Verified on
 provisions anyone can check: SBA § 7 is 15 U.S.C. 636 (the 7(a) loan
 programme), SBA § 8 is 15 U.S.C. 637 (the 8(a) programme), FDIA § 3 is
 12 U.S.C. 1813 (Definitions). Fixing it also resolved 2 of the 295 conflicts.
+
+**A citation walks down as many levels as it needs, and an unmatched level
+costs the whole citation.** "section 2118(a) of title II of division A of
+Public Law 116-136" is one address with a chain in the middle of it. Matching
+only the bare "division X of" form read 354 of the corpus's 489 chained
+citations and lost the other 135 — and lost them *entirely* rather than
+partially, because with the chain unmatched the whole pattern failed and only
+the bare "Public Law 116-136" survived, taking the section number with it. That
+is the failure mode to watch for in any of these matchers: a missing optional
+segment does not degrade the match, it deletes it.
+
+`SUBDIV_CHAIN` accepts up to four of title / subtitle / part / subpart /
+chapter / subchapter / division, and `divisionOf()` picks the division out of
+whatever chain was matched — because the division is the only level that
+changes *which* provision is meant, the rest being address rather than
+ambiguity. It is shared by the Public Law and named-Act matchers, which had the
+same gap.
+
+Two orderings inside the `act` branch are load-bearing, and both were wrong
+first. A named **section beats a named division**: "section 5001 of division A
+of the CARES Act" gives both, and answering with division A's contents hands
+back a list of hundreds when the citation named one of them. And where the Code
+index cannot place a section, the Act's own **Public Law text is tried before
+the head of the Act** — the reader was being sent to the top of an Act for a
+section sitting on disk.
 
 **A section is cited with alternative subsections more often than you would
 think.** "section 7(a) or (b) of the Small Business Act" put the alternation

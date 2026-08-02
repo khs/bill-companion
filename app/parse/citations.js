@@ -86,6 +86,24 @@ const RE_ACT_DIVISION = POPULAR_NAMES.map((act) => ({
   ),
 }));
 
+// The subdivision chain between a section number and the law it sits in:
+// "section 2118(a) of title II of division A of Public Law 116-136". Congress
+// walks down as many levels as it needs, and only the last of them — the
+// division — changes which provision is meant, because that is where the
+// numbering restarts. The rest is address, not ambiguity.
+//
+// 489 citations across the corpus carry a chain. Matching only the bare
+// "division X of" form read 354 of them and lost the other 135, and the loss
+// was total rather than partial: with the chain unmatched the whole citation
+// failed and only the bare "Public Law 116-136" survived, so the section number
+// went with it.
+const SUBDIV_CHAIN =
+  '(?:(?:[Tt]itles?|[Ss]ubtitles?|[Pp]arts?|[Ss]ubparts?|[Cc]hapters?|[Ss]ubchapters?' +
+  '|[Dd]ivisions?|[Dd]iv\\.)\\s+[A-Za-z0-9]{1,5}\\s+of\\s+){0,4}';
+
+// The division named anywhere in such a chain, if one is.
+const RE_CHAIN_DIVISION = /\b(?:division|div\.?)\s+([A-Za-z0-9]{1,2})\s+of/i;
+
 const RE_ACT_REL_SECTION = POPULAR_NAMES.filter((a) => a.enactedAs && !a.sectionsMatchCode).map(
   (act) => ({
     act,
@@ -99,7 +117,7 @@ const RE_ACT_REL_SECTION = POPULAR_NAMES.filter((a) => a.enactedAs && !a.section
         // the one already in hand — claiming to know which of two alternatives
         // the drafter meant would be inventing an answer.
         `(?:\\s*(?:,|or|and)\\s*${SUBSEC})*` +
-        `\\s+of\\s+the\\s+(?:${act.pattern})`,
+        `\\s+of\\s+(${SUBDIV_CHAIN})the\\s+(?:${act.pattern})`,
       'g'
     ),
   })
@@ -129,11 +147,12 @@ const RE_PUBLAW = new RegExp(`\\b${PUBLAW_NAME}`, 'gi');
 //
 // This is a *longer* match over the same span as RE_PUBLAW, at the same rank, so
 // dedupe() keeps it — the same mechanism the Act-relative form relies on.
+
 const RE_PUBLAW_SECTION = new RegExp(
   `\\b[Ss]ections?\\s+(\\d+[A-Za-z]*)(${SUBSEC})\\s+of\\s+` +
   // An omnibus restarts its numbering in every division, so "of division G of"
   // is not decoration — it is the half of the address that disambiguates.
-  `(?:[Dd]iv(?:ision)?\\.?\\s+([A-Z]{1,2})\\s+of\\s+)?${PUBLAW_NAME}`,
+  `(${SUBDIV_CHAIN})${PUBLAW_NAME}`,
   'g'
 );
 
@@ -1103,6 +1122,12 @@ const RE_INTERNAL = new RegExp(
 // Extraction
 // ---------------------------------------------------------------------------
 
+/** The division named in a subdivision chain, upper-cased, or null. */
+function divisionOf(chain) {
+  const m = RE_CHAIN_DIVISION.exec(String(chain || ''));
+  return m ? m[1].toUpperCase() : null;
+}
+
 function push(out, m, kind, extra) {
   // Some patterns intentionally start with a boundary group (punctuation or a
   // leading space) that isn't part of the citation. Trim it off the offsets so
@@ -1190,6 +1215,7 @@ export function extractCitations(text) {
         act,
         actSection: m[1],
         subsection: m[2] || '',
+        division: divisionOf(m[3]),
         ladder: subsectionLadder(m[2]),
       });
     }
@@ -1223,7 +1249,7 @@ export function extractCitations(text) {
       law: m[5],
       actSection: m[1],
       subsection: m[2] || '',
-      division: m[3] ? m[3].toUpperCase() : null,
+      division: divisionOf(m[3]),
       ladder: subsectionLadder(m[2]),
     });
   }

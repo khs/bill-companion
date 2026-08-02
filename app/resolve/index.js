@@ -105,7 +105,12 @@ async function dispatch(cite) {
       // name. Answered before the Act's codified head, because a division is a
       // far more specific thing than the Act it sits in — and the head would be
       // 630 sections away from what was cited.
-      if (cite.division) {
+      //
+      // Only where no section is named. "section 2118(a) of title II of
+      // division A of the CARES Act" gives both, and the section is the more
+      // specific of the two: answering with division A's contents would hand
+      // back a list of 300 sections when the citation named one of them.
+      if (cite.division && !cite.actSection) {
         const pl = publawIdOf(act);
         if (pl) {
           const local = await resolvePlawDivision(pl.congress, pl.law, cite.division);
@@ -139,6 +144,19 @@ async function dispatch(cite) {
               codified: `${at.title} U.S.C. ${at.section}`,
             },
           };
+        }
+      }
+
+      // The Act names a section the Code index cannot place — uncodified, or
+      // codified somewhere its credit does not say. Where the Act *is* a Public
+      // Law we hold, its own text can still answer, exactly as it does for
+      // "section N of Public Law X-Y". Without this the reader was sent to the
+      // head of the Act for a section we have sitting on disk.
+      if (cite.actSection) {
+        const pl = publawIdOf(act);
+        if (pl) {
+          const local = await resolvePlaw(pl.congress, pl.law, cite.actSection);
+          if (local) return { ...local, actName: act.name };
         }
       }
 
