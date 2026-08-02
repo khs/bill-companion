@@ -1233,6 +1233,52 @@ section('internal cross-references');
       eq(`${name} § ${sec}`, at && `${at.title} U.S.C. ${at.section}`, `${t} U.S.C. ${s}`);
     }
 
+    // ---- the bracketed credit form --------------------------------------
+    // "(Pub. L. 85-536, § 2[7], July 18, 1958, 72 Stat. 387)". The Small
+    // Business Act *is* section 2 of that law, so the OLRC writes the Act's own
+    // section 7 as "§ 2[7]". Reading the outer number filed every SBA section
+    // under "2", where they all collided and were dropped as ambiguous — the
+    // Act had no index at all, and "section 7(a) of the Small Business Act"
+    // could only reach the head of the Act.
+    const sba = POPULAR_NAMES.find((e) => e.name === 'Small Business Act');
+    ok('the Small Business Act is wired to its credit', !!sba.enactedAs, String(sba.enactedAs));
+    for (const [sec, want] of [['2', '15 U.S.C. 631'], ['7', '15 U.S.C. 636'], ['8', '15 U.S.C. 637']]) {
+      const at = await resolveActSection(sba, sec);
+      eq(`  SBA § ${sec}`, at && `${at.title} U.S.C. ${at.section}`, want);
+    }
+    // The same form in another Act, so this is not one special case.
+    const fdia = POPULAR_NAMES.find((e) => e.name === 'Federal Deposit Insurance Act');
+    if (fdia && fdia.enactedAs) {
+      const at = await resolveActSection(fdia, '3');
+      eq('  FDIA § 3 (same bracketed form)', at && `${at.title} U.S.C. ${at.section}`, '12 U.S.C. 1813');
+    }
+
+    // ---- a section cited with alternative subsections ---------------------
+    // "section 7(a) or (b) of the Small Business Act" put the alternation
+    // between the number and the "of the …" the pattern needs, so the whole
+    // citation was missed and only the bare Act name survived.
+    for (const phrase of [
+      'section 7(a) of the Small Business Act',
+      'section 7(a) or (b) of the Small Business Act',
+      'section 7(a), (b), or (m) of the Small Business Act',
+      'section 7(a)(36)(A) of the Small Business Act',
+    ]) {
+      const c = extractCitations(normalizeText(`SEC. 2. X.\nFunds under ${phrase} are available.\n`))
+        .find((x) => x.kind === 'act');
+      ok(`"${phrase}" spans the whole phrase`, c && c.text === phrase, JSON.stringify(c && c.text));
+      eq('  and carries section 7', c && c.actSection, '7');
+      const r = await resolve(c);
+      ok('  resolving into 15 U.S.C. 636',
+         /^15 U\.S\.C\. 636/.test(r.citation || ''), r.citation);
+    }
+    // The alternation is consumed, not interpreted: the address is the first
+    // subsection, because nothing in the text says which alternative was meant.
+    const alt = extractCitations(
+      normalizeText('SEC. 2. X.\nFunds under section 7(a) or (b) of the Small Business Act.\n')
+    ).find((x) => x.kind === 'act');
+    eq('an alternation resolves to the subsection in hand', (await resolve(alt)).citation,
+       '15 U.S.C. 636(a)');
+
     // The user's case, both halves of it. "section 251(b) of the Balanced
     // Budget and Emergency Deficit Control Act of 1985 in division J of the
     // Infrastructure Investment and Jobs Act" resolved neither: the section

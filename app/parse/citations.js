@@ -90,7 +90,16 @@ const RE_ACT_REL_SECTION = POPULAR_NAMES.filter((a) => a.enactedAs && !a.section
   (act) => ({
     act,
     re: new RegExp(
-      `\\b[Ss]ections?\\s+(\\d+[A-Za-z]*)(${SUBSEC})\\s+of\\s+the\\s+(?:${act.pattern})`,
+      `\\b[Ss]ections?\\s+(\\d+[A-Za-z]*)(${SUBSEC})` +
+        // "section 7(a) or (b) of the Small Business Act" — a bill names two
+        // subsections of one section, and the alternation sat between the
+        // number and the "of the …" the pattern needs, so the whole citation
+        // was missed and only the bare Act name survived. Consumed but not
+        // captured: the section is what resolves, and the first subsection is
+        // the one already in hand — claiming to know which of two alternatives
+        // the drafter meant would be inventing an answer.
+        `(?:\\s*(?:,|or|and)\\s*${SUBSEC})*` +
+        `\\s+of\\s+the\\s+(?:${act.pattern})`,
       'g'
     ),
   })

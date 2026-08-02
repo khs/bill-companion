@@ -64,7 +64,7 @@ export const POPULAR_NAMES = [
   { name: 'Federal Advisory Committee Act', pattern: 'Federal\\s+Advisory\\s+Committee\\s+Act', title: '5', section: '1001', range: 'ch. 10' },
   { name: 'Paperwork Reduction Act', pattern: 'Paperwork\\s+Reduction\\s+Act', title: '44', section: '3501', range: '3501 et seq.' },
   { name: 'Congressional Budget Act of 1974', pattern: 'Congressional\\s+Budget\\s+Act\\s+of\\s+1974', title: '2', section: '621', enactedAs: 'Pub. L. 93–344', range: '621 et seq.' },
-  { name: 'Small Business Act', pattern: 'Small\\s+Business\\s+Act', title: '15', section: '631', range: '631 et seq.' },
+  { name: 'Small Business Act', pattern: 'Small\\s+Business\\s+Act', title: '15', section: '631', enactedAs: 'Pub. L. 85–536', range: '631 et seq.' },
   { name: 'Truth in Lending Act', pattern: 'Truth\\s+in\\s+Lending\\s+Act', title: '15', section: '1601', enactedAs: 'Pub. L. 90–321', range: '1601 et seq.' },
   { name: 'Bank Secrecy Act', pattern: 'Bank\\s+Secrecy\\s+Act', title: '31', section: '5311', range: '5311 et seq.' },
   { name: 'Controlled Substances Act', pattern: 'Controlled\\s+Substances\\s+Act', title: '21', section: '801', enactedAs: 'Pub. L. 91–513', range: '801 et seq.' },

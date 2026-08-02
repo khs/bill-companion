@@ -9,7 +9,7 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 396 checks, no dependencies
+node tools/selftest.mjs                   # 413 checks, no dependencies
 node tools/rendertest.mjs                 # 215 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
@@ -142,7 +142,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 396 checks passed
+node tools/selftest.mjs     # all 413 checks passed
 node tools/rendertest.mjs   # all 215 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
@@ -720,6 +720,31 @@ file a section under the wrong Act:
   section means a renumbering or an ambiguous credit. The ingester tombstones the
   entry and records it in `acts/_conflicts.json` rather than keeping either —
   picking one would point a citation at a real but unrelated provision.
+
+**A credit can state the Act-relative number four ways, and the bracketed one
+is the easy one to miss.** Alongside the three rules above:
+
+```
+15 U.S.C. 636  ->  "(Pub. L. 85–536, § 2[7], July 18, 1958, 72 Stat. 387; …)"
+12 U.S.C. 1813 ->  "(Sept. 21, 1950, ch. 967, § 2[3], 64 Stat. 873; …)"
+```
+
+The Small Business Act *is* section 2 of Pub. L. 85–536, so the OLRC writes the
+Act's own section 7 as `§ 2[7]`. Reading the outer number filed every SBA
+section under "2", where they all collided and were dropped as ambiguous — so
+the Act had no index at all and "section 7(a) of the Small Business Act" could
+only reach the head of the Act. 130 sections carry the form. Verified on
+provisions anyone can check: SBA § 7 is 15 U.S.C. 636 (the 7(a) loan
+programme), SBA § 8 is 15 U.S.C. 637 (the 8(a) programme), FDIA § 3 is
+12 U.S.C. 1813 (Definitions). Fixing it also resolved 2 of the 295 conflicts.
+
+**A section is cited with alternative subsections more often than you would
+think.** "section 7(a) or (b) of the Small Business Act" put the alternation
+between the number and the "of the …" that `RE_ACT_REL_SECTION` anchors on, so
+the entire citation was missed and only the bare Act name survived. The
+alternation is consumed but not captured: the section number is what resolves,
+and the address keeps the first subsection, because nothing in the text says
+which of two alternatives the drafter meant.
 
 **`act_slug()` must agree between `ingest_usc.py` and `act-sections.js`** — the
 same standing hazard as `slug()`, and worse, because it collapses *runs* of

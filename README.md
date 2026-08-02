@@ -320,7 +320,7 @@ nothing — so it lives here rather than being fetched at build time.
 ## Tests
 
 ```bash
-node tools/selftest.mjs       # 396 checks: parsing, PDF extraction, citations, tree, share links, live eCFR, local data
+node tools/selftest.mjs       # 413 checks: parsing, PDF extraction, citations, tree, share links, live eCFR, local data
 npm i -D linkedom             # once, for the DOM tests
 node tools/rendertest.mjs     # 215 checks: both panes, the redline, additions, resolvers, fallback states, wiring
 node tools/corpus.mjs         # 30 real bills, every metric diffed against a recorded baseline

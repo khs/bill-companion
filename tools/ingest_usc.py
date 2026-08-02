@@ -195,7 +195,19 @@ def slug(section: str) -> str:
 # those would file the section under whichever law last touched it.
 ACT_DATE_CH = re.compile(r"^\(\s*([A-Z][a-z]{2,8}\.?\s+\d{1,2},\s+\d{4},\s+ch\.\s+\d+[A-Za-z]?)")
 ACT_PUBLAW = re.compile(r"^\(\s*(Pub\.\s*L\.\s*\d+[-–—]\d+)")
-ACT_SECNUM = re.compile(r"§{1,2}\s*([0-9][0-9A-Za-z.\-–—]*)")
+# The bracketed form is a fourth way a credit states the Act-relative number,
+# and reading only the outer one collapses a whole Act onto a single key.
+#
+#     15 U.S.C. 636 -> "(Pub. L. 85-536, § 2[7], July 18, 1958, 72 Stat. 387; ...)"
+#
+# The Small Business Act *is* section 2 of Pub. L. 85-536, so the OLRC writes
+# the Act's own section 7 as "§ 2[7]". Taking the "2" filed every SBA section
+# under one number, where they all collided and were dropped as ambiguous —
+# which is why the Act had no index at all. Checked against provisions anyone
+# can verify: SBA § 7 is 15 U.S.C. 636 (the 7(a) loan program), SBA § 8 is
+# 15 U.S.C. 637 (the 8(a) program), FDIA § 3 is 12 U.S.C. 1813 (Definitions).
+# 130 sections carry it.
+ACT_SECNUM = re.compile(r"§{1,2}\s*([0-9][0-9A-Za-z.\-–—]*)(?:\[([0-9][0-9A-Za-z.\-–—]*)\])?")
 
 
 def act_slug(name: str) -> str:
@@ -237,10 +249,12 @@ def act_origin(source_credit: str) -> tuple[str, str] | None:
     # pieces collide would only rediscover that as a conflict.
     if re.search(r"§\s*[0-9][^,;]*\(part\)", first):
         return None
-    nums = ACT_SECNUM.findall(first)
-    if not nums:
+    hit = ACT_SECNUM.search(first)
+    if not hit:
         return None
-    return re.sub(r"\s+", " ", m.group(1)), nums[0]
+    # The bracketed number when there is one, else the plain one.
+    num = hit.group(2) or hit.group(1)
+    return re.sub(r"\s+", " ", m.group(1)), num
 
 
 def write_act_index(out_root: Path, origins: dict[str, dict[str, str]],
