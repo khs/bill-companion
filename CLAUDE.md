@@ -9,8 +9,8 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 286 checks, no dependencies
-node tools/rendertest.mjs                 # 155 checks, needs `npm i -D linkedom`
+node tools/selftest.mjs                   # 328 checks, no dependencies
+node tools/rendertest.mjs                 # 167 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
@@ -72,16 +72,19 @@ but bun is not installed on this machine and nobody has run it. If you are on a
 bun machine, run all four and fix the note rather than trusting it.
 
 - Python 3.13 is on PATH.
-- **`npm install` from a subdirectory walks up.** There is no `package.json` in
-  the repo (it is gitignored), so `npm i -D linkedom` here installed into
+- **`npm install` from a subdirectory walks up.** `package.json` is tracked now,
+  which is the fix. Before it was, `npm i -D linkedom` here installed into
   `C:\Users\Nemo\package.json` — the user's home directory, next to an unrelated
-  dependency of theirs. Create the project-local `package.json` *first*. The one
-  here sets `"type": "module"`, which also silences Node's reparse warning on
+  dependency of theirs. If it ever goes missing, create it *before* installing.
+  It sets `"type": "module"`, which also silences Node's reparse warning on
   every `app/**/*.js`.
 - The app itself has **zero runtime dependencies**. `linkedom` is dev-only, for
   the DOM tests. Keep it that way — no build step is a feature here.
-- Not a git repo. `data/usc/` (~300 MB), `corpus/files/` (33 MB) and
-  `node_modules/` are gitignored — see "Notes for future Claude" below.
+- A git repo, on `main`, pushed to `origin` (`github.com/khs/bill-companion`)
+  and deployed from the branch to GitHub Pages. **Push by default** — the user
+  wants to look at changes live, and there are no users to break. Only
+  `node_modules/` is gitignored: the ingested Code and the corpus bills are both
+  tracked, because the shards *are* the site. See below.
 
 **State:** U.S. Code fully ingested — 53 titles (1–52 and 54; title 53 is
 reserved and does not exist), 60,436 sections, release point `119-102`. CFR is
@@ -100,16 +103,22 @@ re-verified the same day on a *second* desktop (`C:\Users\Nemo\Documents\Coding\
 bill-companion-main`) — which is where the runtime differences above turned up.
 If you are reading this on a fresh machine, start here.
 
-### Four things are not in the repo
+### What a fresh clone still needs
 
-They are gitignored because they are large and regenerable, and **nothing works
-without them**. In this order:
+Almost nothing, now that the Code and the corpus are tracked — a clone arrives
+with all 63,168 shard files and all 26 corpus bills. Two steps remain:
 
 ```bash
 npm i -D linkedom                        # dev-only; rendertest.mjs needs a DOM
+python tools/serve.py                    # must be RUNNING; shards are fetched over HTTP
+```
+
+The regeneration commands are for when the *inputs* change — a new release
+point, or a new bill in `corpus.json` — not for setting up a machine:
+
+```bash
 python tools/ingest_usc.py --titles all  # ~5 min, 322 MB, 53 titles / 60,436 sections
 node tools/corpus.mjs fetch              # 26 bills, 34 MB, into corpus/files/
-python tools/serve.py                    # must be RUNNING; shards are fetched over HTTP
 ```
 
 The ingest also writes `data/usc/acts/` (2,730 files, 0.7 MB), the Act-section →
@@ -132,8 +141,8 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 286 checks passed
-node tools/rendertest.mjs   # all 155 render checks passed
+node tools/selftest.mjs     # all 328 checks passed
+node tools/rendertest.mjs   # all 167 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
@@ -188,6 +197,41 @@ Keller** — say so rather than implying otherwise.
 The parser is in good shape against 30 real bills, 34 MB, ~5,400 amendments at
 88% targeted and 3.0% of amendatory verbs unaccounted for. The open items below
 are ranked; items 1–3 are the substantive ones.
+
+**Structure and cross-references, 2026-08-02.** Prompted by "section 123 of the
+Fiscal Responsibility Act doesn't understand where it is or what the context
+is", which turned out to be two unrelated bugs meeting in one section. Every
+change below is asserted in `selftest.mjs` or `rendertest.mjs` (286 → 328 and
+155 → 167 checks); the corpus moved only where noted.
+
+- **Markers manufactured by the 72-column wrap** (`app/parse/outline.js`, new).
+  1,093 across the 23 plain-text corpus bills. **1,485 internal references now
+  point somewhere else** and 1,115 fewer are flagged ambiguous. 101 references
+  stopped resolving at all, and that is the fix working: every one sampled had
+  been pointing at the tail of a wrapped phrase — six ACA references to
+  "subsection (d)" all landed on the `(d)` in "a subsection\n(d) hospital",
+  which is a defined term, not a provision. The same phantom was splitting
+  sentences into two paragraphs in the left pane (570 → 566 on the sample bill,
+  four boundaries, each one verified by hand).
+- **Sections know where they sit.** `ancestors` is a stack now, so section 123
+  reports `DIVISION A—LIMIT FEDERAL SPENDING › TITLE III—BUDGET ENFORCEMENT IN
+  THE SENATE` instead of a `TITLE III` that could have been any of three. Shown
+  as a breadcrumb in the section head and as `<optgroup>`s in the jump menu.
+- **Headings are whole.** The `--` separator bug (every plain-text heading began
+  with a stray hyphen) and wrapped headings, in both panes.
+- **Appropriations sections exist.** +2,139 sections across the corpus, 11 → 659
+  on H.J. Res. 31 and 39 → 120 on the sample bill. This is the only change that
+  moved the corpus: 11 bills' `sections` plus one `divisions` on H.R. 1865
+  (`DIVISION I—EXTENSIONS`, which could never prove itself while
+  `realBodyFollows` accepted only caps headings). No bill's citations,
+  amendments or diff spans moved at all. Every new section was checked to be an
+  indented sentence-case heading and none flush left, per bill, before
+  `--update`.
+
+Two things found on the way that were not part of the ask: `lead-in` in
+`render-context.js` had been styled nowhere since the pane was written, and the
+"rendered text preserves the source" check was a 5% length ratio. Both are
+covered in **Testing discipline** below.
 
 **`by adding at the end the following:` now carries its language** (2026-08-01).
 This was the largest known functional gap — the commonest way a bill creates new
@@ -325,6 +369,89 @@ a positive test, so ambiguity keeps it in the table. The scan steps over blank
 lines, nested listings, and all-caps lines, because a typeset heading wraps
 (`TITLE I—DEFINITIONS; RULE-` / `MAKING; EXPEDITED REG-` / `ISTRATION`) and page
 furniture (`•HR 3633 EH1S`) sits in the same gap.
+
+**A marker at the head of a line may only be there because the line wrapped.**
+Bills hard-wrap at about 72 columns, and a cross-reference broken across the
+measure leaves its marker looking exactly like an outline marker:
+
+```
+    (4) Form of point of order.--A point of order under paragraph
+(1) may be raised by a Senator as provided in section 313(e) of the
+```
+
+1,093 of these across the 23 plain-text corpus bills. Each is a phantom sibling
+of the real marker and, being nearer, steals every later reference to it: in
+section 123 of the Fiscal Responsibility Act two references meaning `(a)(1) In
+general` landed mid-sentence inside paragraph (4). In the left pane the same
+phantom split a sentence in half and dressed the back half up as a new
+enumerated provision. The tell is the previous line's last word — a real marker
+follows a line that ends a thought (`.`, `--`, `;`, `and`, `or`), a wrapped one
+follows the bare unit word that introduces it, with no punctuation, because the
+punctuation would have come *after* the marker. `app/parse/outline.js` owns the
+test and both `internal.js` and `render-bill.js` ask it; a second spelling would
+put resolution and rendering out of step. One exception is load-bearing: a
+run-in heading (`(1) Federal land.--The term …`) is real even after a line
+ending in a unit word — H.R. 2617 writes "In this section" with the colon
+dropped. The corpus cannot see any of this, because its metrics are parse-only
+and this is resolution and layout; `tools/selftest.mjs` asserts it directly.
+
+**The ancestor chain is a stack, not a variable.** `parseBill` kept one
+`division`, so `TITLE III` overwrote `DIVISION A`. A bill restarts its title
+numbering inside every division — the Fiscal Responsibility Act has three
+`TITLE I`s and three `TITLE III`s — so the label left behind named three
+different places at once and section 123 could not say which. Each unit closes
+every unit at its own rank or deeper (`DIVISION` > `TITLE` > `Subtitle` >
+`CHAPTER`), and sections carry `ancestors` outermost-first.
+
+**govinfo writes the em dash as `--`.** `DIVISION A--LIMIT FEDERAL SPENDING`,
+against a separator class matching one character, left every plain-text bill
+with headings reading `-LIMIT FEDERAL SPENDING`. The stray hyphen had been
+asserted in selftest, which is how long it had been there. Match the pair before
+the singleton.
+
+**A heading that runs past the measure keeps going on the next line.** `SEC. 271.
+TERMINATION … ON FEDERAL STUDENT` / `LOANS; RESUMPTION …` was cut at the break,
+so the jump menu named a different provision than the section is about, and the
+left pane stranded the tail as a caps-locked orphan of body text. A section
+heading closes with a period and a division heading closes at the blank line —
+that is the difference between the two continuation rules. Only an all-caps line
+continues an all-caps heading, and the guard is by *shape* (a bulleted running
+head, a bare folio) rather than "has two capitals in it", which threw away the
+legitimate continuation `1933.` of `DEFINITIONS UNDER THE SECURITIES ACT OF`.
+Continuation lines are read but never consumed, so every offset stays put. The
+hyphens a typeset PDF breaks words on are kept, not closed up: `REG-ISTRATION`
+shows a seam, but gluing it shut also glues `PAY-` / `AS-YOU-GO` into a word
+that does not exist. That is still TODO 7; showing half a heading was not.
+
+**`RE_HEAD` and `RE_DIV` are `$`-anchored with no `m` flag.** Match them against
+a paragraph's *first line*, never the whole paragraph — once a heading absorbs
+its wrapped tail, matching the merged string fails, and the symptom is not an
+error but a section head silently rendered as body text with its `#sec-N` anchor
+gone. Better still, don't re-derive: `parseBill` is the authority on what a
+section is and `render-bill.js` reads its list.
+
+**An appropriations bill sets its real headings in sentence case, and so does a
+table of contents.** `Sec. 101. Notwithstanding any other provision of law…` is
+a heading; `Sec. 101. Discretionary spending limits.` is a listing. Case cannot
+separate them — which is why matching was case-sensitive and why H.J. Res. 31
+yielded 11 sections from 1.5 MB — so **indentation** does: govinfo sets an entry
+flush left and indents a real heading with the body it opens. In H.J. Res. 31
+that splits 656 candidates into 7 entries and 649 headings with nothing in
+between. Three further guards each cost real time: only the abbreviated `Sec.`
+form, because a blanket `/i` reads the wrapped tail of "…under\nsection 1931." as
+a heading and invented 12 sections in the ACA; only after the body has begun and
+outside the table; and `realBodyFollows` must accept a sentence-case heading too,
+or an appropriations division can never prove itself and the whole bill stays
+"inside the table of contents". These sections are marked `runIn` — the heading
+*is* the provision's first sentence, so it must not be uppercased or split off
+from the rest of it.
+
+**A section number is not unique.** Every division of an appropriations act
+restarts at `Sec. 101`, so `#sec-101` names 259 different paragraphs in the
+Consolidated Appropriations Act, 2019 and `getElementById` answers with the
+first. The unique id `parseBill` already assigns goes on `data-sec`, which is
+what the jump menu targets; `sec-N` is kept for the first of each number so
+existing anchors still resolve.
 
 **Lazy tails inside a captured unit match their minimum.** `RE_AMEND_HEAD_UNIT`
 captured `(?:\s+of\s+${AMEND_MIDDLE}{3,90}?)?` inside the group that becomes the
@@ -568,7 +695,18 @@ Weak assertions have hidden more bugs here than missing tests:
 - `headings > 5` let a heading silently lose its class. Assert exact equality
   against `bill.sections.length`.
 - Length-ratio checks measure UI chrome, not correctness. Count occurrences of
-  distinctive phrases instead.
+  distinctive phrases instead — or strip the chrome and assert *exactly*. "Rendered
+  text preserves the source" was a 5% tolerance, which on the sample bill left
+  slack for ~5,000 characters of silent loss and then failed for the honest
+  reason that the bill had grown breadcrumbs. Removing `.sec-where`,
+  `.amend-tag` and `.amend-ops` and joining the paragraphs with a space (the
+  blank line between two of them is a boundary, not content) makes it exact,
+  character for character, on a 1.4 MB bill.
+- **A contract check only covers the pattern it was written with.** The
+  CSS/markup contract asked which classes reach `classList.add`, and most of
+  this app's classes are set by assigning `className` outright — 12 classes
+  checked out of 54. Widening it found `lead-in`, set on the section lead-in in
+  `render-context.js` since the pane was written and styled nowhere.
 - The impact script (`amendments / steps / inert refs resolved`) caught two wrong
   *outputs* that passed every unit test. Re-measure after touching extraction.
 - A fixture that doesn't exercise a feature is not coverage of that path. The
@@ -605,16 +743,20 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    systematic cause has stood out immediately as a double-digit count. What is
    left is genuinely long-tail, and each further fix risks the middle running
    somewhere it shouldn't.
-3. **Appropriations acts lose almost all their sections.** `RE_SECTION` is
-   case-sensitive, which is what stops a table of contents from producing a
-   phantom section for every line it lists — but appropriations bills write
-   their *real* headings in the same sentence case, "Sec. 101. Notwithstanding
-   any other provision…". H.J. Res. 31 (Consolidated Appropriations Act, 2019)
-   yields 11 sections from 1.5 MB, against 505 sentence-case headings in the
-   text. Everything keyed to sections degrades there: the jump menu, the `#sec-N`
-   anchors, and which section an amendment is attributed to. Distinguishing the
-   two needs the same trick `parseBill` already uses for divisions — ask whether
-   the bill's real body follows — rather than case alone.
+3. **Appropriations sections are recovered; the headings *inside* them are
+   not.** (Was: "appropriations acts lose almost all their sections." Fixed
+   2026-08-02 — see the invariant above.) H.J. Res. 31 now yields 659 sections
+   against 11, and 2,139 sections were recovered across the corpus with no
+   other metric moving on any bill. What is still missing is the layer *between*
+   a division and its sections: appropriations acts write a bare `TITLE I` on
+   one line with its heading on the next (`DEPARTMENTAL MANAGEMENT, OPERATIONS,
+   INTELLIGENCE, AND OVERSIGHT`), which `RE_DIVISION` cannot match because it
+   requires a separator on the same line. Those titles, and the account headings
+   under them (`Office of the Secretary and Executive Management`), are the
+   real navigational structure of an appropriations act and are still invisible.
+   Also unresolved: `heading` for a run-in section is the provision's own first
+   clause, because there is no heading to have — honest, but it makes for a
+   repetitive jump menu.
 4. **`in the matter preceding subparagraph (A)`** still falls through to the
    inert internal-ref note. It names a position between provisions, not a
    subtree; resolving it to the neighbour would be subtly wrong.
@@ -628,9 +770,13 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    manifest, so the loss is known rather than silent, but the resolver still
    shows only one of the two. Fixing it properly means a shard format that holds
    a list.
-7. **Hyphenated headings stay broken** (`CAT-` + `ASTROPHIC`). Documented in
-   README as a known limit — body text rejoins, headings can't, because the
-   lowercase-continuation signal is gone in all-caps.
+7. **Hyphenated headings stay broken** (`CAT-` + `ASTROPHIC`) — but they are no
+   longer *truncated*: a wrapped heading is now rejoined, so H.R. 3633's title I
+   reads `DEFINITIONS; RULE-MAKING; EXPEDITED REG-ISTRATION` rather than
+   stopping at `RULE-`. Closing the seam is what remains, and it is not obviously
+   safe: `PAY-` + `AS-YOU-GO` must keep its hyphen where `REG-` + `ISTRATION`
+   must lose it, and nothing in the text says which is which. Documented in
+   README as a known limit.
 8. **CFR part views cap at 40 sections**, silently beyond that.
 9. **Popular names cover ~46 Acts**, not the full OLRC table. The Commodity
    Exchange Act was missing until the CLARITY Act pass, where it was the single
@@ -640,9 +786,19 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    wraps in chat/mail. Shorter would need a backend, which is a different product.
 11. **No visual verification has ever happened.** Colours, spacing, dark mode, the
    green/red diff — all unconfirmed by anyone but the user. The `.node.added`
-   block added on 2026-08-01 is the newest thing nobody has looked at, and it is
-   the one most likely to be visually wrong: it is the first *block-level* mark
-   in a pane whose diff has until now been inline only.
+   block added on 2026-08-01 is still unseen. Three more things were added on
+   2026-08-02 that nobody has looked at either, and all three are *layout*
+   rather than colour, which is the kind linkedom cannot check:
+   - `.sec-where`, the breadcrumb inside each section head. It renders inside a
+     `.sec-head`, so it has to opt out of that rule's caps and accent colour —
+     if the opt-out loses, every breadcrumb SHOUTS IN ACCENT BLUE.
+   - `.sec-head.run-in`, the appropriations heading that carries its own first
+     sentence. Same risk in reverse: if the override loses, 648 paragraphs of
+     H.J. Res. 31 render as uppercase accent-coloured headings.
+   - `<optgroup>` in the jump menu. Native select styling varies by platform and
+     nobody has seen it on any of them.
+   Ask for a screenshot of the Fiscal Responsibility Act (breadcrumbs, and the
+   run-in sections in division B) before trusting any of it.
 12. **`inserting after subparagraph (C) the following` has the sibling problem
    `scopeAdditions` just fixed for additions.** Same shape — the new provision is
    a sibling of the one named, not a child — but insert ops carry anchors and
@@ -664,7 +820,7 @@ index.html            UI + boot diagnostic (classic script, runs when modules fa
 embed-example.html    host page for trying the iframe embed; not part of the app
 app/main.js           wiring; ingest() is the single entry point for bill text
 app/share.js          fragment-encoded share links (deflate + base64url)
-app/parse/            pdf.js · bill.js · citations.js   (extraction)
+app/parse/            pdf.js · bill.js · citations.js · outline.js  (extraction)
 app/resolve/          cfr.js (live eCFR) · usc.js (local shards) ·
                       internal.js (refs within the bill) · provision-tree.js ·
                       popular-names.js · index.js (dispatch)
@@ -672,7 +828,7 @@ app/ui/               render-bill.js · render-context.js · redline.js · style
 tools/                ingest_usc.py · serve.py · selftest.mjs · rendertest.mjs ·
                       measure.mjs (shared metrics) · impact.mjs · corpus.mjs
 corpus/               corpus.json + baseline.json (tracked) · files/ (not)
-data/usc/             generated shards, one JSON per section; gitignored
+data/usc/             generated shards, one JSON per section; tracked — it IS the site
 ```
 
 Citation kinds: `usc` `cfr` `publaw` `stat` `act` `internal`. Relative addresses

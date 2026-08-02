@@ -5,6 +5,9 @@
 // character count — so every citation offset computed against the raw text stays
 // valid and no offset remapping table is needed.
 
+import { isWrappedMarkerLine } from '../parse/outline.js';
+import { isHeadingContinuationLine } from '../parse/bill.js';
+
 // A line opening a quotation starts a new paragraph: that is a block of statute
 // the bill is inserting, and running it on into the instruction above it is
 // exactly the thing a reader needs kept apart. The quote styles must all be
@@ -15,7 +18,13 @@
 const RE_PARA_START =
   /^\s*(?:\([A-Za-z0-9]{1,8}\)|SECTION\s+\d|SEC\.\s|TITLE\s+[IVXLC]|Subtitle\s+[A-Z]|DIVISION\s+|CHAPTER\s+|``|‘‘|["“]|\d+\.\s)/;
 const RE_HEAD = /^\s*(SECTION|SEC\.)\s+(\d+[A-Za-z]*)\.\s*(.*)$/;
-const RE_DIV = /^\s*(DIVISION\s+[A-Z0-9]+|TITLE\s+[IVXLC]+|Subtitle\s+[A-Z]|CHAPTER\s+[IVXLC0-9]+)\s*[—–-]\s*(.+?)\s*$/;
+const RE_DIV = /^\s*(DIVISION\s+[A-Z0-9]+|TITLE\s+[IVXLC]+|Subtitle\s+[A-Z]|CHAPTER\s+[IVXLC0-9]+)\s*(?:--|[—–-])\s*(.+?)\s*$/;
+
+// A line opening with an outline marker and nothing before it — no quote. A
+// quoted marker opens a block of inserted statute and always starts a
+// paragraph; a bare one only does when it is a real marker rather than the
+// tail of a reference that wrapped across the measure.
+const RE_BARE_MARKER = /^\s*\([A-Za-z0-9]{1,8}\)/;
 
 /**
  * Group the raw text into paragraph ranges over the original offsets.
@@ -25,23 +34,64 @@ const RE_DIV = /^\s*(DIVISION\s+[A-Z0-9]+|TITLE\s+[IVXLC]+|Subtitle\s+[A-Z]|CHAP
  * bending boundaries to keep chips whole cost section headings their `#sec-N`
  * anchors, which is a worse bug than a chip ending a line early.
  */
-function paragraphs(text) {
+function paragraphs(text, secByStart) {
   const out = [];
+  const lines = text.split('\n');
   let cur = null;
   let off = 0;
 
-  for (const line of text.split('\n')) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const start = off;
     const end = off + line.length;
     off = end + 1;
 
     if (!line.trim()) { cur = null; continue; }
 
-    const isHead = RE_HEAD.test(line) || RE_DIV.test(line);
+    // A heading that ran past the measure keeps its tail in the same paragraph,
+    // so it is styled as the one heading it is rather than breaking into a
+    // caps-locked orphan line of body text underneath. A section heading closes
+    // with a period and a division heading closes at the blank line, which is
+    // why only the first stops on its own.
+    if (cur && cur.head && !cur.runIn && !cur.headDone && isHeadingContinuationLine(line)) {
+      cur.end = end;
+      cur.text += /-$/.test(cur.text) ? line.trim() : ` ${line.trim()}`;
+      if (cur.terminated && /\.\s*$/.test(cur.text)) cur.headDone = true;
+      continue;
+    }
+
+    // parseBill is the authority on what a section is. Re-deriving it from a
+    // regex here meant the two could disagree, and they did the moment
+    // appropriations headings were recognised: parseBill found 648 sections in
+    // H.J. Res. 31 that this pattern, being caps-only, rendered as body text —
+    // no heading style, no #sec-N anchor, and a jump menu pointing at nothing.
+    const sec = secByStart.get(start);
+    const isHead = !!sec || RE_DIV.test(line);
+    // "…A point of order under paragraph" / "(1) may be raised by a Senator…":
+    // the marker is the tail of a wrapped cross-reference, not a new item.
+    // Breaking there cut a sentence in half and dressed the back half up as an
+    // enumerated provision. See app/parse/outline.js.
+    const wrapped =
+      RE_BARE_MARKER.test(line) && isWrappedMarkerLine(i > 0 ? lines[i - 1] : null, line);
     // Start a fresh paragraph on a heading, on an enumerator, or when the
     // previous line ended in a way that closes a sentence block.
-    if (!cur || isHead || RE_PARA_START.test(line) || cur.head) {
-      cur = { start, end, head: isHead, line };
+    // `cur.head` closes a heading paragraph after one line — right for a real
+    // heading, wrong for a run-in one, whose next line is the same sentence
+    // carrying on.
+    if (!cur || isHead || (RE_PARA_START.test(line) && !wrapped) || (cur.head && !cur.runIn)) {
+      const hm = line.match(RE_HEAD);
+      cur = {
+        start, end, head: isHead, line, sec,
+        // A run-in heading carries the provision's own first sentence, so the
+        // lines after it are that sentence continuing and must not be split off.
+        runIn: !!(sec && sec.runIn),
+        // Accumulated heading text and whether it has already closed, so the
+        // continuation test above knows when to stop. Only a SEC. heading
+        // carries its own terminator.
+        text: hm ? hm[3] : line,
+        terminated: !!hm,
+        headDone: hm ? /\.\s*$/.test(hm[3]) : false,
+      };
       out.push(cur);
     } else {
       cur.end = end;
@@ -65,16 +115,26 @@ export function renderBill(bill, citations, amendments, onCite, onAmend) {
   const byStart = citations.slice().sort((a, b) => a.start - b.start);
   let ci = 0;
 
+  // A heading paragraph begins at exactly the offset parseBill recorded for the
+  // section, which is what lets the breadcrumb find its own section.
+  const secByStart = new Map(bill.sections.map((s) => [s.start, s]));
+
   // How far the previous paragraph actually drew to. A chip whose citation
   // overruns a paragraph boundary is rendered whole by that paragraph, so the
   // next one must resume past it rather than redraw the overlap.
   let consumed = 0;
 
-  for (const para of paragraphs(text)) {
+  // Section numbers a `sec-N` id has already been spent on.
+  const seenNums = new Set();
+
+  for (const para of paragraphs(text, secByStart)) {
     if (consumed >= para.end) continue; // wholly absorbed by an overrunning chip
-    const raw = text.slice(para.start, para.end);
-    const headMatch = raw.match(RE_HEAD);
-    const divMatch = raw.match(RE_DIV);
+    const sec = para.sec;
+    // RE_DIV is matched against the paragraph's FIRST line, never the whole of
+    // it: it is `$`-anchored with no `m` flag, so a heading that absorbed its
+    // wrapped tail stops matching as a whole string. The symptom is not an
+    // error but a heading silently rendered as body text.
+    const divMatch = sec ? null : para.line.match(RE_DIV);
 
     const p = document.createElement('p');
     // The paragraph's span in the source text. Internal cross-references resolve
@@ -83,9 +143,23 @@ export function renderBill(bill, citations, amendments, onCite, onAmend) {
     // currency everywhere else here; publishing them costs two attributes.
     p.dataset.start = String(para.start);
     p.dataset.end = String(para.end);
-    if (headMatch) {
-      p.className = 'sec-head';
-      p.id = `sec-${headMatch[2]}`;
+    if (sec) {
+      p.className = sec.runIn ? 'sec-head run-in' : 'sec-head';
+      // A bill can number two sections alike — every division of an
+      // appropriations act restarts at 101 — so `sec-N` is not unique and
+      // getElementById returns whichever came first. The unique id parseBill
+      // already assigns goes on a data attribute, and the jump menu uses that;
+      // `sec-N` stays for the first of each number so existing anchors still
+      // resolve.
+      p.dataset.sec = sec.id;
+      if (!seenNums.has(sec.num)) { p.id = `sec-${sec.num}`; seenNums.add(sec.num); }
+      // Where this section sits. A bill restarts its title numbering inside
+      // every division, so the heading alone does not say: "SEC. 123" under
+      // "TITLE III" is one of three title IIIs in the Fiscal Responsibility
+      // Act. Rendered inside the heading paragraph rather than before it, so
+      // the #sec-N anchor still scrolls to something that includes it and the
+      // amendments-only filter keeps it with its heading.
+      if (sec.ancestors && sec.ancestors.length) p.appendChild(whereEl(sec.ancestors));
     } else if (divMatch) {
       p.className = 'div-head';
     }
@@ -181,6 +255,29 @@ function renderRange(parent, text, from, to, cites, onCite) {
     cursor = to;
   }
   return cursor;
+}
+
+/**
+ * The chain of divisions and titles enclosing a section, outermost first.
+ *
+ * Deliberately not clickable. The right-hand pane's crumbs navigate the
+ * provision tree of the Code; this one states a fact about the bill already on
+ * screen, and a control that only ever scrolls a few lines up is not worth
+ * teaching the reader to expect.
+ */
+function whereEl(ancestors) {
+  const el = document.createElement('span');
+  el.className = 'sec-where';
+  ancestors.forEach((a, i) => {
+    if (i) {
+      const sep = document.createElement('span');
+      sep.className = 'sep';
+      sep.textContent = '›';
+      el.appendChild(sep);
+    }
+    el.appendChild(document.createTextNode(`${a.label} — ${a.heading}`));
+  });
+  return el;
 }
 
 function opChips(ops) {

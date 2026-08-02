@@ -538,7 +538,13 @@ function links(list) {
   return c;
 }
 
-function card(title, body, cls) {
+/**
+ * @param {object} [link] optional {label, href}, appended INSIDE the note's own
+ *   sentence rather than in the "Read elsewhere" row below it. A note that ends
+ *   "here's the link" has to be followed by the link, not by a paragraph break
+ *   and a heading.
+ */
+function card(title, body, cls, link) {
   const c = document.createElement('div');
   c.className = `card ${cls}`.trim();
   const h = document.createElement('h4');
@@ -546,6 +552,15 @@ function card(title, body, cls) {
   c.appendChild(h);
   const p = document.createElement('p');
   p.textContent = body;
+  if (link) {
+    p.appendChild(document.createTextNode(' '));
+    const a = document.createElement('a');
+    a.href = link.href;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = link.label;
+    p.appendChild(a);
+  }
   c.appendChild(p);
   return c;
 }
@@ -591,7 +606,7 @@ function externalCard(root, res) {
       )
     );
   } else if (res.note) {
-    root.appendChild(card('Note', res.note, ''));
+    root.appendChild(card('Note', res.note, '', res.noteLink));
   }
   if (res.links && res.links.length) root.appendChild(links(res.links));
   return root;

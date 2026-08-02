@@ -318,9 +318,9 @@ nothing — so it lives here rather than being fetched at build time.
 ## Tests
 
 ```bash
-node tools/selftest.mjs       # 286 checks: parsing, PDF extraction, citations, tree, share links, live eCFR, local data
+node tools/selftest.mjs       # 328 checks: parsing, PDF extraction, citations, tree, share links, live eCFR, local data
 npm i -D linkedom             # once, for the DOM tests
-node tools/rendertest.mjs     # 155 checks: both panes, the redline, additions, resolvers, fallback states, wiring
+node tools/rendertest.mjs     # 167 checks: both panes, the redline, additions, resolvers, fallback states, wiring
 node tools/corpus.mjs         # 30 real bills, every metric diffed against a recorded baseline
 node tools/impact.mjs         # not a test: prints what one bill parses to, resolution included
 ```
@@ -388,11 +388,13 @@ without a fetch step first.
   single `enactedAs` field in `app/resolve/popular-names.js`, but it has to be
   the Act as the Code's credits spell it, checked against a real shard.
 - **Scanned PDFs need OCR first.** Text extraction requires a text layer.
-- **A hyphenated heading stays broken.** Body text rejoins across a line break
-  (`environ-` + `mental`) because the continuation is lowercase. Headings are set
-  in caps, where that signal is gone and `COST-` + `EFFECTIVE` is indistinguishable
-  from `CAT-` + `ASTROPHIC`, so headings are left as typeset — H.R. 9925's § 8
-  reads `EMERGENCY ORDERS ADDRESSING IMMINENT CAT-`.
+- **A hyphenated heading keeps a visible seam.** A heading too long for the
+  measure now carries its continuation — `DEFINITIONS; RULE-MAKING; EXPEDITED
+  REG-ISTRATION` rather than stopping at `RULE-` — but the hyphen the typesetter
+  broke the word on is kept rather than closed up. Body text rejoins cleanly
+  because the continuation is lowercase; headings are set in caps, where that
+  signal is gone and `COST-` + `EFFECTIVE` is indistinguishable from `CAT-` +
+  `ASTROPHIC`. Keeping the hyphen shows a seam; removing it would invent words.
 - **An added block that closes twice is read only as far as its first close.**
   A bill adding several provisions at once normally opens each paragraph with a
   quote mark and closes once at the very end; a few write each added

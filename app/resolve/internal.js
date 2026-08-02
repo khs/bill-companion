@@ -12,6 +12,7 @@
 // so the thing referred to is a few lines away in the bill text.
 
 import { sectionAt } from '../parse/bill.js';
+import { isWrappedMarker } from '../parse/outline.js';
 
 // Same hierarchy the amendment parser uses, and for the same reason: the unit
 // word states the depth outright, which is the only thing that makes a bare
@@ -63,7 +64,14 @@ function escapeRe(s) {
 // the ones that matter. All four conventions, as everywhere else here.
 const LINE_HEAD = '(?:^|\\n)[ \\t]*(?:``|‘‘|["“])?[ \\t]*';
 
-/** Every line-start marker in [from, to), with its offset and depth. */
+/**
+ * Every line-start marker in [from, to), with its offset and depth.
+ *
+ * Markers that are only there because a reference wrapped across the 72-column
+ * measure are skipped — see app/parse/outline.js. They are indistinguishable by
+ * shape from real ones, and leaving them in gives the enclosing provision a
+ * phantom sibling that steals every later reference to the real marker.
+ */
 function outline(text, from, to) {
   const re = new RegExp(`${LINE_HEAD}(\\([A-Za-z0-9]{1,8}\\))(?=[ \\t\\n]|$)`, 'g');
   const out = [];
@@ -71,6 +79,10 @@ function outline(text, from, to) {
   let m;
   while ((m = re.exec(text)) && m.index < to) {
     const at = m.index + m[0].lastIndexOf(m[1]);
+    if (isWrappedMarker(text, at)) {
+      re.lastIndex = Math.max(re.lastIndex, at + m[1].length);
+      continue;
+    }
     out.push({ at, marker: m[1], depth: markerDepth(m[1]) });
     // Overlapping line starts are impossible, but a zero-width step is not.
     re.lastIndex = Math.max(re.lastIndex, at + m[1].length);

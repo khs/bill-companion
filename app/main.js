@@ -108,9 +108,30 @@ function ingest(raw) {
   els.metaDesig.textContent = bill.meta.designation || '—';
   els.metaShort.textContent = bill.meta.shortTitle || '';
 
+  // Grouped by the chain of divisions and titles each section sits under. A
+  // flat list is actively misleading in a bill with divisions, because the
+  // numbering restarts inside each one — the Fiscal Responsibility Act has
+  // three "TITLE I"s, and its jump menu ran "Sec. 124" straight into "Sec. 251"
+  // with nothing to say a division boundary had been crossed. Sections above
+  // the first division (short title, definitions) sit ungrouped at the top,
+  // which is where they are.
   els.jump.replaceChildren(new Option('Jump to…', ''));
+  let group = null;
+  let groupLabel = null;
   for (const s of bill.sections) {
-    els.jump.appendChild(new Option(`Sec. ${s.num}. ${s.heading}`.slice(0, 70), s.num));
+    const label = (s.ancestors || []).map((a) => `${a.label} — ${a.heading}`).join('  ›  ');
+    if (label !== groupLabel) {
+      groupLabel = label;
+      group = null;
+      if (label) {
+        group = document.createElement('optgroup');
+        // A property assignment does not reflect to the attribute in every DOM
+        // implementation; the headless one in rendertest.mjs is one of them.
+        group.setAttribute('label', label.slice(0, 90));
+        els.jump.appendChild(group);
+      }
+    }
+    (group || els.jump).appendChild(new Option(`Sec. ${s.num}. ${s.heading}`.slice(0, 70), s.id));
   }
 
   const n = citations.length;
@@ -303,9 +324,14 @@ els.ctxBack.addEventListener('click', () => {
 });
 
 els.jump.addEventListener('change', (e) => {
-  const num = e.target.value;
-  if (!num) return;
-  document.getElementById(`sec-${num}`)?.scrollIntoView({ block: 'start' });
+  const key = e.target.value;
+  if (!key) return;
+  // Keyed on the section's own unique id, not its number. Every division of an
+  // appropriations act restarts at "Sec. 101", so `#sec-101` names several
+  // paragraphs and getElementById answers with the first — picking division A
+  // no matter which one was chosen. `data-sec` is unique by construction.
+  const el = els.billBody.querySelector(`[data-sec="${key}"]`);
+  el?.scrollIntoView({ block: 'start' });
 });
 
 els.onlyAmend.addEventListener('change', (e) => {

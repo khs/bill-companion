@@ -94,9 +94,14 @@ async function dispatch(cite) {
         source: 'Public Law',
         citation: `Pub. L. ${cite.congress}-${cite.law}`,
         external: true,
-        note:
-          'Public Laws are served by govinfo and congress.gov, neither of which allows ' +
-          'cross-origin browser requests. Opening the text requires following a link.',
+        note: "Unfortunately, Public Laws don't play nice with our scraper: here's the link",
+        // Rendered inside the note's own sentence, not in the row below it —
+        // the sentence ends by promising a link, so one has to be right there.
+        // The alternatives still appear under "Read elsewhere".
+        noteLink: {
+          label: `Pub. L. ${cite.congress}-${cite.law} on govinfo`,
+          href: `https://www.govinfo.gov/link/plaw/${cite.congress}/public/${cite.law}`,
+        },
         links: [
           { label: 'govinfo (text)', href: `https://www.govinfo.gov/link/plaw/${cite.congress}/public/${cite.law}` },
           { label: 'congress.gov', href: `https://www.congress.gov/public-laws/${cite.congress}th-congress` },

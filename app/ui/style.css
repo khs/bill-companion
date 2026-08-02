@@ -205,6 +205,22 @@ body {
   scroll-margin-top: 54px;
 }
 .billtext .sec-head:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
+/* An appropriations heading IS the provision's first sentence — "Sec. 101.  Not
+   later than 30 days after the last day of each month, …". It keeps the rule
+   and the spacing that mark a new section, and drops the caps and the accent
+   colour, which would otherwise shout a whole paragraph of prose. */
+.billtext .sec-head.run-in {
+  font-family: var(--serif); font-size: 16px; font-weight: 400;
+  letter-spacing: 0; text-transform: none; color: var(--ink);
+}
+/* Where the section sits, above its own heading. Sits inside the .sec-head
+   paragraph, so it has to opt out of that rule's caps and accent colour. */
+.billtext .sec-where {
+  display: block; margin-bottom: .35em;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .06em;
+  text-transform: none; color: var(--ink-faint); white-space: normal;
+}
+.billtext .sec-where .sep { margin: 0 .45em; opacity: .65; }
 .billtext .div-head {
   font-family: var(--sans); font-size: 11px; font-weight: 700; letter-spacing: .1em;
   text-transform: uppercase; color: var(--ink-faint); margin: 2.2em 0 .3em;
@@ -359,6 +375,13 @@ body {
   border-radius: 6px; padding: .45em .6em; margin-left: -.6em;
   box-shadow: inset 3px 0 0 var(--focus);
 }
+/* The section's own lead-in — the sentence every subsection below hangs off
+   ("For purposes of this section—"). It introduces the list rather than being
+   an item in it, so it gets a little more air beneath than a sibling node.
+   The class had been carried since the pane was written and never styled: it
+   is set with `className =` rather than classList.add, which is the hole the
+   markup contract above had until it was widened. */
+.prov .node.lead-in { margin-bottom: .85em; }
 .prov .node.dimmed { opacity: .45; }
 .prov .node.dimmed:hover { opacity: 1; }
 

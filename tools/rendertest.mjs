@@ -29,6 +29,13 @@ const ok = (n, c, d) => { if (c) pass++; else { fail++; failures.push(`${n}${d ?
 const eq = (n, a, b) => ok(n, a === b, `got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`);
 const section = (t) => console.log(`\n\x1b[1m${t}\x1b[0m`);
 
+/** Where two strings first diverge, with a little context either side. */
+function firstDiff(a, b) {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return `at ${i}: rendered ${JSON.stringify(a.slice(i - 40, i + 40))} vs source ${JSON.stringify(b.slice(i - 40, i + 40))}`;
+}
+
 // --- install a DOM ---------------------------------------------------------
 const { window, document } = parseHTML(readFileSync(join(ROOT, 'index.html'), 'utf8'));
 globalThis.window = window;
@@ -86,6 +93,19 @@ section('CSS / markup contract');
     for (const m of src.matchAll(/classList\.(?:add|toggle)\(\s*['"]([A-Za-z][\w-]*)['"]/g)) {
       toggled.set(m[1], f);
     }
+    // `classList.add` was only ever half of it. Most of this app's classes are
+    // set by assigning `className` outright, and those were exempt from the
+    // check for no reason other than the pattern it was written with — an
+    // unstyled one is just as invisible, and just as dead on screen. Template
+    // literals contribute their static head ("cite cite-${kind}" gives "cite"),
+    // which is the part a stylesheet can be expected to name.
+    for (const m of src.matchAll(/\.className\s*=\s*(['"`])([^'"`$]*)/g)) {
+      // A token ending in "-" is the severed head of an interpolation
+      // ("cite cite-${c.kind}"), not a class anyone can write a rule for.
+      for (const c of m[2].trim().split(/\s+/)) {
+        if (/^[A-Za-z][\w-]*[A-Za-z0-9]$/.test(c) || /^[A-Za-z]$/.test(c)) toggled.set(c, f);
+      }
+    }
   }
   const unstyled = [...toggled].filter(([c]) => !styled.has(c));
   ok('every class the app toggles is styled', unstyled.length === 0,
@@ -127,6 +147,39 @@ if (existsSync(samplePath)) {
   // line got merged into it to keep a straddling citation intact.
   eq('renders a heading for every parsed section',
      el.querySelectorAll('.sec-head').length, bill.sections.length);
+
+  // ---- where each section sits ------------------------------------------
+  // Every section under a division carries its chain; the three above the
+  // first division carry nothing, because there is nothing to carry.
+  const withWhere = el.querySelectorAll('.sec-where').length;
+  eq('a breadcrumb for every section inside a division', withWhere,
+     bill.sections.filter((s) => s.ancestors.length).length);
+  const w123 = el.querySelector('#sec-123 .sec-where');
+  ok('the breadcrumb names the division as well as the title',
+     w123 && /DIVISION A/.test(w123.textContent) && /TITLE III/.test(w123.textContent),
+     JSON.stringify(w123 && w123.textContent));
+  // It lives INSIDE the heading paragraph, so #sec-N still scrolls to
+  // something containing it and the amendments-only filter keeps the two
+  // together — `.billtext.filtered p:not(.has-amend):not(.sec-head)` would
+  // otherwise hide a breadcrumb that had been made a sibling.
+  ok('the breadcrumb is inside the heading it belongs to',
+     w123 && w123.parentElement === el.querySelector('#sec-123'),
+     'a sibling breadcrumb is hidden by the amendments-only filter');
+
+  // ---- headings that ran past the measure --------------------------------
+  // The tail of a wrapped heading belongs to the heading. Rendered as its own
+  // paragraph it became a caps-locked orphan line of body text, and the pane
+  // showed "SEC. 271. TERMINATION … ON FEDERAL STUDENT" with "LOANS; …"
+  // stranded underneath in a different style.
+  const h271 = el.querySelector('#sec-271');
+  ok('a wrapped heading renders as one paragraph',
+     h271 && /FEDERAL STUDENT LOANS; RESUMPTION/.test(h271.textContent.replace(/\s+/g, ' ')),
+     JSON.stringify(h271 && h271.textContent.replace(/\s+/g, ' ').slice(0, 90)));
+  // The trap that guards it: RE_HEAD is `$`-anchored with no `m` flag, so
+  // matching it against the whole merged paragraph fails and the heading
+  // silently loses its class and its jump anchor rather than erroring.
+  ok('  and keeps its class and its #sec-N anchor',
+     h271 && h271.className.includes('sec-head'), JSON.stringify(h271 && h271.className));
   // Exact equality, not a range. ">0" once waved through a first-overlap bug
   // that rendered a single block for eleven amendments, and the ">= n-1" that
   // replaced it was slack left over from two amendments sharing a paragraph —
@@ -143,10 +196,26 @@ if (existsSync(samplePath)) {
 
   // Rendered text must track the source: proof that offset splicing neither
   // dropped nor duplicated any of the bill.
-  const rendered = el.textContent.replace(/\s+/g, ' ').trim();
+  //
+  // Exact, not a 5% length ratio. The ratio was measuring UI chrome as much as
+  // correctness — the amendment tags, the op chips and now the section
+  // breadcrumbs are all text the bill does not contain — so it had slack for
+  // roughly 5,000 characters of real loss, and it broke the moment a bill grew
+  // enough breadcrumbs rather than when anything went wrong. Strip the chrome
+  // and the remainder is the bill, character for character.
+  // Paragraphs are joined with a space, because the blank line between two of
+  // them is a boundary rather than content and so is not rendered into either.
+  // Under \s+ collapsing that space is a no-op wherever the source already had
+  // one — which is all but 15 of 557 boundaries in this bill, and exactly the
+  // slack a length ratio could never distinguish from real loss.
+  const clone = el.cloneNode(true);
+  for (const chrome of clone.querySelectorAll('.sec-where, .amend-tag, .amend-ops')) chrome.remove();
+  const rendered = [...clone.querySelectorAll('p')]
+    .map((p) => p.textContent).join(' ').replace(/\s+/g, ' ').trim();
   const source = text.replace(/\s+/g, ' ').trim();
-  ok('rendered text preserves the source', Math.abs(rendered.length - source.length) < source.length * 0.05,
-     `rendered ${rendered.length} vs source ${source.length}`);
+  eq('rendered text preserves the source exactly', rendered.length, source.length);
+  ok('  and character for character', rendered === source,
+     rendered === source ? '' : firstDiff(rendered, source));
 
   // No citation may be rendered twice. A citation straddling a line break used
   // to be emitted once on each side of the paragraph split — two half-chips
@@ -594,6 +663,25 @@ section('resolvers');
   const act = await resolve({ kind: 'act', act: { name: 'Clean Air Act', pattern: '', title: '42', section: '7401', range: '7401 et seq.' }, text: 'Clean Air Act' });
   ok('act name resolves to its first section', act.isActStart === true && !act.missing);
 
+  // A Public Law can only ever be an outbound link — govinfo and congress.gov
+  // both refuse cross-origin browser requests — so the note has to hand the
+  // reader the link rather than explain a CORS policy at them. It ends by
+  // promising one, which makes the link part of the sentence: rendered into the
+  // note's own <p>, not left to the "Read elsewhere" row underneath.
+  const pl = await resolve({ kind: 'publaw', congress: '118', law: '5', text: 'Public Law 118-5' });
+  eq('a Public Law says what it can do, not what it cannot', pl.note,
+     "Unfortunately, Public Laws don't play nice with our scraper: here's the link");
+  ok('  and carries an inline link to that law', !!pl.noteLink && /govinfo\.gov\/link\/plaw\/118\/public\/5/.test(pl.noteLink.href),
+     JSON.stringify(pl.noteLink));
+  const plEl = renderContext(pl, {});
+  const noteP = [...plEl.querySelectorAll('.card p')].find((p) => /don't play nice/.test(p.textContent));
+  ok('  the link renders INSIDE the note paragraph', !!noteP && !!noteP.querySelector('a'),
+     noteP ? noteP.innerHTML : 'no note paragraph');
+  ok('  pointing at the law itself', noteP?.querySelector('a')?.href.includes('/plaw/118/public/5'),
+     noteP?.querySelector('a')?.href);
+  // The alternatives are still offered separately.
+  ok('  and the other sources are still listed', (pl.links || []).length === 3, `${(pl.links || []).length}`);
+
   // Live eCFR through the real resolver: XML parse, section split, ancestry.
   try {
     const cfr = await resolve({ kind: 'cfr', title: '40', part: '60', section: '60.1', subsection: '', text: '40 CFR 60.1' });
@@ -648,6 +736,46 @@ try {
   ok('status reports what was found',
      /citation/.test(document.getElementById('status').textContent),
      JSON.stringify(document.getElementById('status').textContent));
+
+  // ---- the jump menu knows about divisions -------------------------------
+  // A flat list is actively misleading in a bill with divisions, because the
+  // numbering restarts inside each one: two different "TITLE I"s, and nothing
+  // in the menu to say a boundary had been crossed.
+  document.getElementById('paste-btn').dispatchEvent(new window.Event('click'));
+  area.value =
+    'SECTION 1. SHORT TITLE.\n' +
+    "This Act may be cited as the ``Divided Test Act''.\n" +
+    '\n' +
+    'DIVISION A--FIRST DIVISION\n' +
+    '\n' +
+    'TITLE I--ALPHA\n' +
+    '\n' +
+    'SEC. 101. ONE.\n' +
+    'Body text of section 101.\n' +
+    '\n' +
+    'DIVISION B--SECOND DIVISION\n' +
+    '\n' +
+    'TITLE I--BETA\n' +
+    '\n' +
+    'SEC. 201. TWO.\n' +
+    'Body text of section 201.\n';
+  document.getElementById('paste-ok').dispatchEvent(new window.Event('click'));
+
+  const jump = document.getElementById('jump');
+  const groups = jump.querySelectorAll('optgroup');
+  eq('the jump menu groups sections by division', groups.length, 2);
+  eq('  the first group names its whole chain',
+     groups[0] && groups[0].getAttribute('label'),
+     'DIVISION A — FIRST DIVISION  ›  TITLE I — ALPHA');
+  eq('  and the second distinguishes the other TITLE I',
+     groups[1] && groups[1].getAttribute('label'),
+     'DIVISION B — SECOND DIVISION  ›  TITLE I — BETA');
+  // Section 1 sits above any division, so it belongs on the select itself —
+  // not swept into whichever group happens to come first.
+  const direct = [...jump.children].filter((c) => c.tagName === 'OPTION');
+  eq('sections above any division stay ungrouped', direct.length, 2); // placeholder + Sec. 1
+  ok('  and section 1 is one of them', direct.some((o) => /Sec\. 1\./.test(o.textContent)),
+     direct.map((o) => o.textContent).join(' | '));
 } catch (err) {
   ok('paste flow runs', false, err.message);
 }

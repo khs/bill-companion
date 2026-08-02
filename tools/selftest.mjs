@@ -512,6 +512,73 @@ if (existsSync(samplePath)) {
   ok('most amendments resolve a target', as.filter((a) => a.target).length >= as.length / 2,
      `${as.filter((a) => a.target).length}/${as.length} resolved`);
 
+  // ---- where a section sits ---------------------------------------------
+  // A bill restarts its title numbering inside every division, so the innermost
+  // label alone names three different places in this bill. Section 123 reported
+  // "TITLE III—BUDGET ENFORCEMENT IN THE SENATE" with no way to tell which of
+  // divisions A, B or C it belonged to.
+  const s123 = bill.sections.find((s) => s.num === '123');
+  eq('sec. 123 sits two units deep', s123.ancestors.length, 2);
+  eq('  outermost is the division', s123.ancestors[0].label, 'DIVISION A');
+  eq('  and its heading has no leading hyphen', s123.ancestors[0].heading, 'LIMIT FEDERAL SPENDING');
+  eq('  innermost is the title', s123.ancestors[1].label, 'TITLE III');
+  eq('  which is not the same TITLE III as division B\'s',
+     bill.sections.find((s) => s.num === '261').ancestors[0].label, 'DIVISION B');
+  eq('a section above any division has no ancestors',
+     bill.sections.find((s) => s.num === '1').ancestors.length, 0);
+  // Every ancestor chain must be a real nesting, outermost first.
+  const misnested = bill.sections.filter((s) =>
+    s.ancestors.some((a, i) => i > 0 && a.label.split(/\s+/)[0] === s.ancestors[i - 1].label.split(/\s+/)[0])
+  );
+  eq('no section repeats a unit kind in its chain', misnested.length, 0);
+
+  // ---- appropriations headings, set in sentence case ---------------------
+  // Division B, title I of this Act is 73 rescission sections written
+  // "Sec. 1.  Each rescission made by this title …". RE_SECTION is
+  // case-sensitive — which is what stops a table of contents producing a
+  // phantom section per line — so the whole title was invisible: the jump menu
+  // ran from Sec. 124 straight to Sec. 251, and Sec. 124's span swallowed all
+  // 73 of them.
+  const rescissions = bill.sections.filter((s) => s.runIn);
+  eq('finds the sentence-case appropriations sections', rescissions.length, 81);
+  ok('  all of them inside division B',
+     rescissions.every((s) => s.ancestors[0] && s.ancestors[0].label === 'DIVISION B'),
+     [...new Set(rescissions.map((s) => s.ancestors[0]?.label))].join(','));
+  ok('  and they are marked run-in, not given a heading they do not have',
+     bill.sections.filter((s) => !s.runIn).length === 39,
+     `${bill.sections.filter((s) => !s.runIn).length} caps sections`);
+  // The table of contents lists "Sec. 101. Discretionary spending limits." in
+  // the same shape. It is flush left where a real heading is indented, and none
+  // of its entries may become a section.
+  const tocEnd = text.indexOf('DIVISION A--LIMIT FEDERAL SPENDING', 200);
+  eq('no section is taken from the table of contents',
+     bill.sections.filter((s) => s.start < tocEnd && s.runIn).length, 0);
+  // Section 124 must now end where section 124 ends.
+  const s124 = bill.sections.find((s) => s.num === '124');
+  ok('the section above them no longer swallows them',
+     s124.end - s124.start < 1200, `${s124.end - s124.start} chars`);
+
+  // ---- headings that ran past the measure --------------------------------
+  // "SEC. 271. TERMINATION … ON FEDERAL STUDENT" / "LOANS; RESUMPTION …" was
+  // cut at the line break, so the jump menu named a different provision than
+  // the one the section is about.
+  eq('a wrapped section heading is rejoined',
+     bill.sections.find((s) => s.num === '271').heading,
+     'TERMINATION OF SUSPENSION OF PAYMENTS ON FEDERAL STUDENT LOANS; ' +
+     'RESUMPTION OF ACCRUAL OF INTEREST AND COLLECTIONS');
+  eq('a wrapped division heading is rejoined',
+     (bill.divisions.find((d) => d.label === 'TITLE IV') || {}).heading,
+     'TERMINATION OF SUSPENSION OF PAYMENTS ON FEDERAL STUDENT LOANS; ' +
+     'RESUMPTION OF ACCRUAL OF INTEREST AND COLLECTIONS');
+  // Joining reads following lines but must never consume them: the section body
+  // still starts where it always did, and every citation offset is unmoved.
+  ok('rejoining a heading does not move the section body',
+     text.slice(bill.sections.find((s) => s.num === '271').start).startsWith('    SEC. 271.'),
+     JSON.stringify(text.slice(bill.sections.find((s) => s.num === '271').start, 40)));
+  // A heading that already ends in a period must not absorb anything.
+  eq('a complete heading is left alone',
+     bill.sections.find((s) => s.num === '101').heading, 'DISCRETIONARY SPENDING LIMITS');
+
   // No citation span may overlap another, or rendering splices badly.
   const sorted = cs.slice().sort((a, b) => a.start - b.start);
   let overlaps = 0;
@@ -918,6 +985,77 @@ section('internal cross-references');
   const gone = extractCitations(t4).find((c) => c.kind === 'internal' && c.scope === 'act');
   eq('a reference to a missing section resolves to nothing', locateInternal(b4, gone), null);
 
+  // ---- markers manufactured by the 72-column wrap ------------------------
+  // A reference broken across the measure leaves its marker at a line head,
+  // shaped exactly like a real outline marker. The phantom becomes a sibling of
+  // the real one and, being nearer, steals every later reference to it. 1,093
+  // of these across the 23 plain-text corpus bills; the corpus itself cannot
+  // see them, because its metrics are parse-only and this is resolution.
+  const t5 = normalizeText(
+    'SEC. 123. LIMITATION ON ADVANCE APPROPRIATIONS.\n' +
+    '    (a) Point of Order.--\n' +
+    '        (1) In general.--Except as provided in paragraph (2), it shall not\n' +
+    '    be in order in the Senate to consider any bill.\n' +
+    '        (2) Exceptions.--Advance appropriations may be provided.\n' +
+    '        (3) Waiver.--In the Senate, paragraph (1) may be waived only by an\n' +
+    '    affirmative vote of three-fifths of the Members.\n' +
+    '        (4) Form of point of order.--A point of order under paragraph \n' +
+    '    (1) may be raised by a Senator as provided in section 313(e).\n'
+  );
+  const b5 = parseBill(t5);
+  const p1 = extractCitations(t5)
+    .filter((c) => c.kind === 'internal' && /paragraph\s+\(1\)/.test(c.text));
+  eq('finds both "paragraph (1)" references', p1.length, 2);
+  // Both mean paragraph (a)(1), "In general" — the one in (3) because that is
+  // what it says, and the one in (4) because it is the wrapped one itself.
+  for (const [i, r] of p1.entries()) {
+    const at = locateInternal(b5, r);
+    ok(`  reference ${i + 1} lands on the real (1), not the wrapped tail`,
+       at && /^\(1\) In general/.test(t5.slice(at.start, at.start + 20)),
+       JSON.stringify(at && t5.slice(at.start, at.start + 30)));
+    ok(`  reference ${i + 1} is not reported ambiguous`, at && !at.ambiguous,
+       JSON.stringify(at && at.why));
+  }
+
+  // The one shape that must survive the guard: a run-in heading is a real
+  // marker even where the line above happens to end in a unit word. Exactly one
+  // case in the 1,093 — H.R. 2617 writes "(a) Definitions.--In this section"
+  // with the colon dropped, and "(1) Federal land.--" under it is real.
+  const t6 = normalizeText(
+    'SEC. 301. GILT EDGE MINE CONVEYANCE.\n' +
+    '    (a) Definitions.--In this section\n' +
+    "        (1) Federal land.--The term ``Federal land'' means the land.\n" +
+    "        (2) Map.--The term ``Map'' means the map.\n" +
+    '    (b) Conveyance.--As described in paragraph (1), the Secretary shall act.\n'
+  );
+  const b6 = parseBill(t6);
+  const fl = extractCitations(t6)
+    .find((c) => c.kind === 'internal' && /paragraph \(1\)/.test(c.text));
+  const flAt = fl && locateInternal(b6, fl);
+  ok('a run-in heading is still a real outline marker',
+     flAt && /Federal land/.test(t6.slice(flAt.start, flAt.start + 40)),
+     JSON.stringify(flAt && t6.slice(flAt.start, flAt.start + 40)));
+
+  // And against the bill this was found in. Section 123 of the Fiscal
+  // Responsibility Act has four "paragraph (1)" references; two of them meant
+  // (a)(1) "In general" and pointed into the middle of a sentence in (4).
+  if (existsSync(samplePath)) {
+    const fra = normalizeText(readFileSync(samplePath, 'utf8'));
+    const fb = parseBill(fra);
+    const s123 = fb.sections.find((s) => s.num === '123');
+    const inSec = extractCitations(fra).filter(
+      (c) => c.kind === 'internal' && c.start >= s123.start && c.start < s123.end
+    );
+    const hits = inSec.map((c) => locateInternal(fb, c)).filter(Boolean);
+    eq('FRA sec. 123: every internal reference resolves', hits.length, inSec.length);
+    eq('  and none of them is ambiguous', hits.filter((h) => h.ambiguous).length, 0);
+    const ones = inSec.filter((c) => /paragraph\s+\(1\)/.test(c.text));
+    eq('  it has three "paragraph (1)" references', ones.length, 3);
+    ok('  all three reach (a)(1) "In general"',
+       ones.every((c) => /^\(1\) In general/.test(fra.slice(locateInternal(fb, c).start, locateInternal(fb, c).start + 16))),
+       ones.map((c) => JSON.stringify(fra.slice(locateInternal(fb, c).start, locateInternal(fb, c).start + 16))).join(' '));
+  }
+
   // Against the real bills: this has to work at scale, not just on fixtures.
   if (existsSync(samplePath)) {
     const real = normalizeText(readFileSync(samplePath, 'utf8'));
@@ -927,7 +1065,15 @@ section('internal cross-references');
     // Exact, and expected to move when the locator improves — that is the point
     // of tracking it. The rest are references out to the U.S. Code rather than
     // into the bill, which correctly resolve to nothing.
-    eq('locates the internal refs it can', hits.length, 74);
+    //
+    // 74 until division B's appropriations sections became visible. One
+    // reference — "under paragraph (2) of subsection (b) of such section" —
+    // used to sit in a SEC. 124 whose span ran 24,869 characters because the 73
+    // sentence-case sections after it were invisible, and it found an unrelated
+    // "(2)" belonging to a different appropriations section. It now sits in its
+    // own 364-character section, which contains no (2), and declines. A
+    // reference out to another Act should resolve to nothing.
+    eq('locates the internal refs it can', hits.length, 73);
     ok('  which is most of them', hits.length >= rc.length * 0.75, `${hits.length}/${rc.length}`);
 
     // Every target must land on an outline marker, or on the head of the bill
@@ -998,9 +1144,12 @@ if (existsSync(substitutePath)) {
   eq('  the table of contents adds none', bill.divisions.filter((d) => d.label === 'TITLE I').length, 1);
   eq('  a section above title I has no division',
      (bill.sections.find((s) => s.num === '2') || {}).division, null);
+  // The stray hyphen this used to assert was the separator bug: govinfo writes
+  // "TITLE I--RESPONSIBLE …", and a separator class matching one character left
+  // the other on the front of the heading.
   eq('  and the first section under title I does',
      (bill.sections.find((s) => s.num === '101') || {}).division,
-     'TITLE I—-RESPONSIBLE SECURITIES INNOVATION');
+     'TITLE I—RESPONSIBLE SECURITIES INNOVATION');
 
   // Quoted, and wrapped across a line — "``Digital Asset \nMarket Clarity Act''"
   // — so it arrived with the quote marks and the line break still in it.
@@ -1100,6 +1249,30 @@ if (existsSync(clarityPdfPath)) {
   // the end of the table of contents lost the real title I entirely.
   ok('  including the one whose heading wraps three lines',
      bill.divisions.some((d) => d.label === 'TITLE I'), bill.divisions.map((d) => d.label).join(','));
+
+  // …and those continuation lines belong to the heading, not to nothing. The
+  // hyphens are the source's own soft hyphens and are kept rather than closed
+  // up: "REG-ISTRATION" shows a visible seam, but gluing it to "REGISTRATION"
+  // means also gluing "PAY-" / "AS-YOU-GO" into a word that does not exist.
+  // That is the standing limit in TODO 7; showing half a heading was not.
+  eq('  and the heading carries all three lines',
+     (bill.divisions.find((d) => d.label === 'TITLE I') || {}).heading,
+     'DEFINITIONS; RULE-MAKING; EXPEDITED REG-ISTRATION');
+  // Five lines in the body, which is what set the continuation cap.
+  eq('  a five-line division heading reaches its last word',
+     (bill.divisions.find((d) => d.label === 'TITLE IV') || {}).heading,
+     'REGISTRATION FOR DIGITAL COMMODITY INTER-MEDIARIES AT THE ' +
+     'COM-MODITY FUTURES TRADING COMMISSION');
+  // The continuation is a bare year — "SEC. 101. DEFINITIONS UNDER THE
+  // SECURITIES ACT OF" / "1933." — which a "must contain two capitals" guard
+  // against page furniture threw away.
+  eq('  a heading continued by a bare year is rejoined',
+     (bill.sections.find((s) => s.num === '101') || {}).heading,
+     'DEFINITIONS UNDER THE SECURITIES ACT OF 1933');
+  // Page furniture sits in the same gap and must never be absorbed.
+  ok('  no heading swallows the running head',
+     !bill.sections.some((s) => /HR 3633|EH1S|^\d+$/.test(s.heading)),
+     bill.sections.map((s) => s.heading).filter((h) => /HR 3633|EH1S/.test(h)).join(' | '));
 
   eq('house print: reads the short title', bill.meta.shortTitle, 'Digital Asset Market Clarity Act of 2025');
   ok('  and stops at the first of the three names it gives itself',

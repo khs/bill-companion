@@ -7,8 +7,49 @@
 //   Subtitle A—Efficiency
 // Section headings are set in caps and terminated by a period.
 
-const RE_DIVISION = /^\s*(DIVISION\s+[A-Z0-9]+|TITLE\s+[IVXLC]+|Subtitle\s+[A-Z]|CHAPTER\s+[IVXLC0-9]+)\s*[—–-]\s*(.+?)\s*$/;
+// govinfo plain text renders the em dash between a label and its heading as a
+// DOUBLE hyphen — "DIVISION A--LIMIT FEDERAL SPENDING". A separator class
+// matching a single character consumed one of the two and handed the other to
+// the heading, so every plain-text bill in the corpus carried headings reading
+// "-LIMIT FEDERAL SPENDING". Take the pair before the singleton.
+const RE_DIVISION = /^\s*(DIVISION\s+[A-Z0-9]+|TITLE\s+[IVXLC]+|Subtitle\s+[A-Z]|CHAPTER\s+[IVXLC0-9]+)\s*(?:--|[—–-])\s*(.+?)\s*$/;
 const RE_SECTION = /^\s*(SECTION|SEC\.)\s+(\d+[A-Za-z]*)\.\s*(.*)$/;
+// The same heading as an appropriations bill sets it: "Sec. 101. Notwithstanding
+// any other provision of law…". Gated on position, never used on its own — see
+// the call site in parseBill.
+//
+// Only the abbreviated, capitalised form. A blanket /i was the obvious way to
+// write this and it is wrong, because bills wrap at 72 columns and a citation
+// broken across the measure puts "section 1931." at the head of a line —
+//
+//     …the State plan under
+//     section 1931.''.
+//
+// which is the tail of a sentence, not a heading. That alone invented 12
+// sections in the Affordable Care Act and 5 in the 2017 tax act, each one
+// swallowing the real section it appeared in. The full word "Section" in
+// sentence case is excluded for the same reason: it opens sentences, and
+// "Sec." does not.
+// The leading whitespace is the discriminator, and it is a sharp one. govinfo
+// sets a table-of-contents entry flush left and indents a real heading with the
+// body it opens:
+//
+//     Sec. 1. Short title.                        <- entry, column 0
+//         Sec. 101.  Not later than 30 days …     <- heading, indented
+//
+// In H.J. Res. 31 that splits 656 candidates into 7 entries and 649 headings
+// with nothing in between. It is a plain-text convention rather than a drafting
+// rule, which is exactly why it is confined to this pattern: caps headings are
+// matched by RE_SECTION whatever their indentation, and a PDF — where leading
+// space does not survive extraction at all — never reaches this one.
+const RE_SECTION_LOOSE = /^[ \t]+(Sec\.)\s+(\d+[A-Za-z]*)\.\s+(\S.*)$/;
+
+// How the structural units nest. A bill states the depth in the label word
+// itself, which is the only thing that survives — indentation does not, and the
+// numbering restarts inside every division ("TITLE I" appears three times in
+// the Fiscal Responsibility Act, once under each of divisions A, B and C).
+const DIVISION_RANK = { DIVISION: 0, TITLE: 1, SUBTITLE: 2, CHAPTER: 3 };
+const rankOf = (label) => DIVISION_RANK[label.split(/\s+/)[0].toUpperCase()] ?? 9;
 // Opens the table of contents. The phrase wraps in PDF-extracted text ("The
 // table of contents for\nthis Act is as follows:"), so only the head of it can
 // be matched on a single line.
@@ -57,16 +98,34 @@ export function parseBill(text) {
   const divisions = [];
   let current = null;
   let offset = 0;
-  let division = null;
+  // The chain of structural units currently open, outermost first. A single
+  // "last heading seen" variable is not enough: "TITLE III" overwrote
+  // "DIVISION A", and since a bill restarts its title numbering inside every
+  // division, the label left behind named three different places at once.
+  // Section 123 of the Fiscal Responsibility Act reported "TITLE III—BUDGET
+  // ENFORCEMENT IN THE SENATE" and nothing about which division that was in.
+  let stack = [];
 
   let inToc = false;
+  // Has the bill's real body started? A sentence-case heading is only
+  // believable after it has: everything before is front matter and the table of
+  // contents, where the same shape means an entry rather than a section.
+  let bodyStarted = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const lineStart = offset;
     offset += line.length + 1;
 
-    const sm = line.match(RE_SECTION);
+    let sm = line.match(RE_SECTION);
+    const capsHead = !!sm;
+    // Appropriations bills set their REAL headings in sentence case — "Sec. 101.
+    // Notwithstanding any other provision of law…" — which is the shape a table
+    // of contents uses for its entries, and the reason matching is
+    // case-sensitive at all. Case cannot separate them, so position does: a
+    // sentence-case heading counts only outside the table and only once the
+    // bill's real body has begun. Both are already tracked.
+    if (!sm && bodyStarted && !inToc) sm = line.match(RE_SECTION_LOOSE);
     const dm = sm ? null : line.match(RE_DIVISION);
 
     if (dm) {
@@ -77,23 +136,54 @@ export function parseBill(text) {
       // (DEFINITIONS), which sits above TITLE I, under "TITLE IX—OTHER MATTERS".
       if (inToc && !realBodyFollows(lines, i)) continue;
       inToc = false;
-      division = { label: dm[1].trim(), heading: dm[2].trim(), start: lineStart };
+      const label = dm[1].trim();
+      const division = {
+        label,
+        heading: joinWrappedHeading(lines, i, dm[2], false),
+        start: lineStart,
+      };
+      // A unit closes every unit at its own rank or deeper: TITLE II ends
+      // TITLE I, and DIVISION B ends both TITLE III and DIVISION A.
+      const rank = rankOf(label);
+      while (stack.length && rankOf(stack[stack.length - 1].label) >= rank) stack.pop();
+      stack.push(division);
       divisions.push(division);
+      bodyStarted = true;
       continue;
     }
 
     if (sm) {
       inToc = false;
       if (current) current.end = lineStart;
+      const ancestors = stack.map((d) => ({ label: d.label, heading: d.heading, start: d.start }));
       current = {
         id: `s${sections.length}`,
         num: sm[2],
-        heading: sm[3].replace(/\.\s*$/, '').trim(),
-        division: division ? `${division.label}—${division.heading}` : null,
+        heading: joinWrappedHeading(lines, i, sm[3], true).replace(/\.\s*$/, '').trim(),
+        // The innermost enclosing unit, kept as it always was. `ancestors` is
+        // the full chain, which is what actually answers "where am I".
+        division: stack.length
+          ? `${stack[stack.length - 1].label}—${stack[stack.length - 1].heading}`
+          : null,
+        ancestors,
+        // A run-in heading is the appropriations shape: "Sec. 101.  Not later
+        // than 30 days …" is the first line of the provision, not a title over
+        // it. The renderer needs to know, because the caps styling a real
+        // heading gets would shout an entire sentence, and the hard paragraph
+        // break after one would cut that sentence in half.
+        runIn: !capsHead,
         start: lineStart,
         end: text.length,
       };
       sections.push(current);
+      bodyStarted = true;
+      // "SEC. 2. TABLE OF CONTENTS." opens the table by itself. Most bills then
+      // write "The table of contents for this Act is as follows:", which is the
+      // line RE_TOC_ANNOUNCE was built for — but that line is optional, and
+      // H.J. Res. 31 goes straight from the heading to the first entry. The
+      // heading is consumed here with a `continue`, so the announce check at
+      // the bottom of the loop never saw it and the table was never open.
+      if (RE_TOC_ANNOUNCE.test(current.heading)) inToc = true;
       continue;
     }
 
@@ -109,6 +199,72 @@ export function parseBill(text) {
     divisions,
     meta: guessMeta(text, sections),
   };
+}
+
+/**
+ * Can this line be the continuation of an all-caps heading above it?
+ *
+ * Exported because the renderer has to ask the same question: parseBill uses it
+ * to rebuild the heading *text*, and app/ui/render-bill.js uses it to keep the
+ * continuation in the same paragraph as the heading it belongs to. Two spellings
+ * of this rule would put the two out of step, and the visible symptom — half a
+ * heading in the left pane, styled as body text — is one nobody would connect
+ * back to here.
+ */
+export function isHeadingContinuationLine(line) {
+  if (!line.trim()) return false;
+  if (RE_SECTION.test(line) || RE_DIVISION.test(line)) return false;
+  if (/[a-z]/.test(line)) return false; // body text
+  if (/^\s*\(/.test(line)) return false; // an outline marker opens the body
+  // Running page furniture in a typeset PDF sits in exactly this gap and is
+  // caps-only too: a bulleted running head ("•HR 3633 EH1S") or a bare folio.
+  // Tested by shape rather than by "has two capitals in it", which threw away
+  // the legitimate continuation "1933." of "DEFINITIONS UNDER THE SECURITIES
+  // ACT OF".
+  if (/^\s*[•·]/.test(line)) return false;
+  if (/^\s*\d{1,4}\s*$/.test(line)) return false;
+  return /[A-Za-z0-9]/.test(line);
+}
+
+/**
+ * A heading too long for the 72-column measure runs onto the next line, and the
+ * part that ran on was simply dropped:
+ *
+ *     SEC. 271. TERMINATION OF SUSPENSION OF PAYMENTS ON FEDERAL STUDENT
+ *       LOANS; RESUMPTION OF ACCRUAL OF INTEREST AND COLLECTIONS.
+ *
+ * The jump menu and the section head showed the first line alone, which stops
+ * mid-phrase and reads as a different provision than the one it names.
+ *
+ * `terminated` says which signal ends the heading. A section heading is set in
+ * caps and closed with a period, so the absence of one is what says it wrapped.
+ * A division heading carries no period at all, so it runs to the blank line
+ * that always follows it.
+ *
+ * Only an all-caps line can continue an all-caps heading: body text carries
+ * lower case, and an outline marker opens the body outright. Continuation lines
+ * are read but never consumed — the loop still walks them, so every offset in
+ * the bill stays exactly where it was.
+ */
+function joinWrappedHeading(lines, i, first, terminated) {
+  let out = first.trim();
+  if (terminated && /\.\s*$/.test(out)) return out;
+
+  // The real terminators below do the work; the cap is only a backstop. A
+  // typeset PDF sets headings in a narrow column, and the CLARITY Act's
+  // "TITLE IV—REGISTRATION FOR / DIGITAL COMMODITY INTER- / MEDIARIES AT THE
+  // COM- / MODITY FUTURES TRADING / COMMISSION" runs to five lines.
+  for (let j = i + 1; j < lines.length && j - i <= 6; j++) {
+    const l = lines[j];
+    if (!isHeadingContinuationLine(l)) break;
+    // A word broken across the measure keeps its hyphen and loses the space,
+    // the same rule guessMeta() uses for a wrapped short title. That leaves
+    // "RULE-MAKING" rather than gluing it into "RULEMAKING" — the hyphen may
+    // be spurious, but inventing a word is worse than showing a visible seam.
+    out += /-$/.test(out) ? l.trim() : ` ${l.trim()}`;
+    if (terminated && /\.\s*$/.test(out)) break;
+  }
+  return out;
 }
 
 /**
@@ -136,6 +292,11 @@ function realBodyFollows(lines, i) {
     // Tested before the all-caps skip below, because a real section heading is
     // itself all caps.
     if (RE_SECTION.test(l)) return true;
+    // An appropriations act's real headings are sentence case, so asking only
+    // for caps meant its first real division could never prove itself and the
+    // whole bill stayed "inside the table of contents". The indentation
+    // requirement is what keeps this from matching the table's own entries.
+    if (RE_SECTION_LOOSE.test(l)) return true;
     if (RE_DIVISION.test(l)) continue;
     // A heading too long for the measure wraps, and a typeset PDF hyphenates it
     // where it breaks: "TITLE I—DEFINITIONS; RULE- / MAKING; EXPEDITED REG- /
