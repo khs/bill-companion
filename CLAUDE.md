@@ -10,7 +10,7 @@ and is written for a user; this file is for changing it. Read both.
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
 node tools/selftest.mjs                   # 396 checks, no dependencies
-node tools/rendertest.mjs                 # 210 checks, needs `npm i -D linkedom`
+node tools/rendertest.mjs                 # 215 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
@@ -143,7 +143,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 
 ```bash
 node tools/selftest.mjs     # all 396 checks passed
-node tools/rendertest.mjs   # all 210 render checks passed
+node tools/rendertest.mjs   # all 215 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
@@ -332,11 +332,29 @@ sections are claimed by two Code sections and are dropped rather than guessed;
 
 Each of these is here because violating it shipped a bug.
 
-**Offsets are sacred.** `normalizeText()` runs exactly once, at ingest, and every
-parser and renderer works on that same string. The bill renderer replaces `\n`
-with a single `' '` — same character count — so citation offsets stay 1:1 with
-the source and no remapping table is needed. Never introduce a transform that
-changes length between extraction and rendering.
+**Offsets are sacred — but the rule is about *when*, not about length.**
+`normalizeText()` runs exactly once, at ingest, and every parser and renderer
+works on that same string. Never transform the text *before* slicing it: an
+offset computed against one string and applied to another desynchronises
+everything, and that is what this invariant exists to forbid.
+
+Transforming a slice *after* it has been cut is a different act and is safe.
+`inline()` in `render-bill.js` does exactly that, and it changes the rendered
+length: a bill hard-wraps at ~72 columns and indents its continuation lines, so
+a phrase broken across the measure carries both — "the Small\n
+Business Administration" — and replacing only the newline left six stray spaces
+through the middle of a phrase, which `white-space: pre-wrap` then rendered
+faithfully because they really are in the source. 381,517 of 403,948 mid-phrase
+runs across the corpus, and a run inside a citation chip on every wrapped cite.
+Nothing maps a rendered position back to an offset — paragraph spans travel as
+`data-start`/`data-end` attributes, not as character counts — so the slice is
+the last safe place to do this, and the only place it is done.
+
+Runs *not* touching a line break are left alone. govinfo double-spaces after a
+colon ("available:  Provided"), and a bill's tables are aligned with runs of
+spaces; that is the drafter's typography, not an artifact of the measure. The
+paragraph's own leading indent survives for the same reason — nothing precedes
+it, so no rule fires on it, and it carries the outline level.
 
 **`[hidden] { display: none !important }` must stay in `style.css`.** Author
 rules like `.modal { display: grid }` beat the UA stylesheet's `[hidden]` at any

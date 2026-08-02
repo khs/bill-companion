@@ -148,6 +148,46 @@ if (existsSync(samplePath)) {
   eq('renders a heading for every parsed section',
      el.querySelectorAll('.sec-head').length, bill.sections.length);
 
+  // ---- whitespace the measure put there, and whitespace the drafter did ---
+  // A bill hard-wraps at ~72 columns AND indents its continuation lines, so a
+  // phrase broken across the measure carries both: "the Balanced Budget and
+  // \n      Emergency Deficit Control Act". Replacing only the newline left six
+  // stray spaces through the middle of a phrase, and `white-space: pre-wrap`
+  // rendered them faithfully, because they really are in the source.
+  {
+    // Wrapped exactly the way govinfo wraps: the break comes first, the next
+    // line's indentation after it. Both halves of the run have to go, and the
+    // indent is what makes the run long enough to be unmissable.
+    const tw = normalizeText(
+      'SEC. 9. WHITESPACE.\n' +
+      '    Amounts under section 251(b) of the Balanced Budget and\n' +
+      '      Emergency Deficit Control Act of 1985 shall be available:  Provided,\n' +
+      'That the Small\n' +
+      '              Business Administration shall report.\n'
+    );
+    const bw = parseBill(tw);
+    const cw = extractCitations(tw);
+    const ew = renderBill(bw, cw, extractAmendments(tw, cw, bw.divisions), () => {}, () => {});
+    const body = [...ew.querySelectorAll('p')].map((q) => q.textContent).join(' ');
+
+    ok('a phrase broken across the measure reads as one phrase',
+       /Balanced Budget and Emergency Deficit Control Act/.test(body), JSON.stringify(body.slice(0, 130)));
+    ok('  including where the next line is deeply indented',
+       /the Small Business Administration/.test(body), JSON.stringify(body.slice(-90)));
+    // Not a blanket collapse. govinfo double-spaces after a colon, and that is
+    // the drafter's typography rather than an artifact of the measure.
+    ok('a double space the drafter wrote is left alone',
+       /available:  Provided/.test(body), JSON.stringify(body.slice(0, 200)));
+    // The paragraph's own indent carries the outline level.
+    const first = [...ew.querySelectorAll('p')].find((q) => /Amounts under/.test(q.textContent));
+    ok('  and the paragraph keeps its own leading indent',
+       /^ {4}Amounts under/.test(first.textContent), JSON.stringify(first.textContent.slice(0, 24)));
+    // The chip is the thing the reader clicks; a run inside it is unmissable.
+    const chip = [...ew.querySelectorAll('.cite')].find((c) => /Balanced Budget/.test(c.textContent));
+    ok('a citation chip carries no run of spaces', chip && !/ {2}/.test(chip.textContent),
+       JSON.stringify(chip && chip.textContent));
+  }
+
   // ---- where each section sits ------------------------------------------
   // Every section under a division carries its chain; the three above the
   // first division carry nothing, because there is nothing to carry.

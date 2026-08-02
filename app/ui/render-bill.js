@@ -194,7 +194,9 @@ export function renderBill(bill, citations, amendments, onCite, onAmend) {
         wrap.className = 'amend';
         const tag = document.createElement('div');
         tag.className = 'amend-tag';
-        tag.textContent = `▸ amends ${amend.target ? amend.target.text : `${amend.unit} ${amend.section}${amend.subsection}`}`;
+        tag.textContent = `▸ amends ${
+          amend.target ? inline(amend.target.text) : `${amend.unit} ${amend.section}${amend.subsection}`
+        }`;
         tag.setAttribute('role', 'button');
         tag.tabIndex = 0;
         const fire = () => onAmend(amend);
@@ -238,7 +240,7 @@ function renderRange(parent, text, from, to, cites, onCite) {
     // like any other cite, but the address was inferred from the enclosing
     // instruction rather than written out in the bill.
     a.className = `cite cite-${c.kind}${c.relative ? ' rel' : ''}`;
-    a.textContent = text.slice(s, e).replace(/\n/g, ' ');
+    a.textContent = inline(text.slice(s, e));
     a.dataset.cid = c.id;
     a.tabIndex = 0;
     a.setAttribute('role', 'button');
@@ -294,8 +296,43 @@ function opChips(ops) {
   return row;
 }
 
+/**
+ * Bill text, ready to be read as prose.
+ *
+ * A bill is hard-wrapped at about 72 columns AND indents its continuation
+ * lines, so a phrase broken across the measure carries both the break and the
+ * next line's indentation:
+ *
+ *     the Balanced Budget and \n      Emergency Deficit Control Act
+ *     the Small \n              Business Administration
+ *
+ * Replacing only the newline left "and       Emergency" and "Small
+ * Business Administration" with six stray spaces through the middle of a
+ * phrase — which `white-space: pre-wrap` then faithfully renders, because the
+ * spaces really are in the source.
+ *
+ * The whole run collapses to one space. Runs NOT touching a line break are
+ * left alone: govinfo double-spaces after a colon ("available:  Provided"),
+ * and that is the drafter's typography rather than an artifact of the measure.
+ *
+ * Leading indentation at the start of a slice survives, because nothing
+ * precedes it — that is the paragraph's own indent, which carries the outline
+ * level and is worth keeping.
+ *
+ * This changes the rendered length, which the offset invariant used to forbid.
+ * It is safe here and only here: the transform is applied to each slice AFTER
+ * it has been cut, so every offset used to cut it was computed against the
+ * untouched source. Nothing maps a rendered position back to an offset —
+ * paragraph spans travel as `data-start`/`data-end` attributes, not as
+ * character counts. Applying a transform BEFORE slicing is the thing that
+ * would desynchronise everything, and is still forbidden.
+ */
+function inline(s) {
+  return s.replace(/[ \t]*\n[ \t]*/g, ' ');
+}
+
 function txt(s) {
-  return document.createTextNode(s.replace(/\n/g, ' '));
+  return document.createTextNode(inline(s));
 }
 
 function describe(c) {
