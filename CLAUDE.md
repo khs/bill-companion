@@ -9,7 +9,7 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 356 checks, no dependencies
+node tools/selftest.mjs                   # 364 checks, no dependencies
 node tools/rendertest.mjs                 # 204 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
@@ -142,7 +142,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 356 checks passed
+node tools/selftest.mjs     # all 364 checks passed
 node tools/rendertest.mjs   # all 204 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
@@ -802,16 +802,28 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
 
 ## TODO / open items
 
-1. **"Subsection (c) of such section is amended" is unseen** — 57 instructions,
-   almost all in the NDAA. No section number appears at all: both the section and
-   the title have to come from context, and the nearest preceding citation is
-   often a *quoted operand* ("…inserting ``section 3401''.") rather than the
-   provision meant, so carrying it forward would attribute the change to the
-   wrong section. Doing this properly means carrying the enclosing instruction's
-   own target rather than the nearest citation.
-2. **A tail of one-off amendatory phrasings is still unseen.** 173 across the
+1. **"Subsection (c) of such section is amended" is seen and targeted.**
+   (Fixed 2026-08-02.) `RE_AMEND_HEAD` needs "section <number>" and here the
+   number is exactly what has been elided, so these were not mis-targeted but
+   invisible — 130 instructions in the NDAA alone, their operations sitting
+   outside any parsed amendment, which is where most of that bill's
+   `uncoveredVerbs` count came from. `RE_AMEND_HEAD_SUCH` reads the shape and
+   `impliedSuchUnit()` composes the target.
+   The referent is the **previous instruction's own resolved target**, not the
+   nearest preceding citation. That distinction is the whole fix: instructions
+   quote their operands, and a quoted operand is often a citation
+   ("…by striking ``section 3401''."), so the nearest cite regularly belongs to
+   text the bill is deleting. Two guards earned their place by being wrong
+   first — every instruction updates the referent, including one with an Act
+   target or no target, so an intervening instruction *breaks* the chain
+   instead of being stepped over; and a citation flagged `note` cannot be
+   carried, because "10 U.S.C. 1580 note" is not section 1580.
+   Corpus: NDAA amendments 1,387 → 1,517, targeted +61, opSpans +476 (≈3.7 per
+   newly-seen instruction), and `uncoveredVerbs` 110 → 32.
+2. **A tail of one-off amendatory phrasings is still unseen.** Was 173 across the
    twenty-bill corpus — 3.0% of all amendatory verbs, and 110 of them in the
-   NDAA alone. Shapes with no shared structure: "the Act entitled ``An Act to
+   NDAA alone — but TODO 1 accounted for 78 of the NDAA's 110, leaving 32
+   there and 95 corpus-wide. Shapes with no shared structure: "the Act entitled ``An Act to
    render immune from seizure…'' (22 U.S.C. 2459; 79 Stat. 985)", "The heading of
    such section", "The sixth sentence of section 7(m) of title 4", "Subpart A of
    part IX of subtitle C of title I of Public Law 115-97". To find them again:
@@ -943,6 +955,16 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    control offers (a)(3), that it widens to (a), and that at (a) the block is
    actually on screen — because asserting only the first would have passed
    against a control that did nothing.
+14. **A "U.S.C. N note" citation still resolves to section N.** The citations
+   are flagged (`c.note`) and "such" anaphora refuses to chain off one, which
+   is what TODO 1 needed — but nothing else acts on the flag yet, so clicking
+   "10 U.S.C. 1580 note" still opens section 1580, a real provision that is not
+   the one cited. 815 of the corpus's 12,918 U.S.C. citations (6.3%) are of
+   this form. The honest behaviour is to say the citation names a note under
+   that section and offer the section as context rather than as the answer;
+   the Act cite beside it ("section 235 of the NDAA for FY2020") is usually the
+   better target and is already extracted.
+
 
 ---
 

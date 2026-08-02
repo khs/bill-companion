@@ -1017,6 +1017,66 @@ section('internal cross-references');
   const gone = extractCitations(t4).find((c) => c.kind === 'internal' && c.scope === 'act');
   eq('a reference to a missing section resolves to nothing', locateInternal(b4, gone), null);
 
+  // ---- "Subsection (c) of such section is amended" -----------------------
+  // RE_AMEND_HEAD needs "section <number>", and here the number is exactly what
+  // has been elided. 130 instructions in the NDAA alone were not seen at all —
+  // not mis-targeted, invisible — and their operations sat outside any parsed
+  // amendment, which is where the corpus's `uncoveredVerbs` count came from.
+  {
+    const ts = normalizeText(
+      'SEC. 123. FOO.\n' +
+      "    (a) In General.--Section 2401 of title 10, United States Code, is amended by striking ``old'' and inserting ``new''.\n" +
+      "    (b) Conforming.--Subsection (c) of such section is amended by striking ``red''.\n" +
+      "    (c) More.--Paragraph (2) of such subsection is amended by striking ``x''.\n"
+    );
+    const as = extractAmendments(ts, extractCitations(ts));
+    eq('all three instructions are seen', as.length, 3);
+    eq('  "of such section" takes the previous target\'s section',
+       `${as[1].target.title} USC ${as[1].target.section}${as[1].target.subsection}`, '10 USC 2401(c)');
+    // "such section" REPLACES the sub-path; "such subsection" descends into it.
+    // Getting that backwards composes (c)(2) as (2), or as (c)(c)(2).
+    eq('  "of such subsection" descends into it',
+       `${as[2].target.title} USC ${as[2].target.section}${as[2].target.subsection}`, '10 USC 2401(c)(2)');
+    ok('  and says the target was carried, not written',
+       /carried from the instruction/.test(as[1].target.implied || ''), as[1].target.implied);
+
+    // An instruction in between breaks the chain. "such" means the instruction
+    // immediately before; reaching past one that named something else attaches
+    // a real amendment to a section the bill was no longer talking about.
+    const tb = normalizeText(
+      'SEC. 123. FOO.\n' +
+      "    (a) Section 2401 of title 10, United States Code, is amended by striking ``old''.\n" +
+      "    (b) The Clean Air Act is amended by striking ``smog''.\n" +
+      "    (c) Subsection (c) of such section is amended by striking ``red''.\n"
+    );
+    const ab = extractAmendments(tb, extractCitations(tb));
+    const last = ab[ab.length - 1];
+    ok('an intervening instruction breaks the chain',
+       !last.target || !/carried from the instruction/.test(last.target.implied || ''),
+       JSON.stringify(last.target && last.target.implied));
+
+    // "10 U.S.C. 1580 note" is not section 1580 — a note is uncodified law
+    // printed beneath it. Composing a subsection onto that spreads a wrong
+    // answer to every instruction that refers back.
+    const tn = normalizeText(
+      'SEC. 123. FOO.\n' +
+      "    (a) Section 235(a) of the National Defense Authorization Act for Fiscal Year 2020 (10 U.S.C. 1580 note) is amended by striking ``old''.\n" +
+      "    (b) Subsection (b) of such section is amended by striking ``red''.\n"
+    );
+    const an = extractAmendments(tn, extractCitations(tn));
+    const noteCite = extractCitations(tn).find((c) => c.kind === 'usc');
+    eq('a "U.S.C. N note" citation is flagged as a note', noteCite.note, true);
+    ok('  and cannot be carried forward by "such"',
+       !an[an.length - 1].target ||
+         !/carried from the instruction/.test(an[an.length - 1].target.implied || ''),
+       JSON.stringify(an[an.length - 1].target && an[an.length - 1].target.implied));
+    // A plain citation must not be flagged.
+    const plainCite = extractCitations(
+      normalizeText('SEC. 2. X.\nSection 2401 of title 10, United States Code, is amended.\n')
+    ).find((c) => c.kind === 'usc');
+    eq('an ordinary U.S.C. citation is not a note', plainCite.note, false);
+  }
+
   // ---- "section N of Public Law X-Y" -------------------------------------
   // A Public Law used to be an outbound link and nothing else. But the Code's
   // source credits file a law under its own number just as readily as under a

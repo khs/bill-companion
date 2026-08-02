@@ -19,6 +19,9 @@ const SUBSEC = '(?:\\([A-Za-z0-9]{1,8}\\))*';
 // ---------------------------------------------------------------------------
 
 // 42 U.S.C. 7401 / 42 USC § 7401(a)(1) / 26 U.S.C. §§ 501-505 / 15 U.S.C. 78a et seq.
+// The word that turns a section citation into a citation of something else.
+const RE_NOTE_SUFFIX = /^\s*note\b/i;
+
 const RE_USC = new RegExp(
   '\\b(\\d{1,2}[A-Z]?)\\s*U\\.?\\s?S\\.?\\s?C\\.?' +
     '\\s*(?:§§?\\s*)?' +
@@ -176,6 +179,28 @@ const RE_AMEND_HEAD = new RegExp(
     '([0-9]+[A-Za-z]*)' +
     `(${SUBSEC})` +
     `(${AMEND_MIDDLE}{0,240}?)` +
+    '\\s+(is|are)\\s+(amended|repealed|redesignated)',
+  'gm'
+);
+
+// "Subsection (c) of such section is amended" — a sub-unit hanging off a
+// section the bill named in an earlier instruction, with no number of its own.
+//
+// RE_AMEND_HEAD cannot see this: it requires "section <number>", and here the
+// number is precisely what has been elided. 252 instructions across the corpus,
+// almost all of them in the NDAA, every one reporting that the bill changes
+// nothing.
+//
+// Kept narrow on purpose. It anchors on the sub-unit, requires "of such", and
+// requires the verb within a short middle — the referent is resolved from the
+// PREVIOUS INSTRUCTION'S TARGET rather than from the nearest citation, and a
+// loose match here would attach a real amendment to the wrong section, which
+// is much worse than not seeing it.
+const RE_AMEND_HEAD_SUCH = new RegExp(
+  AMEND_BOUNDARY +
+    '((?:[Ss]ubsections?|[Pp]aragraphs?|[Ss]ubparagraphs?|[Cc]lauses?)\\s*(?:\\([A-Za-z0-9]{1,8}\\))+)' +
+    '\\s+of\\s+such\\s+([Ss]ection|[Ss]ubsection|[Pp]aragraph)\\b' +
+    `(${AMEND_MIDDLE}{0,120}?)` +
     '\\s+(is|are)\\s+(amended|repealed|redesignated)',
   'gm'
 );
@@ -1105,7 +1130,21 @@ export function extractCitations(text) {
     }
   }
 
-  return dedupe(out);
+  // "10 U.S.C. 1580 note" is NOT section 1580. A note is uncodified law printed
+  // beneath a section, usually the very Act provision that created whatever the
+  // section administers, so resolving it to the section shows a real provision
+  // that is not the one cited. 815 of the corpus's 12,918 U.S.C. citations
+  // (6.3%) are of this form.
+  //
+  // Flagged here, against each citation's own `end`, rather than at the two
+  // push sites: the regex match end is not the citation end (push() adjusts for
+  // boundary groups), and testing from the wrong offset reads as working while
+  // flagging nothing at all.
+  const cites = dedupe(out);
+  for (const c of cites) {
+    if (c.kind === 'usc') c.note = RE_NOTE_SUFFIX.test(text.slice(c.end, c.end + 8));
+  }
+  return cites;
 }
 
 // Specificity ranking. When two matches overlap we keep the more useful one:
@@ -1262,6 +1301,53 @@ function impliedSuch(h, citations) {
   };
 }
 
+/**
+ * "Subsection (c) of such section is amended" — the section is the one the
+ * PREVIOUS INSTRUCTION was amending.
+ *
+ * Deliberately not "the nearest preceding U.S. Code citation", which is how
+ * impliedSuch() resolves "of such title" and is wrong here. A bill's
+ * instructions quote their operands, and a quoted operand is frequently a
+ * citation: "…by striking ``section 3401''." leaves "section 3401" as the
+ * nearest cite, and carrying it forward would attribute the next instruction to
+ * a section the bill merely mentioned in passing. The enclosing instruction's
+ * own resolved target is the referent the drafter meant, and it is the one
+ * thing that cannot be a quotation.
+ *
+ * Restricted to U.S. Code targets for the reason impliedSuch() excludes "such
+ * Act": a sub-unit of an Act-relative section is Act-relative too, and
+ * presenting it as a Code address would be confidently wrong.
+ */
+function impliedSuchUnit(h, lastTarget) {
+  if (!h.suchOf || !h.subsection) return null;
+  if (!lastTarget || lastTarget.kind !== 'usc' || !lastTarget.title || !lastTarget.section) return null;
+  // "…(10 U.S.C. 1580 note) is amended" targets a note, not section 1580, and
+  // the section it names is somebody else's. Composing a subsection onto it
+  // would take a pre-existing mis-resolution and spread it to the instructions
+  // that refer back to it.
+  if (lastTarget.note) return null;
+
+  // "such section" replaces the previous target's own sub-path; "such
+  // subsection"/"such paragraph" descends further into it. Getting this
+  // backwards composes (c)(2) as (2) or (c)(c)(2).
+  const base = h.suchOf === 'section' ? '' : lastTarget.subsection || '';
+  const subsection = base + h.subsection;
+  return {
+    id: `u${h.start}`,
+    kind: 'usc',
+    text: `${h.unit} of section ${lastTarget.section} of title ${lastTarget.title}`,
+    start: h.start,
+    end: h.headEnd,
+    title: lastTarget.title,
+    section: lastTarget.section,
+    subsection,
+    ladder: subsectionLadder(subsection),
+    implied:
+      `section ${lastTarget.section} of title ${lastTarget.title}, carried from the ` +
+      `instruction immediately before this one`,
+  };
+}
+
 function ircScopes(text, divisions) {
   RE_1986_CODE.lastIndex = 0;
   const out = [];
@@ -1335,6 +1421,25 @@ export function extractAmendments(text, citations, divisions = []) {
     });
   }
 
+  RE_AMEND_HEAD_SUCH.lastIndex = 0;
+  while ((m = RE_AMEND_HEAD_SUCH.exec(text))) {
+    const raw = m[0];
+    const lead = raw.length - raw.replace(/^[\s.;:—–)-]+/, '').length;
+    heads.push({
+      start: m.index + lead,
+      headEnd: m.index + raw.length,
+      inner: '',
+      unit: m[1].replace(/\s+/g, ' ').trim(), // "Subsection (c)"
+      section: '',
+      subsection: (m[1].match(MARKER_RE) || []).join(''),
+      middle: m[3] || '',
+      verb: m[5].toLowerCase(),
+      // Which unit "such" points back at, so the target can be composed from
+      // the previous instruction rather than guessed at from nearby text.
+      suchOf: m[2].toLowerCase(),
+    });
+  }
+
   RE_AMEND_HEAD_UNIT.lastIndex = 0;
   while ((m = RE_AMEND_HEAD_UNIT.exec(text))) {
     const raw = m[0];
@@ -1365,6 +1470,11 @@ export function extractAmendments(text, citations, divisions = []) {
     merged.push(h);
   }
 
+  // The target the previous instruction resolved to, for anaphora. Threaded
+  // rather than looked up, because "such section" means the section the bill was
+  // just talking about — see impliedSuchUnit().
+  let lastTarget = null;
+
   const out = merged.flatMap((h, i) => {
     const nextHead = i + 1 < merged.length ? merged[i + 1].start : text.length;
     const bodyEnd = Math.min(nextHead, h.headEnd + MAX_AMEND_BODY, text.length);
@@ -1388,7 +1498,20 @@ export function extractAmendments(text, citations, divisions = []) {
       ) ||
       impliedIrc(h, ircRanges) ||
       impliedSuch(h, citations) ||
+      impliedSuchUnit(h, lastTarget) ||
       null;
+    // "such" means the instruction immediately before this one, so EVERY
+    // instruction updates the referent — including one whose target is an Act
+    // or a Public Law, and including one with no target at all. Only usc
+    // targets can be composed against (impliedSuchUnit declines the rest), so
+    // recording them all is what makes an intervening instruction *break* the
+    // chain rather than be stepped over.
+    //
+    // Skipping non-usc instructions instead reached back past them: "Subsection
+    // (b) of such section", written after an instruction amending section
+    // 235(a)(4) of an NDAA, was attributed to a 10 U.S.C. section named several
+    // instructions earlier. Confidently wrong, and about a real provision.
+    lastTarget = target;
 
     const ops = [];
     for (const [re, type] of [[RE_STRIKE, 'strike'], [RE_INSERT, 'insert']]) {
