@@ -590,6 +590,47 @@ if (existsSync(samplePath)) {
   ok('the section above them no longer swallows them',
      s124.end - s124.start < 1200, `${s124.end - s124.start} chars`);
 
+  // ---- a label on a line of its own --------------------------------------
+  // An appropriations act centres "TITLE I", leaves a blank line, then centres
+  // the heading. RE_DIVISION needs a separator on the same line, so it matched
+  // none of them: 44 titles in H.J. Res. 31, and everything under them hanging
+  // off a title nobody could see.
+  {
+    const tb = normalizeText(
+      'SECTION 1. SHORT TITLE.\n' +
+      "This Act may be cited as the ``Bare Label Act''.\n\n" +
+      '  DIVISION A--DEPARTMENT OF EXAMPLE APPROPRIATIONS ACT\n\n' +
+      '                                TITLE I\n\n' +
+      '            DEPARTMENTAL MANAGEMENT, OPERATIONS, AND OVERSIGHT\n\n' +
+      '                     Office of the Secretary\n\n' +
+      '    Sec. 101.  Not later than 30 days after enactment, the Secretary\n' +
+      'shall submit a report.\n\n' +
+      '                               TITLE II\n\n' +
+      '               SECURITY, ENFORCEMENT, AND INVESTIGATIONS\n\n' +
+      '    Sec. 201.  None of the funds may be used for anything.\n'
+    );
+    const bb = parseBill(tb);
+    eq('a bare TITLE label is recognised',
+       bb.divisions.filter((d) => /^TITLE/.test(d.label)).length, 2);
+    eq('  with the heading from the line below',
+       (bb.divisions.find((d) => d.label === 'TITLE I') || {}).heading,
+       'DEPARTMENTAL MANAGEMENT, OPERATIONS, AND OVERSIGHT');
+    eq('  and the second one is its own, not borrowed',
+       (bb.divisions.find((d) => d.label === 'TITLE II') || {}).heading,
+       'SECURITY, ENFORCEMENT, AND INVESTIGATIONS');
+    // The point of all of it: the sections underneath know where they are.
+    const s101 = bb.sections.find((s) => s.num === '101');
+    eq('a section under a bare title sits two units deep', s101.ancestors.length, 2);
+    eq('  under its division', s101.ancestors[0].label, 'DIVISION A');
+    eq('  and its title', s101.ancestors[1].label, 'TITLE I');
+    eq('a later section moves to the next title',
+       bb.sections.find((s) => s.num === '201').ancestors[1].label, 'TITLE II');
+    // The account heading between the title and the section is not a division.
+    ok('an account heading is not read as a unit',
+       !bb.divisions.some((d) => /Office of the Secretary/i.test(d.heading)),
+       bb.divisions.map((d) => d.heading).join(' | '));
+  }
+
   // ---- headings that ran past the measure --------------------------------
   // "SEC. 271. TERMINATION … ON FEDERAL STUDENT" / "LOANS; RESUMPTION …" was
   // cut at the line break, so the jump menu named a different provision than

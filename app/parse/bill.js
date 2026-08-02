@@ -13,6 +13,23 @@
 // the heading, so every plain-text bill in the corpus carried headings reading
 // "-LIMIT FEDERAL SPENDING". Take the pair before the singleton.
 const RE_DIVISION = /^\s*(DIVISION\s+[A-Z0-9]+|TITLE\s+[IVXLC]+|Subtitle\s+[A-Z]|CHAPTER\s+[IVXLC0-9]+)\s*(?:--|[—–-])\s*(.+?)\s*$/;
+// The same units, set the way an appropriations act sets them: the label
+// centred on a line of its own, and the heading two lines below it.
+//
+//     TITLE I
+//
+//         DEPARTMENTAL MANAGEMENT, OPERATIONS, INTELLIGENCE, AND OVERSIGHT
+//
+// RE_DIVISION needs a separator on the same line, so it matched none of these:
+// 44 titles in H.J. Res. 31 and not one of them visible. That is the whole
+// navigational structure of an appropriations act — everything under it hangs
+// off a title nobody could see.
+//
+// Anchored end-to-end, so the line must be the label and nothing else. "TITLE I"
+// occurring in a sentence, or "TITLE I--DEFINITIONS" (which RE_DIVISION already
+// handles), does not match.
+const RE_DIVISION_BARE = /^\s*(DIVISION\s+[A-Z0-9]+|TITLE\s+[IVXLC]+|Subtitle\s+[A-Z]|CHAPTER\s+[IVXLC0-9]+)\s*$/;
+
 const RE_SECTION = /^\s*(SECTION|SEC\.)\s+(\d+[A-Za-z]*)\.\s*(.*)$/;
 // The same heading as an appropriations bill sets it: "Sec. 101. Notwithstanding
 // any other provision of law…". Gated on position, never used on its own — see
@@ -126,7 +143,15 @@ export function parseBill(text) {
     // sentence-case heading counts only outside the table and only once the
     // bill's real body has begun. Both are already tracked.
     if (!sm && bodyStarted && !inToc) sm = line.match(RE_SECTION_LOOSE);
-    const dm = sm ? null : line.match(RE_DIVISION);
+    let dm = sm ? null : line.match(RE_DIVISION);
+    // A bare label, with its heading on a later line. Read but not consumed —
+    // the heading line is left for the loop, which will ignore it, so no offset
+    // moves. Falls back to no heading at all rather than reaching far: a label
+    // on its own is still worth navigating by.
+    if (!sm && !dm) {
+      const bm = line.match(RE_DIVISION_BARE);
+      if (bm) dm = [bm[0], bm[1], headingBelow(lines, i)];
+    }
 
     if (dm) {
       // A bill's table of contents lists its divisions in lines byte-identical
@@ -199,6 +224,30 @@ export function parseBill(text) {
     divisions,
     meta: guessMeta(text, sections),
   };
+}
+
+/**
+ * The heading belonging to a label that sits on a line of its own.
+ *
+ * Appropriations acts centre "TITLE I", leave a blank line, then centre the
+ * heading. Scans past blank lines for the first all-caps line, and stops at
+ * anything that ends the gap — another label, a section, or body text — so a
+ * title with no heading gets an empty one rather than borrowing the next
+ * title's.
+ *
+ * Bounded tightly. The heading is always within a line or two; searching
+ * further would eventually find *some* all-caps line and attach it to the
+ * wrong label, which is worse than the blank it replaces.
+ */
+function headingBelow(lines, i) {
+  for (let j = i + 1; j < lines.length && j - i <= 3; j++) {
+    const l = lines[j];
+    if (!l.trim()) continue;
+    if (RE_SECTION.test(l) || RE_DIVISION.test(l) || RE_DIVISION_BARE.test(l)) return '';
+    if (!isHeadingContinuationLine(l)) return '';
+    return joinWrappedHeading(lines, j, l.trim(), false);
+  }
+  return '';
 }
 
 /**

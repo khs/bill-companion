@@ -207,7 +207,7 @@
  "hr1892-115-enr": {
   "chars": 780824,
   "sections": 227,
-  "divisions": 46,
+  "divisions": 58,
   "citations": 2124,
   "byKind": {
    "usc": 407,
@@ -238,7 +238,7 @@
  "hr748-116-enr": {
   "chars": 1059989,
   "sections": 287,
-  "divisions": 20,
+  "divisions": 33,
   "citations": 2726,
   "byKind": {
    "act": 625,
@@ -298,7 +298,7 @@
  "s2938-117-enr": {
   "chars": 97126,
   "sections": 31,
-  "divisions": 10,
+  "divisions": 13,
   "citations": 266,
   "byKind": {
    "internal": 145,
@@ -421,7 +421,7 @@
  "hr4346-117-enr": {
   "chars": 1241175,
   "sections": 266,
-  "divisions": 50,
+  "divisions": 53,
   "citations": 2009,
   "byKind": {
    "act": 209,
@@ -451,8 +451,8 @@
  },
  "hr1865-116-enr": {
   "chars": 2271931,
-  "sections": 348,
-  "divisions": 82,
+  "sections": 559,
+  "divisions": 101,
   "citations": 3928,
   "byKind": {
    "act": 582,
@@ -542,7 +542,7 @@
  "hr6201-116-enr": {
   "chars": 128661,
   "sections": 58,
-  "divisions": 19,
+  "divisions": 26,
   "citations": 426,
   "byKind": {
    "act": 123,
@@ -569,7 +569,7 @@
  "hr2617-117-enr": {
   "chars": 5244482,
   "sections": 1864,
-  "divisions": 208,
+  "divisions": 291,
   "citations": 9792,
   "byKind": {
    "usc": 2863,
@@ -632,7 +632,7 @@
  "hr1-115-enr": {
   "chars": 575249,
   "sections": 130,
-  "divisions": 7,
+  "divisions": 9,
   "citations": 1369,
   "byKind": {
    "act": 25,
@@ -879,8 +879,8 @@
  },
  "hjres31-116-enr": {
   "chars": 1492185,
-  "sections": 659,
-  "divisions": 8,
+  "sections": 660,
+  "divisions": 52,
   "citations": 2137,
   "byKind": {
    "act": 296,

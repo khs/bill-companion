@@ -9,7 +9,7 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 371 checks, no dependencies
+node tools/selftest.mjs                   # 379 checks, no dependencies
 node tools/rendertest.mjs                 # 204 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
@@ -142,7 +142,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 371 checks passed
+node tools/selftest.mjs     # all 379 checks passed
 node tools/rendertest.mjs   # all 204 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
@@ -832,20 +832,34 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    systematic cause has stood out immediately as a double-digit count. What is
    left is genuinely long-tail, and each further fix risks the middle running
    somewhere it shouldn't.
-3. **Appropriations sections are recovered; the headings *inside* them are
-   not.** (Was: "appropriations acts lose almost all their sections." Fixed
-   2026-08-02 — see the invariant above.) H.J. Res. 31 now yields 659 sections
-   against 11, and 2,139 sections were recovered across the corpus with no
-   other metric moving on any bill. What is still missing is the layer *between*
-   a division and its sections: appropriations acts write a bare `TITLE I` on
-   one line with its heading on the next (`DEPARTMENTAL MANAGEMENT, OPERATIONS,
-   INTELLIGENCE, AND OVERSIGHT`), which `RE_DIVISION` cannot match because it
-   requires a separator on the same line. Those titles, and the account headings
-   under them (`Office of the Secretary and Executive Management`), are the
-   real navigational structure of an appropriations act and are still invisible.
-   Also unresolved: `heading` for a run-in section is the provision's own first
-   clause, because there is no heading to have — honest, but it makes for a
-   repetitive jump menu.
+3. **Appropriations acts are navigable.** (Completed 2026-08-02.) Two passes:
+   sentence-case section headings earlier in the day, and now the layer between
+   a division and its sections. An appropriations act centres the label on a
+   line of its own and puts the heading two lines below —
+
+   ```
+   TITLE I
+
+       DEPARTMENTAL MANAGEMENT, OPERATIONS, INTELLIGENCE, AND OVERSIGHT
+   ```
+
+   — and `RE_DIVISION` needs a separator on the same line, so it matched none
+   of them. 44 titles in H.J. Res. 31 alone, with everything beneath them
+   hanging off a title nobody could see. `RE_DIVISION_BARE` is anchored
+   end-to-end so the line must be the label and nothing else, and
+   `headingBelow()` scans at most three lines for it, returning an empty
+   heading rather than reaching far enough to borrow the next title's.
+   Corpus: divisions +186 across 9 bills (H.J. Res. 31: 8 -> 52), and sections
+   +212 on two of them, because a recognised division also clears `inToc` and
+   sets `bodyStarted`, which is what lets the sentence-case matcher run in
+   regions that were previously gated. Every one checked: 0 flush-left, so none
+   is a table-of-contents entry.
+   Still open in this family: the *account* headings under a title ("Office of
+   the Secretary and Executive Management", "operations and support") are the
+   level appropriators actually think in, and they are not units — they carry no
+   label, so nothing distinguishes them from a centred phrase. `heading` for a
+   run-in section is also still the provision's own first clause, because there
+   is no heading to have.
 4. **`in the matter preceding subparagraph (A)`** still falls through to the
    inert internal-ref note. It names a position between provisions, not a
    subtree; resolving it to the neighbour would be subtly wrong.
