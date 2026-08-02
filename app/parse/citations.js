@@ -314,6 +314,7 @@ const RE_EACH_PLACE = /each\s+place\s+(?:it|they)\s+(?:appears?|occurs?)/i;
 const RE_AT_THE_END = /^\s*(?:''|’’|["”])?\s*,?\s*at\s+the\s+end\b/i;
 const RE_ANCHORED = /^\s*(?:''|’’|["”])?\s*(after|before)\s+(?:``|‘‘|["“])([\s\S]{1,200}?)(?:''|’’|["”])/i;
 
+
 /**
  * Work out where each inserted phrase belongs, in document order.
  *
@@ -400,6 +401,57 @@ function scopeAdditions(ops) {
   }
 }
 
+/**
+ * "by inserting after subparagraph (C) the following" places a whole provision
+ * among siblings, so it is scoped to the anchor itself.
+ *
+ * The renderer calls additionsAt() for every node once it has laid out that
+ * node's children, so an op scoped to "(a)(3)(C)" draws immediately after
+ * subparagraph (C)'s entire subtree — which is what "after subparagraph (C)"
+ * means. Scoping it to the walked path instead would draw it inside whatever
+ * the instruction had navigated to, which is the same mistake scopeAdditions()
+ * exists to undo for add-at-end.
+ *
+ * The anchor's depth truncates the walked path the same way, because the walk
+ * may have gone deeper than the anchor: "in paragraph (3)— (B) in subparagraph
+ * (C), by inserting after subparagraph (C) the following" must not compose
+ * "(a)(3)(C)(C)".
+ *
+ * Only ever promoted when the inserted text opens with its own marker. Without
+ * one this is a phrase being woven into a sentence, and drawing it as a block
+ * would be a different claim entirely.
+ */
+function scopeUnitInserts(ops) {
+  for (const op of ops) {
+    if (op.type !== 'insert' || !op.unitAnchor || !op.text) continue;
+    if (!/^\s*(?:``|‘‘|["“])?\s*\([A-Za-z0-9]{1,8}\)/.test(op.text)) continue;
+    // The anchor may be a chain — "after subparagraph (B)(ii) the following new
+    // clause" places the new clause among (B)'s clauses, not among the
+    // subparagraphs. Truncate the walked path above the chain's OUTERMOST
+    // marker and append the whole chain; keying on the anchor's first marker
+    // alone put a clause where a subparagraph goes.
+    const chain = op.unitAnchor.match(MARKER_RE) || [];
+    if (!chain.length) continue;
+    // The added block's own leading marker states the level the new provision
+    // belongs at, which is the one signal that survives extraction — the same
+    // one scopeAdditions() reads. The anchor chain is then trimmed to that
+    // level: "inserting after subparagraph (H)(iii) the following: ``(I) …''"
+    // names the end of (H) but adds a SUBPARAGRAPH, so it belongs after (H),
+    // not after (H)'s last clause. (H.R. 1865 does exactly this, having just
+    // redesignated the old (I) as (K) to make room.)
+    const added = op.text.match(/^\s*(?:``|‘‘|["“])?\s*(\([A-Za-z0-9]{1,8}\))/);
+    const addedDepth = markerDepth(added[1]);
+    const anchorPath = chain.filter((mk) => markerDepth(mk) <= addedDepth);
+    if (!anchorPath.length) continue;
+    const depth = markerDepth(anchorPath[0]);
+    const kept = ((op.scope || '').match(MARKER_RE) || []).filter((mk) => markerDepth(mk) < depth);
+    op.scope = kept.join('') + anchorPath.join('');
+    // Routed to the structural placer in redline.js rather than to apply(),
+    // which weaves text into one passage and cannot see where a subtree ends.
+    op.placement = 'after-unit';
+  }
+}
+
 function placeOps(text, ops) {
   const spans = ops.filter((o) => o.start != null).sort((a, b) => a.start - b.start);
   for (let i = 0; i < spans.length; i++) {
@@ -428,7 +480,19 @@ function placeOps(text, ops) {
     if (m) {
       op.relation = m[1].toLowerCase();
       op.anchor = m[2];
+      continue;
     }
+    // Nothing quoted to anchor to. Look back for a unit anchor instead — this
+    // is a whole new provision taking its place among siblings, not a phrase
+    // woven into a sentence.
+    // op.start points INSIDE the quotes, so the window ends with the opener
+    // itself. Trim it, or the tempered tail — which exists to stop the phrase
+    // being read across an earlier operand — can never reach the end.
+    const before = text
+      .slice(Math.max(0, op.start - 200), op.start)
+      .replace(/(?:``|‘‘|["“])\s*$/, '');
+    const u = before.match(RE_UNIT_ANCHOR);
+    if (u) op.unitAnchor = u[2];
   }
 }
 
@@ -471,6 +535,27 @@ const RE_STRIKE = new RegExp(
 const RE_INSERT = new RegExp(
   `insert(?:ing)?\\b(?:(?!strik)[\\s\\S]){0,120}?${QO}([\\s\\S]{1,400}?)${QC}`, 'gi');
 const RE_ADD_END = /adding\s+at\s+the\s+end\s+the\s+following/gi;
+
+// "by inserting after subparagraph (C) the following new subparagraph:" —
+// anchored to a UNIT rather than to a quoted phrase, and looking backwards from
+// the operand rather than forwards, because here the anchor is written before
+// the language it places.
+//
+// These were being dropped on the floor. An insert with neither `replaces` nor
+// `anchor` is never drawn by apply(), so a bill adding a whole new subparagraph
+// this way showed nothing at all — not misplaced, invisible. 2,801 of the
+// corpus's 9,828 insert ops reach apply() with neither, and this is the largest
+// family in that set with a structural answer.
+//
+// Anchored to the end of the searched window so that the phrase found is the one
+// immediately preceding THIS operand: a quote opener in between means the phrase
+// belongs to an earlier instruction.
+const RE_UNIT_ANCHOR = new RegExp(
+  `\\binsert(?:ing)?\\s+(after)\\s+(?:the\\s+)?` +
+  `(?:subsection|paragraph|subparagraph|clause|subclause|item|subitem)s?\\s+` +
+  `(\\([A-Za-z0-9]{1,8}\\)(?:\\([A-Za-z0-9]{1,8}\\))*)(?:(?!${QO})[\\s\\S]){0,60}$`,
+  'i'
+);
 
 // The commonest way a bill creates new law, and for a long time the one whose
 // language was never captured: "by adding at the end the following new
@@ -1420,6 +1505,7 @@ export function extractAmendments(text, citations, divisions = []) {
     const nav = extractSteps(text, h.headEnd, bodyEnd, (target && target.subsection) || '');
     scopeOps(ops, nav.steps);
     scopeAdditions(ops);
+    scopeUnitInserts(ops);
 
     return [{
       start: h.start,

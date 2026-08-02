@@ -10,7 +10,7 @@ and is written for a user; this file is for changing it. Read both.
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
 node tools/selftest.mjs                   # 344 checks, no dependencies
-node tools/rendertest.mjs                 # 178 checks, needs `npm i -D linkedom`
+node tools/rendertest.mjs                 # 185 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
@@ -143,7 +143,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 
 ```bash
 node tools/selftest.mjs     # all 344 checks passed
-node tools/rendertest.mjs   # all 178 render checks passed
+node tools/rendertest.mjs   # all 185 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
@@ -881,12 +881,24 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    Ask for a screenshot of the Fiscal Responsibility Act (breadcrumbs, and the
    run-in sections in division B) and of a Public Law citation before trusting
    any of it.
-12. **`inserting after subparagraph (C) the following` has the sibling problem
-   `scopeAdditions` just fixed for additions.** Same shape — the new provision is
-   a sibling of the one named, not a child — but insert ops carry anchors and
-   placement metadata that additions don't, so the fix is not the same code and
-   would move more metrics. Left deliberately; do it as its own pass, with the
-   corpus diff explained separately from the add-at-end one.
+12. **`inserting after subparagraph (C) the following` is placed.** (Fixed
+   2026-08-02.) It was worse than "misplaced": an insert reaches `apply()` with
+   either a paired strike or a quoted anchor, and this shape has neither, so it
+   fell through both branches and drew **nothing at all**. 312 ops across the
+   corpus, each one a whole new provision the reader never saw.
+   `scopeUnitInserts()` scopes them to the anchor itself and `redline.js` routes
+   them to the structural placer, so they land after that provision's subtree —
+   the renderer already calls `additionsAt()` for every node once its children
+   are laid out, which is exactly the hook needed. Verified structurally rather
+   than by count: in 306 of 312 the added block's own marker is the successor of
+   the provision it follows ((B)→(C), (19)→(20), (d)→(e)). The corpus cannot see
+   any of this — `opSpans` keys on `type:start-end` and none of those changed —
+   so `rendertest.mjs` asserts the placement directly.
+   Still open in the same family: 2,483 inserts remain undrawn, dominated by
+   "striking <unit> and inserting the following:" (1,154 bare + 705 with "the
+   following"), where the strike names a unit rather than a quoted phrase so
+   `RE_REPLACES` never pairs them. That is a replacement of a whole provision
+   and wants its own pass.
 13. **An addition is drawn only when the provision it follows is on screen.** An
    op scoped to `(a)(3)` renders nothing if the pane is showing `(b)`. The panel
    says "⚠ the provision it follows is not shown", which is honest but is a

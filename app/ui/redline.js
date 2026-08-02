@@ -109,8 +109,18 @@ export function createRedline(ops, fullText) {
   // after paragraph (3)'s lead-in sentence and before the subparagraphs it is
   // supposed to follow. The renderer asks for these once it has finished a
   // node's children instead; see additionsAt().
+  //
+  // "by inserting after subparagraph (C) the following" joins the same list.
+  // It is an insert by verb but a new provision by shape, and it was reaching
+  // apply() with nothing to anchor to — no quoted phrase, no paired strike —
+  // so it drew nothing at all. Scoped to (C) itself by scopeUnitInserts(), it
+  // lands after (C)'s subtree, which is where the bill puts it.
   const additions = (ops || [])
-    .filter((o) => o.type === 'add-at-end' && typeof o.text === 'string')
+    .filter(
+      (o) =>
+        typeof o.text === 'string' &&
+        (o.type === 'add-at-end' || (o.type === 'insert' && o.placement === 'after-unit'))
+    )
     .map((o) => ({ ...o, done: false }));
 
   // Has this amendment already happened?
@@ -182,6 +192,9 @@ export function createRedline(ops, fullText) {
 
     for (const op of work) {
       if (op.done || op.type !== 'insert' || !inScope(op) || stale) continue;
+      // Placed structurally, by additionsAt(). Weaving it in here too would
+      // draw the same new provision twice.
+      if (op.placement === 'after-unit') continue;
       if (op.replaces != null) {
         const where = struckAt.get(op.replaces);
         // Only in the same passage the strike landed in; otherwise wait, the

@@ -554,6 +554,54 @@ section('additions at the end');
      /a swap\.\s*\(D\) a contract of sale/.test(flat), flat);
   ok('  and not before them', !/to conduct—\s*\(D\)/.test(flat), flat);
 
+  // ---- "by inserting after subparagraph (B) the following" ---------------
+  // Same structural job as add-at-end, written with a different verb, and it
+  // was drawing NOTHING. apply() only places an insert that either replaces a
+  // strike or anchors to a quoted phrase; this has neither, so it fell through
+  // both branches and vanished. 312 ops across the corpus.
+  {
+    const ti =
+      'Section 4c(a) of the Widget Act (7 U.S.C. 6c(a)) is amended—\n' +
+      '    (1) in paragraph (3)—\n' +
+      "        (A) in subparagraph (C), by striking ``or'' at the end; and\n" +
+      '        (B) by inserting after subparagraph (A) the following new subparagraph:\n' +
+      "``(B) an option;'';\n";
+    const ai = extractAmendments(ti, extractCitations(ti));
+    const ins = ai[0].ops.filter((o) => o.placement === 'after-unit');
+    eq('an insert anchored to a unit is recognised', ins.length, 1);
+    // Scoped to the ANCHOR, not to the level the walk stopped at and not to the
+    // anchor's parent: the renderer draws additions after each node's children,
+    // so scoping to (a)(3)(A) is what puts the new (B) after (A) rather than
+    // after the last subparagraph or inside (A).
+    eq('  scoped to the provision it follows', ins[0].scope, '(a)(3)(A)');
+
+    const lawI = () => [{
+      marker: '(a)', path: '(a)', heading: '', text: 'It shall be unlawful—',
+      children: [{
+        marker: '(3)', path: '(a)(3)', heading: '', text: 'to conduct—',
+        children: [
+          { marker: '(A)', path: '(a)(3)(A)', heading: '', text: 'a transaction; or', children: [] },
+          { marker: '(C)', path: '(a)(3)(C)', heading: '', text: 'a swap.', children: [] },
+        ],
+      }],
+    }];
+    const eli = rc(
+      { source: 'U.S. Code', citation: '7 U.S.C. 6c(a)', links: [], tree: lawI(), focusPath: '',
+        effect: { ops: ai[0].ops, unmatched: false } },
+      { onScope: () => {} }
+    );
+    const addedI = [...eli.querySelectorAll('.node.added')];
+    eq('the new subparagraph is drawn', addedI.length, 1);
+    eq('  reading as the bill wrote it', addedI[0].textContent.trim(), '(B) an option;');
+    // Between (A) and (C), which is the whole point of anchoring to a unit.
+    const flatI = eli.querySelector('.prov').textContent.replace(/\s+/g, ' ');
+    ok('  after the provision it names', /a transaction; or\s*\(B\) an option;/.test(flatI), flatI);
+    ok('  and before the next one', /\(B\) an option;\s*\(C\)\s*a swap\./.test(flatI), flatI);
+    // It must not ALSO be woven in by apply(), which would draw it twice.
+    eq('  and drawn exactly once',
+       (flatI.match(/\(B\) an option;/g) || []).length, 1);
+  }
+
   // A new subsection is a sibling of (a), so it follows the whole provision.
   const t2 =
     'Section 5330 of title 31, United States Code, is amended by adding at the end the following:\n' +
