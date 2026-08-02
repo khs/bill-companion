@@ -1209,6 +1209,73 @@ section('internal cross-references');
       eq('  and the heading it was inside is clean',
          idx.toc.find((t) => t.num === '3').heading, 'REFERENCES TO ACT');
     }
+  // ---- Acts wired to the source-credit index ------------------------------
+  // 64 of the 78 popular names carry `enactedAs` now, against 4. None was
+  // typed: for each entry the ingested Act index was searched for the one act
+  // whose sections include that entry's own head, keeping at least 80% of its
+  // mappings inside the entry's title. Landmarks, because they are checkable by
+  // anyone: these are the provisions these section numbers are famous for.
+  {
+    const { resolveActSection } = await imp('app/resolve/act-sections.js');
+    const { POPULAR_NAMES } = await imp('app/resolve/popular-names.js');
+    const LANDMARKS = [
+      ['Clean Water Act', '404', '33', '1344'],           // dredge-and-fill permits
+      ['Endangered Species Act of 1973', '7', '16', '1536'],   // interagency consultation
+      ['National Environmental Policy Act of 1969', '102', '42', '4332'], // the EIS
+      ['Americans with Disabilities Act of 1990', '3', '42', '12102'],
+      ['Rehabilitation Act of 1973', '504', '29', '794'],
+      ['National Labor Relations Act', '7', '29', '157'],
+      ['Balanced Budget and Emergency Deficit Control Act of 1985', '251', '2', '901'],
+    ];
+    for (const [name, sec, t, s] of LANDMARKS) {
+      const act = POPULAR_NAMES.find((e) => e.name === name);
+      const at = act && (await resolveActSection(act, sec));
+      eq(`${name} § ${sec}`, at && `${at.title} U.S.C. ${at.section}`, `${t} U.S.C. ${s}`);
+    }
+
+    // The user's case, both halves of it. "section 251(b) of the Balanced
+    // Budget and Emergency Deficit Control Act of 1985 in division J of the
+    // Infrastructure Investment and Jobs Act" resolved neither: the section
+    // number was dropped and the division was dropped, leaving two citations
+    // that both pointed at the head of an Act.
+    const t2 = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Amounts designated pursuant to section 251(b) of the Balanced Budget and      Emergency\n' +
+      'Deficit Control Act of 1985 in division J of the      Infrastructure Investment and Jobs Act\n' +
+      'shall be available.\n'
+    );
+    const cs2 = extractCitations(t2);
+    const bb = cs2.find((c) => c.kind === 'act' && /Balanced Budget/.test(c.act.name));
+    // The span must cover the section, or the chip reads "the Act" while
+    // resolving to one provision of it.
+    ok('the citation spans "section 251(b) of the …"', /^section 251\(b\) of/.test(bb.text), bb.text);
+    eq('  carrying the Act-relative number', bb.actSection, '251');
+    const bbRes = await resolve(bb);
+    eq('  which resolves through the credit', bbRes.citation, '2 U.S.C. 901(b)');
+    ok('  to the right provision', /discretionary spending limits/i.test(bbRes.heading || ''),
+       bbRes.heading);
+
+    const iija = cs2.find((c) => c.kind === 'act' && /Infrastructure/.test(c.act.name));
+    eq('a division of an Act is captured', iija.division, 'J');
+    ok('  and spans the whole phrase', /^division J of/.test(iija.text), iija.text);
+    const divRes = await resolve(iija);
+    eq('  resolving to that division of the Public Law',
+       divRes.citation, 'Pub. L. 117-58, division J');
+    eq('  with only that division\'s sections', divRes.plaw.toc.length, 19);
+    ok('  and every one of them in division J',
+       divRes.plaw.toc.every((x) => /^DIVISION J\b/.test(x.where || '')),
+       [...new Set(divRes.plaw.toc.map((x) => x.where))].join(' | '));
+
+    // An Act codified out of many laws has no single Public Law, so naming a
+    // division of it resolves to nothing rather than to some other law's.
+    const caa = extractCitations(
+      normalizeText('SEC. 2. X.\nAs provided in division B of the Clean Air Act.\n')
+    ).find((c) => c.kind === 'act');
+    ok('an Act with no single Public Law has no division to give',
+       !caa || !(await resolve(caa)).plaw,
+       'a division was invented for an Act assembled from many laws');
+  }
+
   // ---- a note is not the section it sits under ---------------------------
   // "Section 602(b)(3)(F) of the Afghan Allies Protection Act of 2009 (8 U.S.C.
   // 1101 note)" targeted 8 U.S.C. 1101 — the INA's *Definitions* section — and

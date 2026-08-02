@@ -4,7 +4,7 @@ import { resolveCfr, resolveCfrPart, cfrLinks } from './cfr.js';
 import { resolveUsc, uscLinks } from './usc.js';
 import { findAct } from './popular-names.js';
 import { resolveActSection } from './act-sections.js';
-import { resolvePlaw } from './plaw.js';
+import { resolvePlaw, resolvePlawDivision } from './plaw.js';
 
 const cache = new Map();
 
@@ -44,6 +44,19 @@ function divisionAgrees(cite, credit) {
   const m = /\bdiv\.?\s+([A-Z]{1,2})\b/.exec(String(credit || ''));
   if (!m) return true;
   return Boolean(cite.division) && cite.division === m[1].toUpperCase();
+}
+
+/**
+ * The Public Law behind an Act's name, where the Act *is* one law.
+ *
+ * Read off whichever field records it: `enactedAs` for the Acts wired to the
+ * source-credit index, `range` for the ones that only ever carried it as a
+ * note. Acts codified out of many laws (the Clean Air Act, "July 14, 1955,
+ * ch. 360") have no single Public Law and correctly return null.
+ */
+function publawIdOf(act) {
+  const m = /Pub\. L\. (\d{1,3})[–—-](\d{1,4})/.exec(`${act.enactedAs || ''} ${act.range || ''}`);
+  return m ? { congress: m[1], law: m[2] } : null;
 }
 
 /** The three places a Public Law can be read outside this app. */
@@ -87,6 +100,18 @@ async function dispatch(cite) {
 
     case 'act': {
       const act = cite.act;
+
+      // "division J of the …" names a division of the Public Law behind the
+      // name. Answered before the Act's codified head, because a division is a
+      // far more specific thing than the Act it sits in — and the head would be
+      // 630 sections away from what was cited.
+      if (cite.division) {
+        const pl = publawIdOf(act);
+        if (pl) {
+          const local = await resolvePlawDivision(pl.congress, pl.law, cite.division);
+          if (local) return { ...local, actName: act.name };
+        }
+      }
 
       // "Section 1861 of the Social Security Act" names a provision, not a
       // range — but in the Act's own numbering, which is not the Code's. The

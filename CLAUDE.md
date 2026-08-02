@@ -9,7 +9,7 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 379 checks, no dependencies
+node tools/selftest.mjs                   # 396 checks, no dependencies
 node tools/rendertest.mjs                 # 210 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
@@ -142,7 +142,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 379 checks passed
+node tools/selftest.mjs     # all 396 checks passed
 node tools/rendertest.mjs   # all 210 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
@@ -947,19 +947,28 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    is a "Show all N" control now, per-citation like the scope. The cap itself
    stays: a part can run to hundreds of sections and rendering them all by
    default is slow and unreadable.
-9. **Popular names cover 78 Acts**, up from 50, and still not the full OLRC
-   table. The 28 added on 2026-08-02 were *derived, not typed*: Congress states
-   an Act's codified range in the parenthetical beside the name — "the Foreign
-   Assistance Act of 1961 (22 U.S.C. 2151 et seq.)" — so they were extracted
-   from the corpus and kept only where at least 5 citations agreed and at least
-   90% named the same section, then checked against the ingested Code for a
-   shard whose heading reads like the head of an Act. That is the method to
-   reuse. None carries `enactedAs`: that field turns on Act-relative section
-   lookup and has to be verified against a real shard's source credit one at a
-   time, and guessing it points citations at real but unrelated provisions.
-   Corpus effect: +1,000 act citations across 28 bills, `citations` moving by
-   exactly the `byKind.act` delta on every one, and two amendments that now
-   resolve a target.
+9. **Popular names cover 78 Acts and 64 of them resolve their own section
+   numbers**, against 46 Acts and 4 respectively this morning. Both halves were
+   *derived*, never typed:
+   - the entries, from the `et seq.` parenthetical Congress writes beside the
+     name ("the Foreign Assistance Act of 1961 (22 U.S.C. 2151 et seq.)");
+   - the `enactedAs` credits, by searching the ingested Act index for the one
+     act whose sections include that entry's own head section, keeping at least
+     80% of its mappings inside the entry's title, and rejecting anything with
+     more than one candidate.
+   Verified against landmarks, which is the only check worth running here:
+   Clean Water Act § 404 is 33 U.S.C. 1344, NEPA § 102 is 42 U.S.C. 4332, ADA
+   § 3 is 42 U.S.C. 12102, Exchange Act § 10 is 15 U.S.C. 78j. And where the
+   bill states the U.S.C. cite itself in a parenthetical, the derivation agrees
+   with it — three of eight sampled did, none disagreed.
+   Corpus effect: Act-relative citations **2,032 -> 5,446**, of which **5,173
+   (95%) reach a real provision** over 1,050 distinct Code sections. The corpus
+   metrics do not move, for the reason the original Act-relative pass did not
+   move them: the citation simply spans more text and `dedupe()` already
+   preferred the longer match at equal rank.
+   The 14 left without `enactedAs` are the ones the derivation refused —
+   several candidates, or too few sections to be sure. Do not fill them in by
+   hand without checking a real shard's source credit.
 10. **Share links are long** — 117 KB bill → 35 KB URL. Fine in a doc or ticket,
    wraps in chat/mail. Shorter would need a backend, which is a different product.
 11. **No visual verification has ever happened.** Colours, spacing, dark mode, the
@@ -1025,6 +1034,19 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    instead, carrying the section number the instruction named, so it resolves
    through the same Act index and local text "section N of Public Law X-Y" uses.
    Corpus: targeted -95, relative -764, nothing else moved.
+
+16. **"Division J of the Infrastructure Investment and Jobs Act" resolves to
+   that division.** (Added 2026-08-02.) An omnibus is cited by division, and
+   the division is the address — without it the phrase landed on the head of
+   the Act, 630 sections from what was meant. `RE_ACT_DIVISION` captures it for
+   every popular name, and `publawIdOf()` reads the Public Law off whichever
+   field records it (`enactedAs`, else `range`), so an Act assembled from many
+   laws — the Clean Air Act, credited "July 14, 1955, ch. 360" — correctly has
+   no division to give.
+   13 such citations across the corpus, 9 of which name a law `data/plaw`
+   holds. The other 4 want laws outside the 25; they fall through to the head
+   of the Act as before. Worth knowing before extending: the answer is the
+   division's *contents*, not a provision, because a division is a range.
 
 15. **An omnibus Public Law's section numbers are not addresses on their own.**
    Every division restarts the numbering, so "section 110 of Public Law 114-113"

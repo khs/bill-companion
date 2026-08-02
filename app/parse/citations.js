@@ -70,6 +70,22 @@ const RE_ACT_SECTION = POPULAR_NAMES.filter((a) => a.sectionsMatchCode).map((act
 // `actSection` so the resolver can look it up in the table the ingester derives
 // from the Code's own source credits. Where the lookup misses, the citation is
 // exactly what it was before this existed — the Act, with its numbering caveat.
+// "division J of the Infrastructure Investment and Jobs Act" — an omnibus is
+// cited by division, and the division is the address. Without this the phrase
+// resolved to the head of the Act, which is to say it pointed 630 sections away
+// from what was meant.
+//
+// Every Act gets one, not just the ones with a codified home: what makes this
+// resolvable is the Public Law behind the name, and app/resolve/plaw.js holds
+// 25 of those in full.
+const RE_ACT_DIVISION = POPULAR_NAMES.map((act) => ({
+  act,
+  re: new RegExp(
+    `\\b[Dd]ivisions?\\s+([A-Z]{1,2})\\s+of\\s+(?:the\\s+)?(?:${act.pattern})`,
+    'g'
+  ),
+}));
+
 const RE_ACT_REL_SECTION = POPULAR_NAMES.filter((a) => a.enactedAs && !a.sectionsMatchCode).map(
   (act) => ({
     act,
@@ -1151,6 +1167,13 @@ export function extractCitations(text) {
   // Still an `act` citation, not a `usc` one: the Code section is not known
   // until the resolver has read the Act's table, and asserting one here would be
   // asserting the very equivalence this exists because it cannot be assumed.
+  for (const { act, re } of RE_ACT_DIVISION) {
+    re.lastIndex = 0;
+    while ((m = re.exec(text))) {
+      push(out, m, 'act', { act, division: m[1].toUpperCase() });
+    }
+  }
+
   for (const { act, re } of RE_ACT_REL_SECTION) {
     re.lastIndex = 0;
     while ((m = re.exec(text))) {

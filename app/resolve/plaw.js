@@ -8,7 +8,7 @@
 // of them are in the Code. The other 333 are appropriations lines, effective
 // dates, findings and savings clauses that exist nowhere but the law itself.
 //
-// This is where those live. Ten laws, sharded per section by
+// This is where those live. Twenty-five laws, sharded per section by
 // tools/ingest_plaw.mjs, chosen by citation frequency across the corpus.
 //
 // The order of preference in app/resolve/index.js is deliberate: the Code first
@@ -120,6 +120,28 @@ export async function resolvePlaw(congress, law, section) {
     source: 'Public Law (as enacted)',
     citation: `Pub. L. ${lawId(congress, law)} § ${section}`,
     plaw: { ...index, toc: null, number: section, entries: shard.entries },
+    asEnacted: true,
+  };
+}
+
+/**
+ * One division of a Public Law we hold: its contents, not a provision.
+ *
+ * "Division J of the Infrastructure Investment and Jobs Act" names 19 sections
+ * out of that law's 630, and the useful answer is which 19 — the same answer a
+ * bare Public Law gets, narrowed to the division the citation actually named.
+ */
+export async function resolvePlawDivision(congress, law, division) {
+  if (!division || !(await havePlaw(congress, law))) return null;
+  const index = await loadPlawIndex(congress, law);
+  if (!index || !Array.isArray(index.toc)) return null;
+  const want = `DIVISION ${String(division).toUpperCase()}`;
+  const toc = index.toc.filter((t) => String(t.where || '').split(' > ')[0] === want);
+  if (!toc.length) return null;
+  return {
+    source: 'Public Law (as enacted)',
+    citation: `Pub. L. ${lawId(congress, law)}, division ${String(division).toUpperCase()}`,
+    plaw: { ...index, toc, entries: null, total: toc.length },
     asEnacted: true,
   };
 }
