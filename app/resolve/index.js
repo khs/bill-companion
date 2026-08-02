@@ -89,7 +89,38 @@ async function dispatch(cite) {
       };
     }
 
-    case 'publaw':
+    case 'publaw': {
+      // "section 12306 of Public Law 113-79" names a provision, and the Code's
+      // own source credits say where it landed — 7 U.S.C. 1632c. That table is
+      // already on disk for 1,737 Public Laws, built by the ingester alongside
+      // the named-Act one, so this costs a static GET and nothing else.
+      //
+      // A miss is the common case and is never guessed at: most of a Public Law
+      // never enters the Code at all (appropriations, effective dates, findings),
+      // and an uncodified section has no Code section to point at. Those fall
+      // through to the link, exactly as before.
+      if (cite.actSection) {
+        const enactedAs = `Pub. L. ${cite.congress}-${cite.law}`;
+        const at = await resolveActSection({ enactedAs }, cite.actSection);
+        if (at) {
+          const res = await resolveUsc({
+            title: at.title,
+            section: at.section,
+            subsection: cite.subsection || '',
+          });
+          if (!res.missing && !res.error) {
+            return {
+              ...res,
+              viaActSection: {
+                act: enactedAs,
+                actSection: cite.actSection,
+                enactedAs,
+                codified: `${at.title} U.S.C. ${at.section}`,
+              },
+            };
+          }
+        }
+      }
       return {
         source: 'Public Law',
         citation: `Pub. L. ${cite.congress}-${cite.law}`,
@@ -113,6 +144,7 @@ async function dispatch(cite) {
           },
         ],
       };
+    }
 
     case 'stat':
       return {

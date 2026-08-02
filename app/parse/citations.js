@@ -88,8 +88,23 @@ const RE_CFR = new RegExp(
 );
 
 // Public Law 117-58 / Pub. L. No. 117-58 / P.L. 117-58
-const RE_PUBLAW =
-  /\b(?:Pub(?:lic)?\.?\s*L(?:aw)?\.?|P\.\s?L\.)\s*(?:No\.?\s*)?(\d{1,3})\s*[–—-]\s*(\d{1,4})/gi;
+const PUBLAW_NAME = String.raw`(?:Pub(?:lic)?\.?\s*L(?:aw)?\.?|P\.\s?L\.)\s*(?:No\.?\s*)?(\d{1,3})\s*[–—-]\s*(\d{1,4})`;
+
+const RE_PUBLAW = new RegExp(`\\b${PUBLAW_NAME}`, 'gi');
+
+// "section 12306 of Public Law 113-79" — the Act-relative shape again, and it
+// resolves the same way. A Public Law names its own sections, and the Code's
+// source credits say where each one landed ("Pub. L. 113–79, title XII,
+// § 12306" is 7 U.S.C. 1632c), so `data/usc/acts/pub_l_113_79.json` already
+// answers this. 1,737 Public Laws are indexed and shipped; the previous
+// behaviour for all of them was an outbound link.
+//
+// This is a *longer* match over the same span as RE_PUBLAW, at the same rank, so
+// dedupe() keeps it — the same mechanism the Act-relative form relies on.
+const RE_PUBLAW_SECTION = new RegExp(
+  `\\b[Ss]ections?\\s+(\\d+[A-Za-z]*)(${SUBSEC})\\s+of\\s+${PUBLAW_NAME}`,
+  'g'
+);
 
 // 117 Stat. 1234
 const RE_STAT = /\b(\d{1,3})\s+Stat\.\s*(\d{1,5})/gi;
@@ -960,6 +975,17 @@ export function extractCitations(text) {
   RE_PUBLAW.lastIndex = 0;
   while ((m = RE_PUBLAW.exec(text))) {
     push(out, m, 'publaw', { congress: m[1], law: m[2] });
+  }
+
+  RE_PUBLAW_SECTION.lastIndex = 0;
+  while ((m = RE_PUBLAW_SECTION.exec(text))) {
+    push(out, m, 'publaw', {
+      congress: m[3],
+      law: m[4],
+      actSection: m[1],
+      subsection: m[2] || '',
+      ladder: subsectionLadder(m[2]),
+    });
   }
 
   RE_STAT.lastIndex = 0;

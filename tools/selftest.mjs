@@ -985,6 +985,51 @@ section('internal cross-references');
   const gone = extractCitations(t4).find((c) => c.kind === 'internal' && c.scope === 'act');
   eq('a reference to a missing section resolves to nothing', locateInternal(b4, gone), null);
 
+  // ---- "section N of Public Law X-Y" -------------------------------------
+  // A Public Law used to be an outbound link and nothing else. But the Code's
+  // source credits file a law under its own number just as readily as under a
+  // name — "Pub. L. 113–79, title XII, § 12306" is 7 U.S.C. 1632c — and the
+  // ingester already wrote 1,737 of them into data/usc/acts/. Nothing had to be
+  // downloaded; the index was on disk the whole time.
+  if (existsSync(join(ROOT, 'data/usc/acts/pub_l_113_79.json'))) {
+    // The shards are static files on disk here, not behind a server; the
+    // resolver fetches them by relative URL. Same shim as the USC block below.
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      const u = String(url);
+      if (/^https?:/i.test(u)) return realFetch(u, opts);
+      const p = join(ROOT, u);
+      if (!existsSync(p)) return { ok: false, status: 404, json: async () => null };
+      return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')) };
+    };
+    const { resolve } = await imp('app/resolve/index.js');
+    const t = normalizeText(
+      'SEC. 2. X.\nOf that amount, $4,000,000 shall be available for the purposes of ' +
+      'section 12306 of Public Law 113-79, and section 4 of Public Law 116-6 applies.\n'
+    );
+    const pubs = extractCitations(t).filter((c) => c.kind === 'publaw');
+    eq('finds both Public Law citations', pubs.length, 2);
+    // The span must cover the section too, or the chip says "Public Law 113-79"
+    // while resolving to a specific provision of it.
+    ok('the citation spans "section N of Public Law X-Y"',
+       pubs[0].text.startsWith('section 12306 of'), JSON.stringify(pubs[0].text));
+    eq('  and carries the Act-relative number', pubs[0].actSection, '12306');
+
+    const hit = await resolve(pubs[0]);
+    eq('a codified section resolves to the Code', hit.citation, '7 U.S.C. 1632c');
+    eq('  and says how it got there', hit.viaActSection.codified, '7 U.S.C. 1632c');
+    ok('  landing on the right provision', /Acer access/i.test(hit.heading || ''),
+       JSON.stringify(hit.heading));
+
+    // Most of a Public Law is never codified. Section 4 of the Consolidated
+    // Appropriations Act, 2019 is an appropriations provision with no Code
+    // section to point at, and inventing one would be worse than the link.
+    const miss = await resolve(pubs[1]);
+    eq('an uncodified section still declines', miss.external, true);
+    ok('  and hands over the link', /don't play nice/.test(miss.note || ''), miss.note);
+    globalThis.fetch = realFetch;
+  }
+
   // ---- markers manufactured by the 72-column wrap ------------------------
   // A reference broken across the measure leaves its marker at a line head,
   // shaped exactly like a real outline marker. The phantom becomes a sibling of

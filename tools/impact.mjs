@@ -104,6 +104,19 @@ export async function report(path) {
     if (at) { actHit++; actSeen.add(`${at.title}:${at.section}`); }
   }
 
+  // Same question for "section 12306 of Public Law 113-79", which resolves
+  // through the same index — the ingester files a Public Law under its own
+  // number as readily as under a name. A miss is expected and common: most of a
+  // Public Law never enters the Code (appropriations, effective dates,
+  // findings), and an uncodified section has no provision to point at.
+  const plRel = cites.filter((c) => c.kind === 'publaw' && c.actSection);
+  let plHit = 0;
+  const plSeen = new Set();
+  for (const c of plRel) {
+    const at = await resolveActSection({ enactedAs: `Pub. L. ${c.congress}-${c.law}` }, c.actSection);
+    if (at) { plHit++; plSeen.add(`${at.title}:${at.section}`); }
+  }
+
   const badOffsets = cites.filter((c) => text.slice(c.start, c.end) !== c.text);
 
   console.log(`\n${b(relative(ROOT, path).replace(/\\/g, '/'))}  ${dim(`${(raw.length / 1024).toFixed(0)} KB${pages ? `, ${pages} pages` : ''}`)}`);
@@ -115,6 +128,9 @@ export async function report(path) {
   console.log(`  relative addresses  ${relative_.length}  ${dim('composed from context')}`);
   console.log(`  inert refs          ${inertAfter}  ${dim(`of ${inertBefore} internal refs; ${inertBefore - inertAfter} resolved`)}`);
   console.log(`  USC lookups         ${hit} hit, ${missSection} missing section, ${missSubsection} missing subsection  ${dim(`(${seen.size} distinct)`)}`);
+  if (plRel.length) {
+    console.log(`  Pub. L. section     ${plHit}/${plRel.length} mapped to the Code  ${dim(`(${plSeen.size} distinct provisions)`)}`);
+  }
   if (actRel.length) {
     console.log(`  Act-relative cites  ${actHit}/${actRel.length} mapped to the Code  ${dim(`(${actSeen.size} distinct provisions)`)}`);
   }

@@ -9,8 +9,8 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 328 checks, no dependencies
-node tools/rendertest.mjs                 # 167 checks, needs `npm i -D linkedom`
+node tools/selftest.mjs                   # 336 checks, no dependencies
+node tools/rendertest.mjs                 # 172 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
@@ -141,8 +141,8 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 328 checks passed
-node tools/rendertest.mjs   # all 167 render checks passed
+node tools/selftest.mjs     # all 336 checks passed
+node tools/rendertest.mjs   # all 172 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
@@ -605,6 +605,29 @@ really are: a few lines up, inside the same quoted block.
 section. The way to reach SSA § 1861 is `enactedAs` and the Act index below, not
 by widening this flag: the flag *assumes* an equivalence, the index *looks one
 up*, and only one of those can be right about the Social Security Act.
+
+**A Public Law is an Act, and the index already had it.** `data/usc/acts/`
+contains 1,737 files named `pub_l_<congress>_<law>.json` — the ingester files a
+section under whatever its credit says, and most modern credits say "Pub. L.
+113–79, title XII, § 12306" rather than a date and chapter. So "section 12306 of
+Public Law 113-79" resolves to 7 U.S.C. 1632c through exactly the machinery
+`resolveActSection` already provided, with `enactedAs` synthesised as
+`Pub. L. <congress>-<law>`. Nothing is downloaded and nothing was added to the
+repo. Across the corpus, 174 of 507 sectioned Public Law citations (34%) reach a
+real provision against none before, over 79 distinct Code sections.
+
+The 66% that miss are the point of the design rather than a shortfall: most of a
+Public Law never enters the Code at all — appropriations lines, effective dates,
+findings — and an uncodified section has no provision to point at. Those fall
+through to the link. Do not be tempted to widen this by guessing at a nearby
+section; the reason the whole mechanism is trustworthy is that it only ever
+repeats what the Code says about itself.
+
+Worth knowing if you extend it: only 322 of the 602 distinct Public Laws cited
+across the corpus are indexed at all, because a law with nothing codified never
+appears in a source credit. And a *bare* "Public Law 113-79" with no section is
+still a link — an Act name on its own names a range, not a provision, the same
+rule the named-Act path follows.
 
 **The Act-section index is derived, never authored.** `data/usc/acts/<slug>.json`
 maps an Act's own section numbers onto the Code's, and every entry comes from the
