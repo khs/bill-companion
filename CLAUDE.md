@@ -10,7 +10,7 @@ and is written for a user; this file is for changing it. Read both.
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
 node tools/selftest.mjs                   # 356 checks, no dependencies
-node tools/rendertest.mjs                 # 198 checks, needs `npm i -D linkedom`
+node tools/rendertest.mjs                 # 204 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
@@ -143,7 +143,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 
 ```bash
 node tools/selftest.mjs     # all 356 checks passed
-node tools/rendertest.mjs   # all 198 render checks passed
+node tools/rendertest.mjs   # all 204 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
@@ -930,11 +930,19 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    following"), where the strike names a unit rather than a quoted phrase so
    `RE_REPLACES` never pairs them. That is a replacement of a whole provision
    and wants its own pass.
-13. **An addition is drawn only when the provision it follows is on screen.** An
-   op scoped to `(a)(3)` renders nothing if the pane is showing `(b)`. The panel
-   says "⚠ the provision it follows is not shown", which is honest but is a
-   dead end for the reader — the useful behaviour would be to offer to widen the
-   scope to the level that does contain it.
+13. **An addition whose provision is off screen now offers to go there.**
+   (Fixed 2026-08-02.) An op scoped to `(a)(3)` renders nothing while the pane
+   shows `(b)`; the panel said so, honestly, and left the reader with nowhere to
+   go. There is a "Show (a)(3)" control now.
+   The non-obvious part, and the reason to read `widenTarget()` before changing
+   it: widening to `(a)(3)` does *not* work. `nodeEl()` asks `additionsAt()` for
+   a node once it has laid out that node's children, and scoping to `(a)(3)`
+   renders its children while putting `(a)(3)` itself in the ancestor ladder,
+   which lays out nothing and asks for nothing. The scope that draws it is the
+   PARENT, `(a)`. The render test asserts the whole round trip — that the
+   control offers (a)(3), that it widens to (a), and that at (a) the block is
+   actually on screen — because asserting only the first would have passed
+   against a control that did nothing.
 
 ---
 

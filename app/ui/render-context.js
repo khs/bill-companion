@@ -145,7 +145,7 @@ export function renderContext(res, handlers) {
     }
   }
 
-  if (res.effect) root.appendChild(effect(res.effect));
+  if (res.effect) root.appendChild(effect(res.effect, handlers));
   if (res.sourceCredit) root.appendChild(card('Source credit', res.sourceCredit, ''));
   if (res.notes && res.notes.length) root.appendChild(notesCard(res.notes));
   if (res.links && res.links.length) root.appendChild(links(res.links));
@@ -461,7 +461,24 @@ function cfrSection(s, isFocus, res) {
 }
 
 /** Amendment preview: does the struck language actually appear in current text? */
-function effect(eff) {
+/**
+ * The scope that makes an addition visible.
+ *
+ * An op scoped to "(a)(3)" is drawn by the node whose own path is "(a)(3)",
+ * and that node is only laid out by nodeEl() when the pane is scoped to its
+ * parent — scope "(a)". Scoping straight to "(a)(3)" renders its *children*
+ * and puts the node itself in the ancestor ladder, which draws no additions.
+ *
+ * Returns null when there is nothing to widen to, so the caller offers no
+ * control rather than one that changes nothing.
+ */
+function widenTarget(scope) {
+  const marks = String(scope || '').match(/\([A-Za-z0-9]{1,8}\)/g);
+  if (!marks || !marks.length) return null;
+  return marks.slice(0, -1).join('');
+}
+
+function effect(eff, handlers) {
   const c = document.createElement('div');
   c.className = 'card effect';
   const h = document.createElement('h4');
@@ -534,6 +551,28 @@ function effect(eff) {
       } else {
         f.className = 'notfound';
         f.textContent = '⚠ the provision it follows is not shown';
+        row.appendChild(f);
+        // Not a dead end. The addition knows exactly which provision it
+        // follows; the pane is simply scoped somewhere else. Widening to that
+        // provision's PARENT is what draws it — the scope node itself renders
+        // through the ancestor ladder, which lays out no children and so never
+        // asks additionsAt() for anything.
+        const widen = widenTarget(op.scope);
+        if (widen !== null && handlers && handlers.onScope) {
+          const b = document.createElement('span');
+          b.className = 'crumb clickable';
+          b.textContent = op.scope ? `Show ${op.scope}` : 'Show the whole section';
+          b.setAttribute('role', 'button');
+          b.tabIndex = 0;
+          const go = () => handlers.onScope(widen);
+          b.addEventListener('click', go);
+          b.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+          });
+          row.appendChild(b);
+        }
+        c.appendChild(row);
+        continue;
       }
       row.appendChild(f);
     }

@@ -322,7 +322,7 @@ nothing — so it lives here rather than being fetched at build time.
 ```bash
 node tools/selftest.mjs       # 356 checks: parsing, PDF extraction, citations, tree, share links, live eCFR, local data
 npm i -D linkedom             # once, for the DOM tests
-node tools/rendertest.mjs     # 198 checks: both panes, the redline, additions, resolvers, fallback states, wiring
+node tools/rendertest.mjs     # 204 checks: both panes, the redline, additions, resolvers, fallback states, wiring
 node tools/corpus.mjs         # 30 real bills, every metric diffed against a recorded baseline
 node tools/impact.mjs         # not a test: prints what one bill parses to, resolution included
 ```

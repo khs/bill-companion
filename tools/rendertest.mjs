@@ -673,6 +673,56 @@ section('additions at the end');
        (flatI.match(/\(B\) an option;/g) || []).length, 1);
   }
 
+  // ---- an addition whose provision is off screen -------------------------
+  // Scoped to (a)(3) while the pane shows (b), the addition draws nothing. The
+  // panel said so, honestly, and then left the reader with nowhere to go.
+  {
+    const wideLaw = () => [
+      {
+        marker: '(a)', path: '(a)', heading: '', text: 'It shall be unlawful—',
+        children: [{
+          marker: '(3)', path: '(a)(3)', heading: '', text: 'to conduct—',
+          children: [{ marker: '(A)', path: '(a)(3)(A)', heading: '', text: 'a transaction;', children: [] }],
+        }],
+      },
+      { marker: '(b)', path: '(b)', heading: '', text: 'Nothing here.', children: [] },
+    ];
+    const tw =
+      'Section 4c(a) of the Widget Act (7 U.S.C. 6c(a)) is amended—\n' +
+      '    (1) in paragraph (3), by adding at the end the following:\n' +
+      "``(B) an option.'';\n";
+    const aw = extractAmendments(tw, extractCitations(tw));
+    let asked = null;
+    // Scoped to (b): the addition belongs to (a)(3), which is not laid out.
+    const away = rc(
+      { source: 'U.S. Code', citation: '7 U.S.C. 6c', links: [], tree: wideLaw(), focusPath: '',
+        effect: { ops: aw[0].ops, unmatched: false } },
+      { scopePath: '(b)', onScope: (p) => { asked = p; } }
+    );
+    eq('an addition outside the shown scope is not drawn',
+       away.querySelectorAll('.node.added').length, 0);
+    ok('  and the panel says why', /the provision it follows is not shown/.test(away.textContent),
+       away.textContent.slice(-200));
+    const show = [...away.querySelectorAll('.crumb.clickable')].find((e) => /^Show \(a\)\(3\)$/.test(e.textContent));
+    ok('  offering the provision it needs', !!show,
+       [...away.querySelectorAll('.crumb.clickable')].map((e) => e.textContent).join(' | '));
+    show.dispatchEvent(new window.Event('click'));
+    // (a), not (a)(3): a node draws its own additions only when its PARENT is
+    // the scope — scoping to (a)(3) renders its children and puts (a)(3) itself
+    // in the ancestor ladder, which asks additionsAt() for nothing.
+    eq('  widening to the parent, which is what draws it', asked, '(a)');
+
+    const shown = rc(
+      { source: 'U.S. Code', citation: '7 U.S.C. 6c', links: [], tree: wideLaw(), focusPath: '',
+        effect: { ops: extractAmendments(tw, extractCitations(tw))[0].ops, unmatched: false } },
+      { scopePath: asked, onScope: () => {} }
+    );
+    eq('  and at that scope it really is drawn', shown.querySelectorAll('.node.added').length, 1);
+    ok('  reading as the bill wrote it',
+       /\(B\) an option\./.test(shown.querySelector('.node.added').textContent),
+       shown.querySelector('.node.added').textContent);
+  }
+
   // A new subsection is a sibling of (a), so it follows the whole provision.
   const t2 =
     'Section 5330 of title 31, United States Code, is amended by adding at the end the following:\n' +
