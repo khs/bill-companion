@@ -9,8 +9,8 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 344 checks, no dependencies
-node tools/rendertest.mjs                 # 185 checks, needs `npm i -D linkedom`
+node tools/selftest.mjs                   # 349 checks, no dependencies
+node tools/rendertest.mjs                 # 192 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
@@ -142,8 +142,8 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 344 checks passed
-node tools/rendertest.mjs   # all 185 render checks passed
+node tools/selftest.mjs     # all 349 checks passed
+node tools/rendertest.mjs   # all 192 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
@@ -839,14 +839,20 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    subtree; resolving it to the neighbour would be subtly wrong.
 5. **Relative refs are only exercised against USC targets.** `expandRelativeRefs`
    accepts CFR targets too, but nothing tests that path.
-6. **Seven section numbers in the Code are duplicates.** Two different Public
-   Laws each added a "§ 3598", and one section is a combined range ("§§ 2891,
-   2892"). One shard per number means the second wins: 5 U.S.C. 3598 and 5757,
-   10 U.S.C. 130g and 2892, 28 U.S.C. 1932, 38 U.S.C. 1167, 40 U.S.C. 3318. The
-   ingester now logs each one and records them under `duplicates` in the
-   manifest, so the loss is known rather than silent, but the resolver still
-   shows only one of the two. Fixing it properly means a shard format that holds
-   a list.
+6. **Seven duplicate section numbers now keep both.** (Fixed 2026-08-02.) Two
+   different Public Laws each added a "§ 3598"; one shard per number meant the
+   second one written replaced the first and the pane showed whichever came
+   later in the XML, with nothing on screen to suggest the other existed. These
+   are not near-duplicates — 5 U.S.C. 5757 is *both* "Payment of expenses to
+   obtain professional credentials" and "Extended assignment incentive",
+   28 U.S.C. 1932 is *both* "Judicial Panel on Multidistrict Litigation" and
+   "Revocation of earned release credit". Half of each pair was simply gone.
+   The later ones ride along under `also`, so 60,429 shards keep their shape and
+   only these seven carry the extra key; the pane names them by heading and
+   source credit (the only things that tell them apart) and swaps on a click.
+   Affected: 5 U.S.C. 3598 and 5757, 10 U.S.C. 130g and 2892, 28 U.S.C. 1932,
+   38 U.S.C. 1167, 40 U.S.C. 3318. Re-ingesting those five titles changed
+   exactly seven files, which is the check that it was deterministic.
 7. **Hyphenated headings stay broken** (`CAT-` + `ASTROPHIC`) — but they are no
    longer *truncated*: a wrapped heading is now rejoined, so H.R. 3633's title I
    reads `DEFINITIONS; RULE-MAKING; EXPEDITED REG-ISTRATION` rather than

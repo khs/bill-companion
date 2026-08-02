@@ -64,6 +64,7 @@ export function renderContext(res, handlers) {
     );
   }
   if (res.crumbs && res.crumbs.length) root.appendChild(crumbs(res.crumbs, res, handlers));
+  if (res.also && res.also.length) root.appendChild(alternates(res, handlers));
   if (res.offsetNote) root.appendChild(card('Numbering caveat', res.offsetNote, 'warn'));
   if (res.isActStart) {
     root.appendChild(
@@ -140,6 +141,49 @@ function head(root, res) {
     s.textContent = res.actName ? res.citation + (res.heading ? ` — ${res.heading}` : '') : res.heading;
     root.appendChild(s);
   }
+}
+
+/**
+ * More than one section of the Code carries this number.
+ *
+ * Seven times in 60,436, two different Public Laws each added a section and the
+ * OLRC prints both — two "§ 3598" in title 5, a combined range "§§ 2891, 2892"
+ * in title 10. A citation to the number alone cannot say which is meant, and
+ * the app used to show whichever the ingester wrote second with nothing on
+ * screen to suggest the other existed.
+ *
+ * Named by their source credits, because that is the thing that actually tells
+ * them apart — they share a number and often a subject.
+ */
+function alternates(res, handlers) {
+  const c = document.createElement('div');
+  c.className = 'card warn';
+  const h = document.createElement('h4');
+  h.textContent = 'This number is used more than once';
+  c.appendChild(h);
+  const p = document.createElement('p');
+  p.textContent =
+    `The Code has ${res.also.length + 1} sections numbered ${res.citation.replace(/^\d+ U\.S\.C\. /, '')}` +
+    `, added by different Public Laws. The citation does not say which is meant.`;
+  c.appendChild(p);
+  const row = document.createElement('div');
+  row.className = 'links';
+  res.also.forEach((a, i) => {
+    const el = document.createElement('span');
+    el.className = 'crumb clickable';
+    el.textContent = a.heading || a.sourceCredit || `alternative ${i + 1}`;
+    el.title = a.sourceCredit || '';
+    el.setAttribute('role', 'button');
+    el.tabIndex = 0;
+    const go = () => handlers && handlers.onAlternate && handlers.onAlternate(i);
+    el.addEventListener('click', go);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+    });
+    row.appendChild(el);
+  });
+  c.appendChild(row);
+  return c;
 }
 
 function crumbs(list, res, handlers) {

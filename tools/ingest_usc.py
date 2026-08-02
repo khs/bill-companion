@@ -484,7 +484,16 @@ def ingest_title(title: str, release: str, out_root: Path, force: bool) -> dict:
                     duplicates.append(rec["section"])
                     # ASCII only: this script does not reconfigure stdout, and a
                     # cp1252 console cannot encode an em dash.
-                    log(f"    ! duplicate section number {rec['section']} - overwriting")
+                    log(f"    ! duplicate section number {rec['section']} - keeping both")
+                    # Both are real law. Overwriting meant 5 U.S.C. 3598 showed
+                    # whichever Public Law happened to come second in the XML and
+                    # the other was simply gone, with nothing on screen to say so.
+                    # The later ones ride along under `also`, so the shard shape
+                    # is unchanged for the other 60,429 sections and only these
+                    # seven carry the extra key.
+                    prior = json.loads((tdir / name).read_text(encoding="utf-8"))
+                    prior.setdefault("also", []).append(rec)
+                    rec = prior
                 written.add(name)
                 (tdir / name).write_text(
                     json.dumps(rec, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"

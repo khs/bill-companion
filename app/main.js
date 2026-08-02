@@ -219,6 +219,26 @@ function paint(res) {
     renderContext(res, {
       scopePath: state.scopePath,
       onScope: (p) => { state.scopePath = p; paint(res); },
+      // Swap in one of the other sections carrying this number, keeping the one
+      // being replaced in the list so the reader can go back. The focus is
+      // cleared rather than carried across: the cited subsection belongs to the
+      // provision that was on screen, and the other section is a different
+      // provision that may have no such subsection at all.
+      onAlternate: (i) => {
+        const alt = res.also[i];
+        const wasPrimary = {
+          heading: res.heading, lead: res.lead, tree: res.tree,
+          notes: res.notes, sourceCredit: res.sourceCredit, crumbs: res.crumbs,
+        };
+        state.scopePath = null;
+        paint({
+          ...res,
+          ...alt,
+          also: [wasPrimary, ...res.also.filter((_, k) => k !== i)],
+          focusPath: '', citedPath: '', focusNode: null, focusChain: [],
+          focusMissing: false, runIn: null, effect: null,
+        });
+      },
       onCrumb: async (c) => {
         if (c.type !== 'part') return;
         status('Loading part…', true);

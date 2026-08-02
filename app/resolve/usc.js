@@ -164,6 +164,25 @@ export async function resolveUsc(cite) {
     // A subsection was cited but isn't in the text we have — usually means the
     // bill is *adding* it, which is worth saying out loud rather than 404ing.
     focusMissing: Boolean(subsection && !focusNode),
+    // The Code contains seven section numbers claimed by two different Public
+    // Laws — two "§ 3598"s in title 5, and so on. One shard per number used to
+    // mean the second one written simply replaced the first, and the pane
+    // showed whichever came later in the XML with nothing to say the other
+    // existed. Both are now in the shard; this is the rest of them, so the pane
+    // can say so and let the reader read the other one.
+    also: (data.also || []).map((a) => ({
+      heading: a.heading || '',
+      lead: a.lead || '',
+      tree: a.tree && a.tree.length ? a.tree : buildTree(a.paragraphs || []),
+      notes: a.notes || [],
+      sourceCredit: a.sourceCredit || '',
+      crumbs: (a.ancestors || []).map((c) => ({
+        type: c.type,
+        label: c.heading ? `${c.num} ${c.heading}`.trim() : c.num,
+        short: c.num,
+        identifier: c.identifier,
+      })),
+    })),
     links,
   };
 }

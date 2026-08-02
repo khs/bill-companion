@@ -1522,6 +1522,29 @@ section('ingested USC data');
         return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')) };
       };
       const { resolveUsc } = await imp('app/resolve/usc.js');
+
+      // Seven section numbers in the Code are claimed by two different Public
+      // Laws. One shard per number meant the second one written replaced the
+      // first, and the pane showed whichever came later in the XML with nothing
+      // to say the other existed — and these are not near-duplicates:
+      // 5 U.S.C. 5757 is "Payment of expenses to obtain professional
+      // credentials" AND "Extended assignment incentive", two unrelated
+      // provisions that happen to share a number.
+      const dup = await resolveUsc({ title: '5', section: '5757', subsection: '' });
+      eq('a duplicated section number keeps both', (dup.also || []).length, 1);
+      ok('  and they are different provisions',
+         dup.heading && dup.also[0].heading && dup.heading !== dup.also[0].heading,
+         `${dup.heading} / ${dup.also[0] && dup.also[0].heading}`);
+      ok('  each with its own source credit',
+         /Pub\. L\./.test(dup.sourceCredit) && /Pub\. L\./.test(dup.also[0].sourceCredit),
+         `${dup.sourceCredit} | ${dup.also[0].sourceCredit}`);
+      ok('  and the alternative carries readable text',
+         (dup.also[0].tree || []).length > 0 || Boolean(dup.also[0].lead),
+         'alternative has neither tree nor lead');
+      // The ordinary case must not grow the key.
+      const single = await resolveUsc({ title: '7', section: '1632c', subsection: '' });
+      eq('a section with one meaning has no alternatives', (single.also || []).length, 0);
+
       const dashed = await resolveUsc({ title: '15', section: '77z-3', subsection: '' });
       ok('ASCII-hyphen cite resolves to the en-dash shard', !dashed.missing, dashed.reason);
       ok('undivided section still carries its text', Boolean(dashed.lead), 'lead empty');

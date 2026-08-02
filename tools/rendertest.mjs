@@ -481,6 +481,42 @@ section('Act-relative derivation');
   ok('  without a numbering caveat, the gap being closed',
      !/Numbering caveat/.test(txt), txt.slice(0, 200));
 
+  // ---- two sections, one number ------------------------------------------
+  // The pane has to say so, and has to let the reader read the other one.
+  // Named by heading and credit, because a bare "alternative 2" tells nobody
+  // which of two provisions sharing a number they are about to open.
+  {
+    let swapped = null;
+    const dupRes = {
+      source: 'U.S. Code', citation: '5 U.S.C. 5757', links: [],
+      heading: 'Payment of expenses to obtain professional credentials',
+      lead: 'An agency may use appropriated funds…', tree: [], notes: [],
+      sourceCredit: '(Added Pub. L. 107-107, div. A, title XI, § 1112(a).)',
+      also: [{
+        heading: 'Extended assignment incentive',
+        lead: 'The head of an Executive agency may pay…', tree: [], notes: [],
+        sourceCredit: '(Added Pub. L. 107-273, div. A, title II, § 207(a)(1).)',
+        crumbs: [],
+      }],
+    };
+    const dupEl = rc(dupRes, { onScope: () => {}, onAlternate: (i) => { swapped = i; } });
+    const dtxt = dupEl.textContent.replace(/\s+/g, ' ');
+    ok('a shared section number is announced', /used more than once/.test(dtxt), dtxt.slice(0, 140));
+    ok('  saying how many there are', /2 sections numbered 5757/.test(dtxt), dtxt.slice(0, 200));
+    const alt = [...dupEl.querySelectorAll('.card.warn .crumb.clickable')];
+    eq('  with the other one offered', alt.length, 1);
+    eq('  named by its heading', alt[0].textContent, 'Extended assignment incentive');
+    ok('  and its credit on hover', /107-273/.test(alt[0].getAttribute('title') || ''),
+       alt[0].getAttribute('title'));
+    alt[0].dispatchEvent(new window.Event('click'));
+    eq('  clicking it asks to swap', swapped, 0);
+
+    // A section with one meaning must not grow a card.
+    const plain = rc({ ...dupRes, also: [] }, { onScope: () => {} });
+    ok('an ordinary section says nothing about alternatives',
+       !/used more than once/.test(plain.textContent), plain.textContent.slice(0, 120));
+  }
+
   // The unresolved case must still warn, and must not claim a derivation.
   const un = rc({
     ...base, citation: 'Social Security Act', isActStart: true,
