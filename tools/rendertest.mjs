@@ -1138,25 +1138,39 @@ section('resolvers');
     // ---- a named subdivision shows its PROVISIONS, not a list of headings --
     // "title IV of division M of Public Law 116-260" was answered with a row of
     // chips reading "Sec. 401. …", which is the table of contents of something
-    // the reader still cannot see. And where the law's text does not record the
-    // level named, the path is shortened until something matches rather than
-    // falling through to all 2,092 sections of the law.
+    // the reader still cannot see.
     if (existsSync(join(ROOT, 'data/plaw/116-260/manifest.json'))) {
       const div = await resolve({ kind: 'publaw', congress: '116', law: '260',
                                   division: 'M', where: ['DIVISION M', 'TITLE IV'],
                                   text: 'title IV of division M of Public Law 116-260' });
-      ok('a subdivision citation falls back to the level the law records',
-         /division M/.test(div.citation), div.citation);
+      eq('a subdivision citation reaches the level it names',
+         div.citation, 'Pub. L. 116-260, division M, title IV');
       ok('  and renders provisions rather than a listing',
          (div.plaw.provisions || []).length > 0, `${(div.plaw.provisions || []).length}`);
       ok('  far fewer than the whole law', div.plaw.total < 100, `${div.plaw.total} sections`);
+      eq('  nothing was dropped from the path', div.plaw.droppedLevels, null);
       const dEl = renderContext(div, {});
-      ok('  saying which level it could not place', /Showing a wider level/.test(dEl.textContent),
-         dEl.textContent.slice(0, 120));
-      ok('  and naming what was asked for', /title IV/.test(dEl.textContent), 'no mention of title IV');
+      ok('  the provisions carry real text',
+         /Amounts made available in this Act/.test(dEl.textContent), dEl.textContent.slice(0, 140));
       ok('  with the shared heading drawn once',
          [...dEl.querySelectorAll('.ctx-sub')].filter((n) => /DIVISION M/.test(n.textContent)).length === 1,
          `${[...dEl.querySelectorAll('.ctx-sub')].filter((n) => /DIVISION M/.test(n.textContent)).length} copies`);
+
+      // Where the law's text genuinely does not record the level named, the path
+      // is shortened from the inside out until something matches, rather than
+      // falling through to all 2,092 sections of the law. A level that cannot
+      // exist proves the fallback without depending on stale data to supply it.
+      const deep = await resolve({ kind: 'publaw', congress: '116', law: '260',
+                                   division: 'M', where: ['DIVISION M', 'TITLE IV', 'SUBTITLE Z'],
+                                   text: 'subtitle Z of title IV of division M of Public Law 116-260' });
+      eq('an unrecorded level falls back to the nearest one that exists',
+         deep.citation, 'Pub. L. 116-260, division M, title IV');
+      ok('  reporting what it could not place', (deep.plaw.droppedLevels || []).join() === 'subtitle Z',
+         JSON.stringify(deep.plaw.droppedLevels));
+      const deepEl = renderContext(deep, {});
+      ok('  and saying so in the pane', /Showing a wider level/.test(deepEl.textContent),
+         deepEl.textContent.slice(0, 140));
+      ok('  naming what was asked for', /subtitle Z/.test(deepEl.textContent), 'no mention of subtitle Z');
     }
 
     const many = await resolve({ kind: 'publaw', congress: '116', law: '6', actSection: '101', text: 'section 101 of Public Law 116-6' });
