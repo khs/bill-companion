@@ -110,12 +110,26 @@ const ENACTED_MIN = 24;
  * it silently vanishes — no mark, no message, nothing for the reader to notice.
  * 496 across the corpus.
  *
- * The cause is usually the bill, faithfully read. The Fiscal Responsibility Act
- * writes "Section 6(o)(3) of the Food and Nutrition Act of 2008 (7 U.S.C.
- * 2015(6)(o)(3))", duplicating the Act's own section number into the U.S.C.
- * parenthetical; the real provision is 2015(o)(3), and the same bill cites it
- * correctly thirty lines later. So this is not a parse to fix — it is an address
- * that has to be reported rather than obeyed.
+ * The cause is mostly US, and that was worth measuring rather than assuming.
+ * A bill CAN write a bad address — the Fiscal Responsibility Act cites "7 U.S.C.
+ * 2015(6)(o)(3)" for 2015(o)(3), duplicating the Act's own section number into
+ * the parenthetical, and cites the same provision correctly thirty lines later —
+ * but that is one citation, not the pattern. Classified across the corpus:
+ *
+ *    46  dropping the leading marker gives a real path
+ *   413  every marker exists in the tree, but not in that order or nesting
+ *   199  the leading marker is nowhere in the provision at all
+ *
+ * and 658 of the 675 are plain U.S.C. cites rather than Act-relative ones, so
+ * this is not the Act-numbering hazard either. Two of our own faults are
+ * confirmed behind it: a shard whose tree is missing a level — 42 U.S.C. 4332
+ * has (A)–(H) at top level, with NEPA's own "(2) all agencies … shall" gone, so
+ * the correct address (2)(A) cannot match — and scope composition dropping a
+ * level, which is how "section 2(a)(36)" reaches 15 U.S.C. 80a-2 as bare (36).
+ *
+ * So this is a symptom to REPORT and a signal to follow, not a bill to blame.
+ * Reporting it is still right: the alternative is drawing nothing and saying
+ * nothing, which is how it stayed invisible. See TODO 34.
  *
  * Shortened from the inside out until something matches, which is exactly what
  * `resolvePlawDivision` does with a Public Law subdivision, and for the same

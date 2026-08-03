@@ -1901,3 +1901,32 @@ data/plaw/            25 Public Laws, one JSON per section NUMBER; tracked, 106 
 
 Citation kinds: `usc` `cfr` `publaw` `stat` `act` `internal`. Relative addresses
 are `usc`/`cfr` with `relative: true` and ids prefixed `r`.
+
+34. **675 operations address a level their provision does not have, and the
+   cause is mostly us.** (2026-08-03.) `reScope()` in `redline.js` stops these
+   vanishing silently — 610 more widen to a level that exists, 675 survive
+   nowhere and are now reported — but the *reason* they exist was asserted
+   before it was measured, and the first answer ("mostly drafting errors,
+   extrapolated from one real one") was wrong. Classified:
+
+   ```
+     46  dropping the leading marker gives a real path
+    413  every marker exists in the tree, but not in that order or nesting
+    199  the leading marker is nowhere in the provision at all
+   ```
+
+   658 of 675 are plain U.S.C. cites, not Act-relative, so the Act-numbering
+   hazard is not it either. Two of our own faults are confirmed and each is
+   worth its own pass:
+   - **A shard tree can be missing a level.** 42 U.S.C. 4332 ships with
+     `(A)`–`(H)` at top level; NEPA's own "(2) all agencies of the Federal
+     Government shall—" is gone, so the correct address `(2)(A)` matches
+     nothing. That is an ingest/USLM structure bug, and it means the shard
+     misrepresents the statute for *reading* too, not only for redlining.
+   - **Scope composition can drop a level.** "section 2(a)(36) of the Investment
+     Company Act" reaches 15 U.S.C. 80a-2 as bare `(36)` instead of `(a)(36)`.
+
+   A bill really can write a bad address — the Fiscal Responsibility Act cites
+   "7 U.S.C. 2015(6)(o)(3)" for 2015(o)(3), and cites it correctly thirty lines
+   later — but that is one citation, not the pattern. Do not repeat the mistake
+   of reading one example and naming the cause.
