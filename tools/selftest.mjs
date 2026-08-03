@@ -1311,15 +1311,41 @@ section('internal cross-references');
          idx.toc.find((t) => t.num === '3').heading, 'REFERENCES TO ACT');
     }
   // ---- Acts wired to the source-credit index ------------------------------
-  // 64 of the 78 popular names carry `enactedAs` now, against 4. None was
-  // typed: for each entry the ingested Act index was searched for the one act
-  // whose sections include that entry's own head, keeping at least 80% of its
-  // mappings inside the entry's title. Landmarks, because they are checkable by
-  // anyone: these are the provisions these section numbers are famous for.
+  // 157 of the 185 popular names carry `enactedAs`, against 4 originally. None
+  // was typed: for each entry the ingested Act index was searched for the one
+  // act whose sections include that entry's own head, keeping at least 80% of
+  // its mappings inside the entry's title. Landmarks, because they are
+  // checkable by anyone: these are the provisions these section numbers are
+  // famous for.
   {
     const { resolveActSection } = await imp('app/resolve/act-sections.js');
     const { POPULAR_NAMES } = await imp('app/resolve/popular-names.js');
+    ok('the table has grown past 180 names', POPULAR_NAMES.length >= 180, `${POPULAR_NAMES.length}`);
+    ok('  and most of them resolve their own section numbers',
+       POPULAR_NAMES.filter((a) => a.enactedAs).length >= 150,
+       `${POPULAR_NAMES.filter((a) => a.enactedAs).length} with enactedAs`);
+    // Every entry must have the four fields the resolver reads, or a name
+    // matches text and then resolves to nothing.
+    const malformed = POPULAR_NAMES.filter((a) => !a.name || !a.pattern || !a.title || !a.section);
+    eq('  every entry carries name/pattern/title/section', malformed.length, 0);
+    // A pattern is spliced into a \b…\b match, so a capturing group inside one
+    // would shift every later group in the composed regexes.
+    const capturing = POPULAR_NAMES.filter((a) => /\((?!\?)/.test(a.pattern));
+    eq('  and no pattern introduces a capturing group', capturing.length, 0);
+
     const LANDMARKS = [
+      // Added 2026-08-03 and derived, not typed — each was cross-checked against
+      // the Code's own credit after the bills' parentheticals disagreed. In every
+      // one of those the bill had cited the Act's head, an et seq. range, or a
+      // FORMER section number, and the derivation was right.
+      ['Federal Deposit Insurance Act', '15', '12', '1825'],   // credit is "§ 2[15]"
+      ['Federal Insecticide, Fungicide, and Rodenticide Act', '3', '7', '136a'],
+      ['Gramm-Leach-Bliley Act', '502', '15', '6802'],         // privacy notices
+      ['Fair Credit Reporting Act', '624', '15', '1681s-3'],   // affiliate sharing
+      ['Surface Mining Control and Reclamation Act of 1977', '410', '30', '1240'],
+      ['Federal Power Act', '215', '16', '824o'],              // reliability standards
+      ['Omnibus Crime Control and Safe Streets Act of 1968', '302', '34', '10132'],
+      ['Family and Medical Leave Act of 1993', '102', '29', '2612'],  // leave entitlement
       ['Clean Water Act', '404', '33', '1344'],           // dredge-and-fill permits
       ['Endangered Species Act of 1973', '7', '16', '1536'],   // interagency consultation
       ['National Environmental Policy Act of 1969', '102', '42', '4332'], // the EIS
@@ -1328,10 +1354,16 @@ section('internal cross-references');
       ['National Labor Relations Act', '7', '29', '157'],
       ['Balanced Budget and Emergency Deficit Control Act of 1985', '251', '2', '901'],
     ];
+    // The Code spells a dashed section number with an EN DASH ("1681s–3") and
+    // everyone else writes an ASCII hyphen. slug() exists to make the two reach
+    // the same shard, so the assertion absorbs the difference the same way —
+    // encoding one spelling here would fail on a correct answer.
+    const sameSection = (a, b) => a.replace(/[–—]/g, '-') === b.replace(/[–—]/g, '-');
     for (const [name, sec, t, s] of LANDMARKS) {
       const act = POPULAR_NAMES.find((e) => e.name === name);
       const at = act && (await resolveActSection(act, sec));
-      eq(`${name} § ${sec}`, at && `${at.title} U.S.C. ${at.section}`, `${t} U.S.C. ${s}`);
+      const got = at ? `${at.title} U.S.C. ${at.section}` : String(at);
+      ok(`${name} § ${sec} is ${t} U.S.C. ${s}`, sameSection(got, `${t} U.S.C. ${s}`), got);
     }
 
     // ---- a title of an Act is a range, and the credits say which ----------

@@ -9,7 +9,7 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 493 checks, no dependencies
+node tools/selftest.mjs                   # 506 checks, no dependencies
 node tools/rendertest.mjs                 # 268 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
@@ -142,7 +142,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 493 checks passed
+node tools/selftest.mjs     # all 506 checks passed
 node tools/rendertest.mjs   # all 268 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
@@ -1142,7 +1142,7 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    is a "Show all N" control now, per-citation like the scope. The cap itself
    stays: a part can run to hundreds of sections and rendering them all by
    default is slow and unreadable.
-9. **Popular names cover 78 Acts and 64 of them resolve their own section
+9. **Popular names covered 78 Acts and 64 of them resolved their own section
    numbers**, against 46 Acts and 4 respectively this morning. Both halves were
    *derived*, never typed:
    - the entries, from the `et seq.` parenthetical Congress writes beside the
@@ -1596,10 +1596,63 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    401 (old-age insurance); CAA title V is 7661 (permits) and title II is 7521
    (mobile sources); HEA title IV is 20 U.S.C. 1070 (student aid); ESEA title I
    is 20 U.S.C. 6301.
-   The 7 that still miss are Acts whose title is entirely uncodified, and the
-   remaining gap in this family is **popular-names coverage, not titles** — "the
-   Housing Act of 1949" is not in the table at all, so nothing matches it. That
-   is the thing to fix next if this is extended.
+   The 7 that still miss are Acts whose title is entirely uncodified.
+
+32. **Popular names: 78 → 185, and 157 resolve their own section numbers.**
+   (2026-08-03, closing the gap item 31 identified.) The same derivation TODO 9
+   used, run again over the corpus, and **nothing was typed**:
+   - the **entries** come from the anchor Congress writes beside a name it is
+     introducing — "the Federal Deposit Insurance Act (12 U.S.C. 1811 et seq.)"
+     — so name, title and section are all the bills' own words;
+   - the **`enactedAs`** credits are searched for in the ingested Act index: the
+     one act whose sections include the entry's own head section, keeping ≥80%
+     of its mappings inside the entry's title and rejecting anything with more
+     than one candidate. 92 of 107 settled; the other 15 are kept without one
+     and resolve to the head of the Act, as the earlier undecided entries do.
+     A miss costs nothing, a guess would cost a provision.
+
+   **The check that makes 107 unread entries trustworthy is the bills'
+   own parentheticals.** Where a bill writes "section 603 of the Fair Credit
+   Reporting Act (15 U.S.C. 1681a)" it has stated the answer, so the derivation
+   must agree: **693 of 711 do**. Every one of the 18 that did not was read
+   against the Code's own credit, and the derivation was right each time —
+   the bill had cited the Act's head, an `et seq.` range, a provision
+   transferred from title 42 to title 34 in 2017, or a **former** section
+   number:
+
+   ```
+   FCRA § 624  -> 15 U.S.C. 1681s-3   "(Pub. L. 90–321, title VI, § 624, as added …)"
+   the bill says 1681u, which is       "… § 626, formerly § 624 …"
+   ```
+
+   That is the "formerly § N" rule the ingester was fixed for, showing up on the
+   other side of the table. When re-running this, normalise EN DASH to hyphen
+   before comparing or the check reports `15:278g–3` and `15:278g-3` as
+   different sections, and exclude `et seq.` parentheticals or it compares a
+   section against the Act's range.
+
+   Two filters earn their place. A candidate must **look like a short title** —
+   every word capitalised, an acronym, or a small connective — which is what
+   rejects "State program funded under part A of title IV of the Social Security
+   Act", a phrase the et-seq. pattern otherwise harvests as a name. And the
+   **anchor must be a shard that exists**, so a mis-read parenthetical cannot
+   introduce an Act pointing at nothing.
+
+   Corpus: `byKind.act` and `citations` both +1,906 and nothing else moved,
+   which is the signature of pure addition — no existing citation was displaced.
+   Of 1,902 measured, **0 are false positives** (every span contains the words
+   of the name it matched), 929 of 975 section citations (95%) reach a real
+   provision, 90 of 96 title citations reach a title's sections, and all 107
+   Acts are genuinely cited. `targeted` +29.
+
+   Worth knowing before extending: a harvested short title can be a **substring
+   of a longer one**. "Department of Agriculture Reorganization Act of 1994" is
+   really title II of the "Federal Crop Insurance Reform and Department of
+   Agriculture Reorganization Act of 1994", so the chip starts mid-name and
+   "section 308" of the combined Act reaches the wrong sub-Act's head. It is
+   harmless here only because that entry is one of the 15 with no `enactedAs`,
+   so no provision is asserted. Adding the longer name would fix it; adding an
+   `enactedAs` to the shorter one without the longer would not.
 
 
 ---
