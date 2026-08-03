@@ -95,6 +95,13 @@ function occurrences(folded, needle) {
  *
  * @param {Array} ops  the amendment's ops, already carrying placement metadata
  */
+// How much inserted language has to be present before "these words are here"
+// counts as evidence that this bill put them here. `alreadyIn` uses the same
+// floor for block additions and for the same reason: below it, a match is a
+// coincidence of common statutory phrasing rather than a fingerprint. Only the
+// unanchored case is subject to it — an anchor is positional proof on its own.
+const ENACTED_MIN = 24;
+
 export function createRedline(ops, fullText) {
   // An insert placed structurally belongs to `additions` and to nothing else.
   // It used to be in both lists as two separate objects: the additions copy was
@@ -223,8 +230,31 @@ export function createRedline(ops, fullText) {
       struckAt.set(op.start, chosen[chosen.length - 1]);
     }
 
+    /**
+     * This language is already in the law, and it is here because of this bill.
+     *
+     * Marks the words where they now sit instead of drawing them as a pending
+     * change. `near` is the position the instruction would have put them, so the
+     * occurrence chosen is the one the bill is talking about — statutory
+     * language repeats, and the first match is regularly a different sentence.
+     */
+    const enact = (op, near) => {
+      const hits = occurrences(folded, op.text);
+      if (!hits.length) return false;
+      let hit = hits[0];
+      if (near != null) {
+        for (const h of hits) {
+          if (Math.abs(h.start - near) < Math.abs(hit.start - near)) hit = h;
+        }
+      } else if (op.atEnd) hit = hits[hits.length - 1];
+      dels.push({ ...hit, op, mark: 'was' });
+      op.done = true;
+      op.enacted = true;
+      return true;
+    };
+
     for (const op of work) {
-      if (op.done || op.type !== 'insert' || !inScope(op) || stale) continue;
+      if (op.done || op.type !== 'insert' || !inScope(op)) continue;
       // Placed structurally, by additionsAt(). Weaving it in here too would
       // draw the same new provision twice.
       if (op.placement === 'after-unit') continue;
@@ -233,16 +263,31 @@ export function createRedline(ops, fullText) {
         // Only in the same passage the strike landed in; otherwise wait, the
         // provision may continue in a later node.
         if (where && dels.some((d) => d.start === where.start)) {
-          inss.push({ at: where.end, text: op.text, op });
-          op.done = true;
+          if (!stale) {
+            inss.push({ at: where.end, text: op.text, op });
+            op.done = true;
+          }
+          continue;
         }
+        // The strike did not land. Where EVERY strike this amendment makes is
+        // already gone and this language is already here, both halves of the
+        // amendment have plainly happened — so the words are marked as the
+        // bill's work rather than withheld. The length floor is `alreadyIn`'s,
+        // because there is no anchor here doing the positional work: staleness
+        // is evidence about the amendment, not about this spot.
+        if (stale && String(op.text).trim().length >= ENACTED_MIN) enact(op, null);
         continue;
       }
       if (op.anchor) {
         const hit = occurrences(folded, op.anchor)[0];
         if (hit) {
           const at = op.relation === 'before' ? hit.start : hit.end;
-          if (alreadyThere(text, at, op.text)) continue;
+          // The words already sit against the anchor the instruction names.
+          // That is positional proof and needs no length floor — it used to be
+          // grounds for drawing nothing at all, which told the reader the
+          // anchor could not be found when the truth was the opposite.
+          if (alreadyThere(text, at, op.text)) { enact(op, at); continue; }
+          if (stale) continue;
           inss.push({ at, text: op.text, op });
           op.done = true;
         }
@@ -337,6 +382,14 @@ export function createRedline(ops, fullText) {
         .filter((o) => o.done),
     /** Additions whose scope names a provision that isn't in the tree shown. */
     unplacedAdditions: () => additions.filter((o) => !o.done),
+    /**
+     * Inserts already in the law, marked where they now sit.
+     *
+     * Read by the panel so it can say "already in force" rather than "shown
+     * above": both are true, and only one of them tells the reader that the
+     * words in front of them are not a proposal.
+     */
+    enactedInserts: () => work.filter((o) => o.enacted),
     /** Additions the law already contains — the bill has been enacted. */
     appliedAdditions: () => additions.filter((o) => o.applied),
   };
@@ -401,7 +454,11 @@ function segments(text, dels, inss) {
     const n = inss[ii];
     if (d && (!n || d.start <= n.at)) {
       push('keep', text.slice(cursor, d.start));
-      push('del', text.slice(d.start, d.end));
+      // `mark` distinguishes language being REMOVED from language this bill
+      // already added. Both are spans over text that is on screen, which is why
+      // they travel together and share the overlap rule; only the colour and
+      // the claim differ.
+      push(d.mark || 'del', text.slice(d.start, d.end));
       cursor = d.end;
       di++;
     } else {

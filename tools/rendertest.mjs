@@ -574,12 +574,45 @@ section('redline on the current law');
      show(createRedline(staleOps).apply(law)).includes('[ins:brand new words]'));
 
   // Even with no strikes to test, an insertion whose words already sit at the
-  // anchor has plainly been applied already.
-  eq('an insertion already present is not drawn again',
-     show(seg([{ type: 'insert', text: 'for the 2018 crop year,', start: 1, end: 24,
-                relation: 'after', anchor: 'In the case of acres,' }],
-              'In the case of acres, for the 2018 crop year, all producers may elect.')),
-     'In the case of acres, for the 2018 crop year, all producers may elect.');
+  // anchor has plainly been applied already — so they are marked as this bill's
+  // work rather than drawn a second time. Three states, not two: `ins` is a
+  // change the bill would make, `was` is one it already made, and drawing the
+  // first here produced "for the 2018 crop year, {+for the 2018 crop year,+}".
+  const enactedOps = [{ type: 'insert', text: 'for the 2018 crop year,', start: 1, end: 24,
+                        relation: 'after', anchor: 'In the case of acres,' }];
+  const enactedLaw = 'In the case of acres, for the 2018 crop year, all producers may elect.';
+  eq('an insertion already present is marked, not drawn again',
+     show(seg(enactedOps, enactedLaw)),
+     'In the case of acres, [was:for the 2018 crop year,] all producers may elect.');
+  // The words appear once. That was the whole point of the original guard and
+  // it still holds — the mark is over the law's own text, not a copy of it.
+  eq('  and the language still appears exactly once',
+     enactedLaw.split('for the 2018 crop year,').length - 1, 1);
+  {
+    const r = createRedline(enactedOps, enactedLaw);
+    r.apply(enactedLaw);
+    eq('  reported as enacted rather than stranded', r.enactedInserts().length, 1);
+    eq('  and not left unplaced', r.unplaced().length, 0);
+  }
+
+  // The unanchored half: where every strike is already gone AND the inserted
+  // language is here, both halves of the amendment have happened. There is no
+  // anchor doing positional work, so this one carries a length floor.
+  const goneStrike = { type: 'strike', text: 'language that is long gone', start: 1, end: 27 };
+  const longIns = { type: 'insert', text: 'a substantially longer replacement phrase', start: 30, end: 71,
+                    replaces: 1 };
+  const lawB = 'the Secretary shall apply a substantially longer replacement phrase here.';
+  // Staleness is judged against the whole provision, so it has to be passed —
+  // `seg()` deliberately builds a redline that knows no law at all.
+  const judged = (ops, law) => show(createRedline(ops, law).apply(law));
+  eq('a stale amendment marks language that is already in force',
+     judged([goneStrike, longIns], lawB),
+     'the Secretary shall apply [was:a substantially longer replacement phrase] here.');
+  // Below the floor a match is a coincidence of common phrasing, not evidence.
+  eq('  but a short operand is not evidence on its own',
+     judged([goneStrike, { type: 'insert', text: '; or', start: 30, end: 34, replaces: 1 }],
+            'apples; or pears'),
+     'apples; or pears');
 }
 
 // --- additions at the end --------------------------------------------------

@@ -13,6 +13,7 @@ node tools/selftest.mjs                   # 534 checks, no dependencies
 node tools/rendertest.mjs                 # 284 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
+node tools/coverage.mjs                   # not a test — what the redline actually draws
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
 node tools/ingest_plaw.mjs                # 25 Public Laws, 106 MB; skips those present
 ```
@@ -1013,6 +1014,45 @@ the bill adds. The guard rejects a gap containing `strik|insert|redesignat` —
 the verbs that take a quoted operand. Not `amend`, which appears in a gap
 legitimately ("the following new section (and amending the table of sections
 accordingly):", three real additions a broader guard threw away).
+
+**"Nothing to draw" and "nothing happened" are opposite conclusions, and the
+redline now says which.** The guards above are right that an enacted bill's
+insertion must not be drawn as a pending change — that produced "for the 2018
+crop year, {+for the 2018 crop year,+}". But withholding it silently told the
+reader the bill does nothing here, and the panel said "⚠ anchor text not found"
+when the anchor had been found and the words were sitting against it. There are
+three states, not two: `ins` is a change the bill would make, `was` is one it
+already made, and `keep` is everything else. `was` is drawn in the insertion
+colour with a dashed underline instead of a fill — the bill's work, not a
+proposal — the inline twin of `.node.was-added`.
+
+Two kinds of evidence, and they are corroborated differently:
+
+- **Positional.** The instruction names an anchor, the anchor is in this
+  passage, and the words already sit against it (`alreadyThere`). No length
+  floor, because position does the work. This was already computed and used only
+  to suppress the drawing.
+- **Amendment-level.** Every strike the amendment makes is already gone
+  (`stale`) and the inserted language is in the passage the op is scoped to.
+  Staleness is evidence about the amendment, not about this spot, so it carries
+  `ENACTED_MIN` — the same 24-character floor `alreadyIn` uses on block
+  additions, and for the same reason: below it a match is common statutory
+  phrasing rather than a fingerprint.
+
+`enact()` picks the occurrence NEAREST the position the instruction would have
+used, not the first — statutory language repeats, and the first match is
+regularly a different sentence. Measured by `tools/coverage.mjs`: inline
+operations shown to the reader went **2,256 → 3,613 of 15,240 (15% → 24%)**,
+of which 1,388 are these marks. 31 ops moved the other way, from "drawn as
+pending" to "already in force", because an op recognised in the first passage
+that contains it can no longer be drawn as new in a later one — which is the
+duplication these guards exist to prevent, caught one passage earlier.
+
+Left alone deliberately, and measured: 891 where the amendment is stale but the
+operand is under the floor, and 1,348 where the language is present but the
+amendment is demonstrably still pending, so the match is probably coincidence.
+Both would be a false claim that this bill put those words there — the same
+family as the et-seq bug below.
 
 **A field the parser sets and no consumer reads is a feature that does not
 exist — and every count stays green while it doesn't.** This is the counts-are-

@@ -333,6 +333,18 @@ body {
 }
 .del .cite { text-decoration: line-through; }
 
+/* Language this bill inserted that the law already contains — the amendment has
+   happened. The bill's colour, because this text is the bill's work, but not the
+   filled background `.ins` uses: a fill reads as "pending change", and nothing
+   here is pending. An underline instead, dashed to say "in force" rather than
+   "proposed". Same reasoning as .node.was-added, inline instead of block. */
+.was-ins {
+  color: var(--ins);
+  text-decoration: underline dashed;
+  text-decoration-color: color-mix(in srgb, var(--ins) 55%, transparent);
+  text-underline-offset: 2px;
+}
+
 /* A whole provision the bill adds at the end.
 
    The inline .ins above is for words landing inside a sentence. This is a new

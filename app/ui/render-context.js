@@ -524,8 +524,16 @@ function appendMarked(parent, text, red, path) {
       continue;
     }
     const s = document.createElement('span');
-    s.className = seg.type === 'ins' ? 'ins' : 'del';
-    s.title = seg.type === 'ins' ? 'Language this bill inserts' : 'Language this bill strikes';
+    // Three claims, not two. `was` is language the bill inserted that the law
+    // already contains — the amendment has happened — so it is coloured as the
+    // bill's work but must not read as a pending change the way `ins` does.
+    s.className = seg.type === 'ins' ? 'ins' : seg.type === 'was' ? 'was-ins' : 'del';
+    s.title =
+      seg.type === 'ins'
+        ? 'Language this bill inserts'
+        : seg.type === 'was'
+        ? 'Added by this bill — already in force'
+        : 'Language this bill strikes';
     s.textContent = seg.text;
     parent.appendChild(s);
   }
@@ -616,7 +624,17 @@ function effect(eff, handlers) {
     if (shown) {
       const f = document.createElement('span');
       f.className = 'found';
-      f.textContent = op.type === 'strike' ? '✓ struck above' : '✓ shown above';
+      // "Shown above" and "already in force" are both true of an enacted
+      // insertion, and only the second tells the reader that the words in front
+      // of them are law rather than a proposal.
+      const enacted = eff.redline && eff.redline.enactedInserts
+        ? eff.redline.enactedInserts().some((p) => p.start === op.start)
+        : false;
+      f.textContent = enacted
+        ? '✓ already in force — marked above'
+        : op.type === 'strike'
+        ? '✓ struck above'
+        : '✓ shown above';
       row.appendChild(f);
     } else if (op.type === 'strike') {
       const f = document.createElement('span');
