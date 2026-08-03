@@ -714,6 +714,10 @@ function placeOps(text, ops) {
       continue;
     }
     if (op.type !== 'insert') continue;
+    // Already placed by the anchor-first matcher, which read both operands of
+    // one phrase. Re-deriving from what follows would find the NEXT
+    // instruction's connective and move it.
+    if (op.relation && op.anchor) continue;
 
     const prev = spans[i - 1];
     if (prev && prev.type === 'strike' && op.start - prev.end < 100) {
@@ -781,6 +785,56 @@ const RE_STRIKE = new RegExp(
 const RE_INSERT = new RegExp(
   `insert(?:ing)?\\b(?:(?!strik)[\\s\\S]){0,120}?${QO}([\\s\\S]{1,400}?)${QC}`, 'gi');
 const RE_ADD_END = /adding\s+at\s+the\s+end\s+the\s+following/gi;
+
+// "by striking the period at the end and inserting ``; or''"
+//
+// The commonest way a bill re-punctuates a list, and the strike names the mark
+// rather than quoting it — so `RE_STRIKE` finds no operand (it is tempered
+// against reaching across "insert", correctly) and `RE_REPLACES` has no strike
+// to pair the insert with. The insert was then unplaced, and 320 of the corpus's
+// 2,431 unplaced inserts are this one shape.
+//
+// Synthesised as an ordinary strike whose operand is the mark itself, which the
+// redline can already find: `occurrences()` requires a word boundary only at an
+// end that is a word character, so a lone "." or ";" matches. Everything
+// downstream — the pairing, the scoping, the drawing — then works unchanged.
+//
+// "at the end" is what makes it locatable: the mark occurs throughout a
+// provision and the one meant is the last, which is the same reason the flag
+// exists for a quoted operand.
+const PUNCT_WORD = { period: '.', semicolon: ';', comma: ',', colon: ':' };
+const RE_STRIKE_PUNCT_END = new RegExp(
+  'strik(?:e|ing)\\s+(?:out\\s+)?the\\s+(period|semicolon|comma|colon)' +
+    '(?:\\s+at\\s+the\\s+end)',
+  'gi'
+);
+
+// "by inserting after ``X'' the following: ``Y''" — the anchor written BEFORE
+// the language it places.
+//
+// `RE_ANCHORED` reads the other order, "by inserting ``Y'' after ``X''", by
+// looking at what follows the operand. In this order the first quoted string is
+// the anchor and the second is the new language, and the generic insert scan —
+// which takes the first quoted string after the verb — read the ANCHOR as the
+// inserted text. That is not a missing answer but a wrong one: it would draw
+// "compliance with procedural steps required by paragraph (1)(B)", language
+// already sitting in 5 U.S.C. 801(a)(2)(A), as green text the bill adds, while
+// the language actually being added went unmentioned and the panel reported
+// "position not stated" about the one thing it knew.
+//
+// Both orders are common and neither is a variant of the other, so this is its
+// own matcher rather than a widening of the existing one.
+//
+// The gap between anchor and language is tempered against both amendatory verbs,
+// for the reason every gap in this file is: "…after ``X'' the following" may run
+// through a unit word and a line break, but if it reaches another strike or
+// insert then the quoted operand it found belongs to that instruction and
+// pairing them would report language the bill removes as language it adds.
+const RE_INSERT_ANCHOR_FIRST = new RegExp(
+  `insert(?:ing)?\\s+(?:immediately\\s+)?(after|before)\\s+${QO}([\\s\\S]{1,300}?)${QC}` +
+    `((?:(?!strik|insert)[\\s\\S]){0,120}?)${QO}([\\s\\S]{1,400}?)${QC}`,
+  'gi'
+);
 
 // "by inserting after subparagraph (C) the following new subparagraph:" —
 // anchored to a UNIT rather than to a quoted phrase, and looking backwards from
@@ -2079,10 +2133,54 @@ export function extractAmendments(text, citations, divisions = []) {
     lastTarget = target;
 
     const ops = [];
+    // The anchor-first form is claimed before the generic scans run, because
+    // both would otherwise match inside it and report the anchor as the
+    // inserted language.
+    const claimed = [];
+    RE_INSERT_ANCHOR_FIRST.lastIndex = 0;
+    let af;
+    while ((af = RE_INSERT_ANCHOR_FIRST.exec(body))) {
+      claimed.push([af.index, af.index + af[0].length]);
+      const rel = af[0].lastIndexOf(af[4]);
+      ops.push({
+        type: 'insert',
+        text: af[4],
+        relation: af[1].toLowerCase(),
+        anchor: af[2],
+        start: h.headEnd + af.index + rel,
+        end: h.headEnd + af.index + rel + af[4].length,
+      });
+    }
+
+    // The punctuation strike is synthesised before the generic scans so that
+    // placeOps sees it in document order and can pair the insert that follows.
+    RE_STRIKE_PUNCT_END.lastIndex = 0;
+    let pm;
+    while ((pm = RE_STRIKE_PUNCT_END.exec(body))) {
+      const mark = PUNCT_WORD[pm[1].toLowerCase()];
+      if (!mark) continue;
+      ops.push({
+        type: 'strike',
+        // `text` is what the BILL says, because an op's span must round-trip to
+        // its text — the badOpOffsets invariant, and it exists because a span
+        // pointing at text it does not match mis-renders the bill pane. There is
+        // no quoted operand here, so the span is the phrase the bill wrote and
+        // the reader clicked; the mark it names travels as `operand`, which is
+        // what the redline matches against in the LAW.
+        text: pm[0],
+        operand: mark,
+        atEnd: true,
+        start: h.headEnd + pm.index,
+        end: h.headEnd + pm.index + pm[0].length,
+        punctuation: true,
+      });
+    }
+
     for (const [re, type] of [[RE_STRIKE, 'strike'], [RE_INSERT, 'insert']]) {
       re.lastIndex = 0;
       let om;
       while ((om = re.exec(body))) {
+        if (claimed.some(([a, b]) => om.index < b && om.index + om[0].length > a)) continue;
         // Absolute offsets of the quoted operand, so the bill pane can mark the
         // exact run of text this instruction adds or removes. The operand is the
         // last thing in the match (the connective precedes it), so lastIndexOf

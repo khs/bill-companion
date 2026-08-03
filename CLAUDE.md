@@ -9,7 +9,7 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 506 checks, no dependencies
+node tools/selftest.mjs                   # 515 checks, no dependencies
 node tools/rendertest.mjs                 # 284 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
@@ -142,7 +142,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 506 checks passed
+node tools/selftest.mjs     # all 515 checks passed
 node tools/rendertest.mjs   # all 284 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
@@ -955,6 +955,49 @@ where this stops after the first — short of the whole addition rather than wro
 about it. Note the *pair* matters: `QO`/`QC` are alternations, which is right for
 "find any quoted operand" and wrong here, because a block opened with ``` `` ```
 must be closed by `''` and not by a curly double appearing inside it.
+
+**An insert's anchor may be written before the language it places.** Both orders
+are common and neither is a variant of the other:
+
+```
+by inserting ``Y'' after ``X''            <- RE_ANCHORED, read AFTER the operand
+by inserting after ``X'' the following: ``Y''   <- RE_INSERT_ANCHOR_FIRST
+```
+
+In the second, the first quoted string is the ANCHOR. The generic insert scan
+takes the first quoted string after the verb, so it read the anchor as the
+inserted text — not a missing answer but a wrong one: "compliance with procedural
+steps required by paragraph (1)(B)", language already sitting in 5 U.S.C.
+801(a)(2)(A), would have been drawn in green as language the bill adds, while the
+language actually being added went unmentioned and the panel said "position not
+stated" about the one thing it knew. The anchor-first form is claimed before the
+generic scans run, or both match inside it; `placeOps` then leaves an op alone
+that already carries `relation` and `anchor`, since re-deriving from what follows
+would find the NEXT instruction's connective.
+
+**A strike may NAME its operand instead of quoting it.** "by striking the period
+at the end and inserting ``; or''" is the commonest way a bill re-punctuates a
+list, and `RE_STRIKE` finds nothing — it is tempered against reaching across
+"insert", correctly — so `RE_REPLACES` had no strike to pair the insert with.
+**320 of the corpus's 2,431 unplaced inserts were this one shape**; 449
+punctuation strikes are now synthesised, 269 of them paired.
+
+The operand is not in the bill, and that collides with the `badOpOffsets`
+invariant — an op's span must round-trip to its text, because a span pointing at
+text it does not match mis-renders the bill pane. Adding the span with `text: '.'`
+broke it on 449 ops across 25 bills. So `text` is the phrase the bill *wrote*
+("striking the period at the end"), which is what the reader clicked and what the
+span slices to, and the mark it names travels as **`operand`** — which is what
+`createRedline` matches against in the law. `occurrences()` already allows a
+punctuation operand: it requires a word boundary only at an end that is itself a
+word character.
+
+Measured while fixing these, for whoever picks up the rest: **79% of the corpus's
+10,106 inserts now carry a placement the redline can use.** Of the 2,164 that do
+not, the two large families left are "striking <unit> and inserting the
+following:" (TODO 12's open item — a whole-provision replacement) and "the item
+relating to section N", which amends a table of sections and is correctly
+undrawable, since the item is not in the provision's text at all.
 
 **The gap between the phrase and the block must not cross another instruction.**
 `adding at the end the following new subclause:` is followed by an optional unit

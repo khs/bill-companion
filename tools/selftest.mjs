@@ -872,6 +872,53 @@ section('operand placement');
   const before = p('Section 2 of the Widget Act (15 U.S.C. 2601) is amended by inserting ``small \'\' before ``planes\'\'.\n');
   eq('a "before" anchor is captured', before.find((o) => o.type === 'insert').relation, 'before');
 
+  // ---- the anchor written BEFORE the language it places ------------------
+  // "by inserting after ``X'' the following: ``Y''" is as common as the other
+  // order and is not a variant of it: here the FIRST quoted string is the
+  // anchor. The generic insert scan takes the first quoted string after the
+  // verb, so it read the anchor as the inserted text — not a missing answer but
+  // a wrong one, drawing language already in the law as language the bill adds,
+  // while the panel reported "position not stated" about the one thing it knew.
+  const first = p(
+    'Section 801(a)(2)(A) of title 5, United States Code, is amended by inserting after ' +
+    '``compliance with procedural steps required by paragraph (1)(B)\'\' the following: ' +
+    '``and the requirements of section 802\'\'.\n'
+  );
+  const fi = first.filter((o) => o.type === 'insert');
+  eq('an anchor-first insert yields ONE insert', fi.length, 1);
+  eq('  whose text is the language being added', fi[0].text, 'and the requirements of section 802');
+  eq('  anchored after the existing phrase', fi[0].relation, 'after');
+  eq('  which is the anchor, not the addition', fi[0].anchor,
+     'compliance with procedural steps required by paragraph (1)(B)');
+  ok('  and its offsets point at the added language, not the anchor',
+     fi[0].start != null && fi[0].end - fi[0].start === fi[0].text.length,
+     `${fi[0].start}..${fi[0].end}`);
+
+  const beforeFirst = p(
+    'Section 3 of the Widget Act (15 U.S.C. 2601) is amended by inserting before ' +
+    '``the Secretary shall\'\' the following: ``subject to subsection (c),\'\'.\n'
+  );
+  const bf = beforeFirst.find((o) => o.type === 'insert');
+  eq('the same in the "before" direction', bf.relation, 'before');
+  eq('  with the language added', bf.text, 'subject to subsection (c),');
+
+  const immediately = p(
+    'Section 3 of the Widget Act (15 U.S.C. 2601) is amended by inserting immediately after ' +
+    '``alpha\'\' the following: ``beta\'\'.\n'
+  );
+  eq('"immediately after" reads the same', immediately.find((o) => o.type === 'insert').text, 'beta');
+
+  // The gap between anchor and language is tempered against both verbs. Without
+  // that, an anchor could reach past its own instruction and pair with the next
+  // one's operand — reporting language the bill REMOVES as language it adds.
+  const spill = p(
+    'Section 3 of the Widget Act (15 U.S.C. 2601) is amended-- (1) by inserting after ``alpha\'\'; and ' +
+    '(2) by striking ``gamma\'\' and inserting ``delta\'\'.\n'
+  );
+  ok('an anchor does not reach across another instruction',
+     !spill.some((o) => o.type === 'insert' && o.anchor === 'alpha' && o.text === 'gamma'),
+     JSON.stringify(spill.map((o) => `${o.type}:${o.text}`)));
+
   const each = p('Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking ``fee\'\' each place it appears and inserting ``charge\'\'.\n');
   ok('"each place it appears" marks the strike', each.find((o) => o.type === 'strike').all === true);
   ok('  and still pairs the replacement', each.find((o) => o.type === 'insert').replaces != null);
@@ -2038,8 +2085,12 @@ if (existsSync(substitutePath)) {
   eq('  every amendatory verb is inside one', uncoveredAmendVerbs(text, ams), 0);
   eq('  and all but the two structural targets resolve', ams.filter((a) => a.target).length, 18);
 
+  // 16 strikes, not 14: the two extra are "by striking the period at the end and
+  // inserting ``; or''", where the strike names the mark instead of quoting it.
+  // Both were previously invisible, which left their inserts unplaced — 320 of
+  // the corpus's 2,431 unplaced inserts are this one shape.
   eq('substitute: extracts the operations', JSON.stringify(opCounts(ams)),
-     JSON.stringify({ strike: 14, insert: 28, 'add-at-end': 10, redesignate: 4 }));
+     JSON.stringify({ strike: 16, insert: 28, 'add-at-end': 10, redesignate: 4 }));
 
   // Counted against the source, not asserted at. Every "adding at the end the
   // following" in this bill falls inside a parsed amendment, so the op count is

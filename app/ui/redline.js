@@ -130,6 +130,10 @@ export function createRedline(ops, fullText) {
     // the renderer happens to be laying out when it asks. Deciding it lazily
     // made appliedNodePaths() depend on walk order, which is the kind of thing
     // that works until a tree is shaped differently.
+    // `operand` is set where the bill NAMES its operand instead of quoting it —
+    // "by striking the period at the end". The span in the bill is the phrase,
+    // so that is what `text` holds; what has to be found in the LAW is the mark.
+    .map((o) => (o.operand ? { ...o, text: o.operand } : o))
     .map((o) => ({ ...o, done: false, inLaw: alreadyIn(fullText, o.text) }));
 
   // Has this amendment already happened?
