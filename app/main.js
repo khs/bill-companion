@@ -175,6 +175,15 @@ async function onCite(cite, el, opts = {}) {
   // cached object would carry one instruction's amendment preview, or one
   // relative address, onto an unrelated later click.
   const res = { ...resolved };
+  // A synthesised target — "Section 403(b) is amended", inside a division that
+  // declared the 1986 Code — names nothing the reader can check. The parser has
+  // recorded WHERE it got the Act from since these were built; nothing carried
+  // it across, so the pane asserted a provision the instruction never mentions
+  // exactly as if the bill had written it out. 1,239 amendment targets across
+  // the corpus. Attached to the copy, like everything else here, because
+  // resolve() memoises by citation and the same provision is reached from
+  // instructions that did name it.
+  if (cite.implied) res.implied = cite.implied;
   if (cite.relative) {
     res.relative = {
       unit: cite.relUnit,

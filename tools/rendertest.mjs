@@ -404,6 +404,41 @@ section('redline on the current law');
   ok('and the amendment block is still drawn', el.querySelectorAll('.amend').length === 1,
      `${el.querySelectorAll('.amend').length} blocks`);
 }
+// A target the bill never wrote down must not read like one it did.
+//
+// `implied` has been set on every synthesised target since they were built —
+// 1,239 of them across the corpus — and carried the reason with it, in prose
+// meant for a reader. Nothing anywhere read the field, so the pane named a
+// provision the instruction does not mention and gave no sign it had inferred
+// anything. This is the tag where the reader meets that claim.
+{
+  const t =
+    'DIVISION T--SECURE 2.0\n\nSEC. 1. AMENDMENT OF 1986 CODE.\n' +
+    'Except as otherwise expressly provided, whenever in this division an amendment is expressed in terms of ' +
+    'an amendment to a section, the reference shall be considered to be made to a section of the ' +
+    'Internal Revenue Code of 1986.\n' +
+    'SEC. 2. CREDIT.\nSection 45E(e) is amended by striking ``old\'\'.\n';
+  const bill = parseBill(t);
+  const cs = extractCitations(t);
+  const ams = extractAmendments(t, cs, bill.divisions);
+  const el = renderBill(bill, cs, ams, () => {}, () => {});
+  const badge = el.querySelector('.amend-tag .amend-implied');
+  ok('an inferred target is marked in the bill pane', !!badge,
+     el.querySelector('.amend-tag') ? el.querySelector('.amend-tag').textContent : 'no tag');
+  // Read through optional access: where the badge is missing the check above has
+  // already failed, and throwing here would abort every check after it.
+  eq('  reading as a qualifier, not part of the address', badge?.textContent, 'from context');
+  ok('  and saying where the Act came from',
+     /Internal Revenue Code of 1986/.test(badge?.title || ''), badge?.title);
+
+  // The control that makes the assertion mean something: a target the bill DOES
+  // write out carries no badge at all.
+  const t2 = 'SEC. 2. X.\nSection 4 of the Widget Act (15 U.S.C. 2601) is amended by striking ``old\'\'.\n';
+  const b2 = parseBill(t2);
+  const c2 = extractCitations(t2);
+  const e2 = renderBill(b2, c2, extractAmendments(t2, c2, b2.divisions), () => {}, () => {});
+  eq('  and a target the bill states carries none', e2.querySelectorAll('.amend-implied').length, 0);
+}
 {
   // Placement rules, each of which changes where the mark lands.
   const { createRedline } = await imp('app/ui/redline.js');
@@ -579,6 +614,31 @@ section('Act-relative derivation');
   ok('  and the credit it was taken from', /Aug\. 14, 1935, ch\. 531/.test(txt), txt.slice(0, 200));
   ok('  without a numbering caveat, the gap being closed',
      !/Numbering caveat/.test(txt), txt.slice(0, 200));
+
+  // ---- a target supplied by context --------------------------------------
+  // The pane's job here is to say the instruction named nothing, and where the
+  // Act came from instead. Ahead of the provision, because a caveat read after
+  // the text it qualifies has already failed.
+  {
+    const imp2 = rc({ ...base, implied: 'Internal Revenue Code of 1986' }, { onScope: () => {} });
+    const itxt = imp2.textContent.replace(/\s+/g, ' ');
+    ok('an inferred target is declared in the pane', /Supplied by context/.test(itxt), itxt.slice(0, 200));
+    ok('  naming where it came from', /Internal Revenue Code of 1986/.test(itxt), itxt.slice(0, 200));
+    ok('  and saying the sentence does not state it',
+       /not\s+something this sentence states/.test(itxt), itxt.slice(0, 300));
+    ok('  marked as a caution rather than a statement',
+       !!imp2.querySelector('.card.warn'), imp2.innerHTML.slice(0, 200));
+    // Before the provision, not after it.
+    const cards = [...imp2.querySelectorAll('.card, .prov')];
+    ok('  and drawn ahead of the provision itself',
+       cards.findIndex((n) => /Supplied by context/.test(n.textContent)) <
+         cards.findIndex((n) => n.classList.contains('prov')),
+       cards.map((n) => n.className).join(' | '));
+
+    const plain = rc({ ...base }, { onScope: () => {} });
+    ok('  and a stated target says none of it',
+       !/Supplied by context/.test(plain.textContent), plain.textContent.slice(0, 150));
+  }
 
   // ---- a CFR part longer than the cap ------------------------------------
   // The cap exists because a part can run to hundreds of sections. It always

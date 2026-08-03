@@ -197,6 +197,17 @@ export function renderBill(bill, citations, amendments, onCite, onAmend) {
         tag.textContent = `▸ amends ${
           amend.target ? inline(amend.target.text) : `${amend.unit} ${amend.section}${amend.subsection}`
         }`;
+        // A synthesised target reads exactly like one the bill wrote out, and
+        // this tag is where the reader meets the claim. The parser knows the
+        // instruction named nothing and where the Act came from instead; saying
+        // so here costs one word and stops the inference being read as a quote.
+        if (amend.target && amend.target.implied) {
+          const from = document.createElement('span');
+          from.className = 'amend-implied';
+          from.textContent = 'from context';
+          from.title = `Not named in this instruction. Supplied by context: ${amend.target.implied}.`;
+          tag.appendChild(from);
+        }
         tag.setAttribute('role', 'button');
         tag.tabIndex = 0;
         const fire = () => onAmend(amend);

@@ -34,6 +34,24 @@ export function renderContext(res, handlers) {
   }
 
   head(root, res);
+  // The instruction named no Act at all and the target was synthesised from the
+  // text around it — a declared "Amendment of 1986 Code", the last title the
+  // bill named, or the provision the previous instruction was amending. Every
+  // one of those is a good inference and none of them is something the reader
+  // can see in the sentence they clicked, so it is said before the provision
+  // rather than after it. Above `relative`, which is a derivation from an
+  // address the bill DID write out and so is the weaker caveat of the two.
+  if (res.implied) {
+    root.appendChild(
+      card(
+        'Supplied by context — not named here',
+        `This instruction does not write out what it amends. Supplied by context: ` +
+          `${res.implied}. That is an inference from the surrounding text, not ` +
+          `something this sentence states.`,
+        'warn'
+      )
+    );
+  }
   if (res.relative) {
     // The bill never wrote this address out — it said "in clause (iv)" and left
     // the reader to carry down the enclosing instruction's target. Show the
