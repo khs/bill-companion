@@ -691,6 +691,29 @@ section('redline on the current law');
   eq('  while a transposition still survives nowhere',
      scopedRed([{ type: 'strike', text: 'apples', start: 1, end: 7, scope: '(6)(o)(E)' }]).lostScope().length,
      1);
+
+  // A scope taken from the instruction's own HEAD, naming nothing here.
+  //
+  // "Section 22(d) of the Federal Reserve Act (12 U.S.C. 375) is amended" — the
+  // Act's subsection (d) IS the codified section, so 375 has no (d) and never
+  // will. 41 of the 306 head addresses that resolve are this shape. This is the
+  // one case where shortening to nothing is right, because the whole provision
+  // is where the operation was applied before the head was read at all;
+  // declaring it lost would withdraw a mark the reader can see today.
+  const fromHead = createRedline(
+    [{ type: 'strike', text: 'apples', start: 1, end: 7, scope: '(d)', scopeFromHead: true }],
+    lawC, tree);
+  eq('a head address the Code flattened away falls back to the whole provision',
+     fromHead.lostScope().length, 0);
+  eq('  and draws there', show(fromHead.apply(lawC, '')), '[del:apples]; or pears');
+  // The exemption is for the head and nothing else: a navigation step naming a
+  // level that does not exist is genuinely unaccounted for, and widening it to
+  // the whole section is how a one-word operand lands in a sentence the
+  // instruction never mentions.
+  const fromNav = scopedRed([{ type: 'strike', text: 'apples', start: 1, end: 7, scope: '(d)' }]);
+  eq('  while the same address from a navigation step stays lost',
+     fromNav.lostScope().length, 1);
+  eq('  and draws nowhere', show(fromNav.apply(lawC, '')), lawC);
 }
 
 // --- additions at the end --------------------------------------------------

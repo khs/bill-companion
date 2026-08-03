@@ -237,6 +237,57 @@ section('relative navigation inside amendments');
   eq('(a)/(1)/(A) outline nests correctly', paths.join(' '), '(b) (b)(2) (b)(2)(C)');
 }
 {
+  // The instruction's own head is an address, and everything below it composes
+  // against that address. Verbatim from H.R. 3633, which writes the SAME
+  // provision out in full four lines earlier — "Section 2(a)(36) of the
+  // Investment Company Act of 1940 (15 U.S.C. 80a-2(a)(36))" — so the right
+  // answer is not in doubt.
+  //
+  // The parenthetical here carries no subsection, and the base path was taken
+  // from the parenthetical alone. So "(a)" was dropped and paragraph (36)
+  // composed as bare "(36)", which addresses nothing in 80a-2 and quietly took
+  // every operation under it with it.
+  const t =
+    'Section 2(a) of the Investment Company Act of 1940 (15 U.S.C. 80a-2) is amended--\n' +
+    "    (1) in paragraph (36), by striking ``old'';\n";
+  const ams = extractAmendments(t, extractCitations(t));
+  eq('the head supplies the base path when the cite has no subsection',
+     ams[0]?.steps?.[0]?.path, '(a)(36)');
+  eq('  and the operation is scoped to it',
+     ams[0]?.ops?.find((o) => o.type === 'strike')?.scope, '(a)(36)');
+
+  // The codified subsection still wins where the citation states one, because
+  // the two numberings really do diverge: 12 U.S.C. 375 IS section 22(d) of the
+  // Federal Reserve Act, so the Act's own "(d)" names nothing in the section.
+  const t2 =
+    'Section 22(d)(3) of the Federal Reserve Act (12 U.S.C. 375(9)) is amended--\n' +
+    "    (1) in paragraph (1), by striking ``old'';\n";
+  const ams2 = extractAmendments(t2, extractCitations(t2));
+  eq('the codified subsection wins over the Act-relative one',
+     ams2[0]?.steps?.[0]?.path, '(9)(1)');
+}
+{
+  // An instruction that never navigates still states where it is working, and
+  // the operation belongs there. "Subsection (g) of section 6695" searched the
+  // WHOLE of section 6695 — every subsection the instruction had just said it
+  // was not talking about. 813 operations across the corpus.
+  const t = "Subsection (g) of section 6695 is amended by striking ``old''.\n";
+  const ams = extractAmendments(t, extractCitations(t));
+  const op = ams[0]?.ops?.find((o) => o.type === 'strike');
+  eq('an instruction with no navigation still scopes to its own head', op?.scope, '(g)');
+  ok('  and the scope is marked as coming from the head', op?.scopeFromHead === true,
+     String(op?.scopeFromHead));
+
+  // The unit named FIRST is the innermost, so its marker goes on the END of the
+  // section's own path — the same rule the unit-phrase citation follows.
+  // "Subparagraph (B) of section 280F(d)(7)" is 280F(d)(7)(B), and it was being
+  // composed as 280F(B)(d)(7). 208 amendments across the corpus.
+  const t2 = "Subparagraph (B) of section 280F(d)(7) is amended by striking ``old''.\n";
+  const ams2 = extractAmendments(t2, extractCitations(t2));
+  eq('the inner unit goes on the end of the path, not the front',
+     ams2[0]?.subsection, '(d)(7)(B)');
+}
+{
   // Stepping back UP the hierarchy. A subsection cannot live inside a
   // subparagraph, so a later "subsection (c)" must truncate the running path,
   // not extend it. Appending blindly produced 5 U.S.C. 801(a)(2)(A)(c).
@@ -2241,8 +2292,24 @@ if (existsSync(substitutePath)) {
   // those against the instruction's target addressed existing law that has
   // nothing to do with them. They stay internal, where locateInternal finds them
   // a few lines up in the quoted block.
-  eq('  and the in-place references', ams.reduce((n, a) => n + a.refs.length, 0), 27);
-  eq('  into relative addresses', expandRelativeRefs(cs, ams).filter((c) => c.relative).length, 49);
+  //
+  // 25, not 27: the last two were the marker INSIDE a navigation phrase that
+  // wrapped the measure — "in paragraph (10), as so redesignated, in the \n
+  // matter following subparagraph (L)". Pass 1 claims the phrase so pass 2 skips
+  // the marker in it, but claims were kept per line and probe-relative, and the
+  // "(L)" is matched on the NEXT line's iteration, by which time the claim is
+  // gone. So the phrase both scoped the operation AND pointed the reader at (L)
+  // — the one provision it identifies itself by staying outside of.
+  eq('  and the in-place references', ams.reduce((n, a) => n + a.refs.length, 0), 25);
+  eq('  into relative addresses', expandRelativeRefs(cs, ams).filter((c) => c.relative).length, 47);
+  // The invariant behind those two, asserted rather than counted: a navigation
+  // phrase absorbs the markers inside it, however the line happens to break.
+  {
+    const overlap = ams.flatMap((a) =>
+      a.refs.filter((r) => a.steps.some((s) => r.start < s.end && r.end > s.start))
+    );
+    eq('  no reference sits inside a navigation phrase', overlap.length, 0);
+  }
 
   // Named targets, not just counts — a step composed onto the wrong subtree
   // still counts. Section 18 of the Securities Act of 1933 is 15 U.S.C. 77r.

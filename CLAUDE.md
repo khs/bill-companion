@@ -1930,10 +1930,86 @@ are `usc`/`cfr` with `relative: true` and ids prefixed `r`.
      our shards disagree with the Code they claim to be. 17 sections of 35,054
      are shaped this way; `reScope()` copes by dropping the leading marker when
      the tail is a real address.
-   - **Scope composition can drop a level.** "section 2(a)(36) of the Investment
-     Company Act" reaches 15 U.S.C. 80a-2 as bare `(36)` instead of `(a)(36)`.
+   - **Scope composition can drop a level.** (Fixed 2026-08-03; see item 35,
+     which turned out to be the larger half of this whole entry.)
 
    A bill really can write a bad address — the Fiscal Responsibility Act cites
    "7 U.S.C. 2015(6)(o)(3)" for 2015(o)(3), and cites it correctly thirty lines
    later — but that is one citation, not the pattern. Do not repeat the mistake
    of reading one example and naming the cause.
+
+35. **An instruction states its address in its first six words, and nothing was
+   reading it.** (Fixed 2026-08-03, from item 34's second confirmed fault.) The
+   named symptom was one step composing short — "section 2(a)(36) of the
+   Investment Company Act" reaching 15 U.S.C. 80a-2 as bare `(36)`. Measuring it
+   found three faults in the same place, and the third was the big one:
+
+   - **The base path came from the parenthetical alone.** "Section 2(a) of the
+     Investment Company Act of 1940 (15 U.S.C. 80a-2) is amended-- (1) in
+     paragraph (36)" composed `(36)`, because the cite carries no subsection and
+     the head's `(a)` was never consulted. The same bill writes the provision out
+     in full four lines earlier, so the right answer was never in doubt. 406
+     instructions, 209 navigation steps, 396 already-scoped operations.
+   - **An instruction that never navigates was left unscoped entirely.** This is
+     the larger half — **813 operations**. "Subsection (g) of section 6695 is
+     amended by striking ``X''" has no steps, so the strike carried no scope and
+     searched the WHOLE of section 6695: every subsection the instruction had
+     just said it was not talking about.
+   - **The inner unit was composed on the front of the path, not the end.**
+     "Subparagraph (B) of section 280F(d)(7)" is 280F(d)(7)(B), and `innerSub +
+     h.subsection` made it 280F(B)(d)(7). 208 amendments. Item 20 already states
+     the rule — the unit named first is the innermost — and this was the one
+     place that broke it.
+
+   **The codified subsection still wins wherever the citation states one**, and
+   that ordering is load-bearing rather than incidental: 12 U.S.C. 375 IS section
+   22(d) of the Federal Reserve Act, so the Act's own `(d)` names nothing in the
+   codified section. 3,467 of 3,731 agree and all 28 that genuinely differ are
+   that shape. The head is consulted only where the parenthetical said nothing.
+
+   The head's address is a **claim, not an assertion**, and the difference is
+   what keeps this safe. It exists in the resolved provision for 265 of the 306
+   that resolve; the other 41 are the divergence above. Those carry
+   `scopeFromHead`, and `reScope()` shortens such a scope to **nothing** — the
+   whole provision, which is exactly where the op applied before any of this —
+   rather than reporting it lost. That is the one exemption to reScope's "never
+   shorten to nothing" rule, and it must stay narrow: a navigation step naming a
+   level that does not exist is genuinely unaccounted for, and widening *that*
+   to the whole section is the hazard `scope` exists to prevent.
+
+   **Coverage FELL, 25% → 23%, and that is the fix working.** This is the
+   counts-are-not-enough rule arriving as a number that moves the wrong way, so
+   read the marks before believing the metric. Of 304 marks withdrawn, 246 were
+   provably outside the provision the instruction named, and every one of a
+   sample read by hand was wrong:
+
+   ```
+   Section 11(d) is amended by striking ``the tax imposed by subsection (a)''
+     -> was struck in 26 U.S.C. 11(b), the 21 percent corporate rate
+   Section 7(a)(3)(A) of the Federal Reserve Act … striking ``$10,000,000,000''
+     -> was struck in 289(a)(1)(A)(i), an asset threshold in another clause
+   Subsection (b)(4) of such section 9442 … striking ``him''
+     -> was struck in 9442(a), a provision about cadet strength
+   ```
+
+   Against that, **331 marks moved from outside the cited provision to inside
+   it**, and addresses surviving nowhere halved, 618 → 280. The headline
+   percentage counts marks drawn and cannot tell a right one from a wrong one;
+   `tools/coverage.mjs` is a report and not a score, and this is the case that
+   proves it. Additions moved the same way: drawn +33, stranded -74.
+
+   Found on the way, and it is the same bug seen from the other side: **a
+   navigation phrase's claim on the markers inside it was kept per line and in
+   probe-relative offsets.** A phrase that wraps the 72-column measure — "in the
+   \n matter following subparagraph (L)" — is matched on one line's overlay probe
+   while the bare "subparagraph (L)" is matched on the NEXT line's iteration, by
+   which time the claim list has been thrown away. So the phrase both scoped the
+   operation and pointed the reader at (L), the one provision it identifies
+   itself by staying outside of. 68 across the corpus. Claims are absolute and
+   outlive the line now.
+
+   Corpus, fully accounted: `steps +28` (matter-phrases that only now have a
+   parent to name — item 4's rule, "no parent, no matter"), `refs -96` (28
+   reclassified plus the 68 absorbed), `relative -63` (67 removed, each
+   overlapping a removed ref; 11 added, each on a new step). Nothing else moved
+   at all — not citations, amendments, targeted, opSpans or diffSpans.

@@ -125,20 +125,28 @@ const ENACTED_MIN = 24;
  * confirmed behind it: a shard whose tree is missing a level — 42 U.S.C. 4332
  * has (A)–(H) at top level, with NEPA's own "(2) all agencies … shall" gone, so
  * the correct address (2)(A) cannot match — and scope composition dropping a
- * level, which is how "section 2(a)(36)" reaches 15 U.S.C. 80a-2 as bare (36).
+ * level, which is how "section 2(a)(36)" reached 15 U.S.C. 80a-2 as bare (36).
  *
  * So this is a symptom to REPORT and a signal to follow, not a bill to blame.
  * Reporting it is still right: the alternative is drawing nothing and saying
- * nothing, which is how it stayed invisible. See TODO 34.
+ * nothing, which is how it stayed invisible. Following it is what found TODO 35:
+ * the instruction's own head was never consulted at all, so 813 operations that
+ * never navigate were searching whole sections. The count above is now 1,233,
+ * of which only 280 survive nowhere. See TODO 34 and TODO 35.
  *
  * Shortened from the inside out until something matches, which is exactly what
  * `resolvePlawDivision` does with a Public Law subdivision, and for the same
  * reason: narrow and honest beats wide and silent. Two rules keep it honest —
  *
- *   - it never shortens to nothing. Falling back to the whole section would let
- *     a one-word operand land in a sentence the instruction never mentions,
- *     which is the hazard `scope` exists to prevent. An address that survives
- *     nowhere is recorded as lost and drawn nowhere.
+ *   - it never shortens a NAVIGATION scope to nothing. Falling back to the whole
+ *     section would let a one-word operand land in a sentence the instruction
+ *     never mentions, which is the hazard `scope` exists to prevent. An address
+ *     that survives nowhere is recorded as lost and drawn nowhere.
+ *     The single exemption is `scopeFromHead` — see the note at the bottom of
+ *     this function. It is not a softening of this rule but its complement: the
+ *     whole provision is where such an op applied before the head was read at
+ *     all, so shortening to nothing restores the previous answer rather than
+ *     widening past a claim the instruction made.
  *   - it never REORDERS. (6)(o)(E) against a provision holding (o)(6)(E) is a
  *     transposition anyone can see, and correcting it would be a guess about
  *     what the drafter meant.
@@ -172,6 +180,20 @@ function reScope(ops, knownPaths) {
       const tail = marks.slice(i).join('');
       if (exists(tail)) return { ...o, scope: tail, scopeWidened: scope };
     }
+    // A scope taken from the instruction's own head, naming nothing here.
+    //
+    // This is the ONE case where shortening to nothing is right, and the reason
+    // is that the whole provision is where the op was applied before the head
+    // was read at all. "Section 22(d) of the Federal Reserve Act (12 U.S.C. 375)
+    // is amended" — the Act's subsection (d) IS the codified section, so 375 has
+    // no (d) and never will. 41 of the 306 head addresses that resolve are this
+    // shape. Declaring them lost would withdraw marks the reader can see today
+    // in order to fix a level that was never wrong.
+    //
+    // A navigation step is not eligible: "in paragraph (14)" of a provision with
+    // no (14) is unaccounted for, and widening it to the whole section is how a
+    // one-word operand lands in a sentence the instruction never mentions.
+    if (o.scopeFromHead) return { ...o, scope: '', scopeWidened: scope };
     return { ...o, scopeLost: scope };
   });
 }

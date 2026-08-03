@@ -582,16 +582,28 @@ const RE_ANCHORED = /^\s*(?:''|’’|["”])?\s*(after|before)\s+(?:``|‘‘|[
  * across a sentence the bill never mentions. The steps were parsed and sitting
  * right there; nothing was asking them.
  *
- * The op takes the path of the last step written before it. Ops with no step
- * before them stay unscoped and apply to the whole provision, which is correct
- * for a one-line instruction that never navigates.
+ * The op takes the path of the last step written before it. An op with no step
+ * before it falls back to `base` — the address the instruction's own head names.
+ *
+ * That fallback is the other half of the same bug. "Subsection (g) of section
+ * 6695 is amended by striking ``X''" never navigates, so the strike was left
+ * unscoped and searched the WHOLE of section 6695 — every subsection the
+ * instruction had just told us it was not talking about. 813 operations across
+ * the corpus. The instruction states its address in its first six words and
+ * nothing was reading it.
+ *
+ * `base` is only a claim, never an assertion: it is the Act's own numbering
+ * wherever the parenthetical carried no codified one, and 41 of 306 name a level
+ * the Code flattened away. Those carry `scopeFromHead` so reScope() can fall
+ * back to the whole provision — which is exactly today's behaviour — instead of
+ * reporting the operation lost. A navigation step naming a level that does not
+ * exist stays lost, because that one really is unaccounted for.
  */
-function scopeOps(ops, steps) {
-  if (!steps || !steps.length) return;
+function scopeOps(ops, steps, base = '') {
   for (const op of ops) {
     if (op.start == null) continue;
     let inForce = null;
-    for (const st of steps) {
+    for (const st of steps || []) {
       if (st.start > op.start) break;
       inForce = st;
     }
@@ -600,6 +612,9 @@ function scopeOps(ops, steps) {
       // "in the matter preceding (A)" scopes to the parent but excludes its
       // children; every other step includes them.
       if (inForce.exact) op.exact = true;
+    } else if (base) {
+      op.scope = base;
+      op.scopeFromHead = true;
     }
   }
 }
@@ -1295,6 +1310,9 @@ function extractSteps(text, from, to, basePath) {
   let current = (basePath.match(MARKER_RE) || []).map((marker, i) => ({ marker, depth: i }));
   let off = from;
   let inQuotedBlock = false;
+  // Spans a navigation phrase has claimed, in absolute offsets, for the whole
+  // instruction rather than one line. See the note at pass 1.
+  const claimed = [];
 
   const lines = text.slice(from, to).split('\n');
   for (let li = 0; li < lines.length; li++) {
@@ -1329,7 +1347,21 @@ function extractSteps(text, from, to, basePath) {
     if (inserted) continue;
 
     // Pass 1: navigation. Records the spans it claims so pass 2 skips them.
-    const claimed = [];
+    //
+    // Claims are kept in ABSOLUTE offsets and outlive the line, because a
+    // navigation phrase can wrap the 72-column measure while the reference
+    // inside it sits on the next physical line:
+    //
+    //     in the matter
+    //         preceding subclause (I), by striking ...
+    //
+    // The phrase is matched on this line's overlay probe (see above); the bare
+    // "subclause (I)" is matched on the NEXT iteration, where a per-line claim
+    // list has already been thrown away. So the phrase became navigation AND
+    // leaked its own marker as an inert reference to the very provision it
+    // identifies itself by staying outside of — the thing item 4 exists to stop,
+    // surviving in exactly the wrapped case nobody could see.
+    const rel = (i) => lineStart + i;
 
     RE_NAV.lastIndex = 0;
     let nm;
@@ -1339,7 +1371,7 @@ function extractSteps(text, from, to, basePath) {
       const phraseStart = nm.index + nm[0].indexOf(nm[1]);
       const resolved = resolvePhrase(unitPairs(nm[1]), current);
       if (!resolved) continue;
-      claimed.push([phraseStart, nm.index + nm[0].length]);
+      claimed.push([rel(phraseStart), rel(nm.index + nm[0].length)]);
       emit(steps, resolved, probe, lineStart, phraseStart, nm[1], text);
       // Only the first address of a list advances the cursor.
       current = resolved.addresses[0].levels;
@@ -1368,7 +1400,7 @@ function extractSteps(text, from, to, basePath) {
       // the section's own opening text, which is not addressable as a path.
       if (levels.length < 2) continue;
       const parent = levels.slice(0, -1);
-      claimed.push([mm.index, mm.index + mm[0].length]);
+      claimed.push([rel(mm.index), rel(mm.index + mm[0].length)]);
       steps.push({
         start: lineStart + mm.index,
         end: lineStart + mm.index + mm[0].length,
@@ -1394,7 +1426,7 @@ function extractSteps(text, from, to, basePath) {
     while ((rm = RE_REF.exec(probe))) {
       const s = rm.index;
       if (!onThisLine(s)) continue;
-      if (claimed.some(([a, b]) => s < b && s + rm[0].length > a)) continue;
+      if (claimed.some(([a, b]) => rel(s) < b && rel(s) + rm[0].length > a)) continue;
       if (quoted.some(([a, b]) => s < b && s + rm[0].length > a)) continue;
       const resolved = resolvePhrase(unitPairs(rm[1]), current);
       if (!resolved) continue;
@@ -2435,16 +2467,40 @@ export function extractAmendments(text, citations, divisions = []) {
       // rather than dropping it silently.
     }
 
-    // "Subsection (a) of section 3" — the inner unit narrows the target further.
+    // "Subsection (a) of section 3" — the inner unit narrows the target further,
+    // and it goes on the END of the section's own path. The unit named first is
+    // the INNERMOST, the same rule the unit-phrase citation follows: in
+    // "Subparagraph (B) of section 280F(d)(7)" the address is 280F(d)(7)(B), not
+    // 280F(B)(d)(7). Composed the other way round for as long as this existed —
+    // 208 amendments across the corpus, every one of them carrying a path with
+    // its levels transposed.
     const innerSub = (h.inner.match(/\([A-Za-z0-9]{1,8}\)/g) || []).join('');
-    const subsection = innerSub + h.subsection;
+    const subsection = h.subsection + innerSub;
 
     // Nested "in paragraph (3)(B)" / "in clause (iv)" addresses, composed
     // against the target's own path. Anchored on the *codified* subsection
-    // (target.subsection), not the Act-relative one, because that's the
-    // numbering the resolved provision actually uses.
-    const nav = extractSteps(text, h.headEnd, bodyEnd, (target && target.subsection) || '');
-    scopeOps(ops, nav.steps);
+    // (target.subsection) wherever the citation states one, not the Act-relative
+    // one, because that is the numbering the resolved provision actually uses —
+    // and the two really do diverge. 12 U.S.C. 375 IS section 22(d) of the
+    // Federal Reserve Act, so the Act's own "(d)" names nothing in the codified
+    // section; 3,467 of 3,731 agree and the 28 that genuinely differ are all of
+    // this shape.
+    //
+    // Where the parenthetical carries NO subsection the head is the only address
+    // there is, and dropping it lost a level off everything downstream:
+    //
+    //   Section 2(a) of the Investment Company Act of 1940 (15 U.S.C. 80a-2)
+    //     is amended-- (1) in paragraph (36), ...
+    //
+    // composed the step as "(36)" when the provision is 80a-2(a)(36) — which the
+    // same bill writes out in full four lines earlier. 406 instructions, 209
+    // navigation steps and 396 already-scoped operations. The head's subsection
+    // exists in the resolved provision for 265 of the 306 that resolve; the other
+    // 41 are the Act-relative divergence above, and reScope() reconciles those
+    // against the tree rather than this pass guessing at them.
+    const base = (target && target.subsection) || subsection;
+    const nav = extractSteps(text, h.headEnd, bodyEnd, base);
+    scopeOps(ops, nav.steps, base);
     scopeAdditions(ops);
     scopeUnitInserts(ops);
     markRangeAdditions(ops, target);
