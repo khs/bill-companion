@@ -2447,6 +2447,39 @@ section('deployment shape');
      lib.map((e) => e.file).filter((f) => f.startsWith('/')).join(', '));
   ok('  each is named and described', lib.every((e) => e.name && e.note),
      lib.filter((e) => !e.name || !e.note).map((e) => e.id).join(', '));
+
+  // ---- every entry says WHEN --------------------------------------------
+  // Derived, not typed: an enrolled bill prints its own session in words
+  // ("…the third day of January, two thousand and twenty"), and a session runs
+  // inside one calendar year, so that is the year the Act was passed. A bill
+  // that is still pending has no such preamble and no enactment year at all —
+  // it takes the year its Congress convened, which is what the names of pending
+  // bills use anyway ("Farm to Fly Act of 2025", 119th Congress).
+  const noYear = lib.filter((e) => !/\b(?:1[89]\d\d|20\d\d)\b/.test(e.name));
+  eq('every library entry carries a year', noYear.map((e) => e.name).join(', '), '');
+  ok('  and none shows it twice',
+     lib.every((e) => (e.name.match(/\b(?:1[89]\d\d|20\d\d)\b/g) || []).length === 1),
+     lib.filter((e) => (e.name.match(/\b(?:1[89]\d\d|20\d\d)\b/g) || []).length !== 1)
+        .map((e) => e.name).join(', '));
+  ok('  never as two adjacent parentheticals',
+     !lib.some((e) => /\)\s*\(\d{4}\)$/.test(e.name)),
+     lib.filter((e) => /\)\s*\(\d{4}\)$/.test(e.name)).map((e) => e.name).join(', '));
+  // Landmarks, because a derived year is only worth having if it is right.
+  // These are the dates these Acts are known by.
+  for (const [id, year] of [
+    ['hr3162-107-enr', 2001],   // USA PATRIOT Act, 26 Oct 2001
+    ['hr3590-111-enr', 2010],   // ACA, 23 Mar 2010
+    ['hr1-115-enr', 2017],      // Tax Cuts and Jobs Act, 22 Dec 2017
+    ['hr748-116-enr', 2020],    // CARES Act, 27 Mar 2020
+    ['s2938-117-enr', 2022],    // Bipartisan Safer Communities Act, 25 Jun 2022
+    ['hr3633-119-rs-substitute', 2025], // pending: the 119th Congress convened 2025
+  ]) {
+    const e = lib.find((x) => x.id === id);
+    eq(`  ${e ? e.name.replace(/\s*\(.*$/, '') : id} is ${year}`, e && e.year, year);
+  }
+  // A name that already carries its year is left alone rather than doubled.
+  const already = lib.find((e) => e.id === 'hr5376-117-enr');
+  eq('  a name with its own year is untouched', already.name, 'Inflation Reduction Act of 2022');
   // The point of the menu is range: one 117 KB bill was a poor answer to "what
   // does this do?" when the repo holds an appropriations act with 660 sections.
   ok('  spanning small to large', lib[0].bytes < 50_000 && lib[lib.length - 1].bytes > 1_000_000,

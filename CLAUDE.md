@@ -9,7 +9,7 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 524 checks, no dependencies
+node tools/selftest.mjs                   # 534 checks, no dependencies
 node tools/rendertest.mjs                 # 284 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
@@ -146,7 +146,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 524 checks passed
+node tools/selftest.mjs     # all 534 checks passed
 node tools/rendertest.mjs   # all 284 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```

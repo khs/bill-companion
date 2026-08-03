@@ -3,20 +3,23 @@
   "id": "hr1719-119-ih",
   "file": "corpus/files/hr1719-119-ih.htm",
   "name": "Farm to Fly Act of 2025 (H.R. 1719, introduced)",
+  "year": 2025,
   "note": "Small and entirely amendatory — its whole operative content is one instruction against 7 U.S.C.…",
   "bytes": 9869
  },
  {
   "id": "hr1957-116-enr",
   "file": "corpus/files/hr1957-116-enr.htm",
-  "name": "Great American Outdoors Act",
+  "name": "Great American Outdoors Act (2020)",
+  "year": 2020,
   "note": "The smallest bill here and a useful floor: a short Act should produce a small, clean parse and…",
   "bytes": 16230
  },
  {
   "id": "s2938-117-enr",
   "file": "corpus/files/s2938-117-enr.htm",
-  "name": "Bipartisan Safer Communities Act",
+  "name": "Bipartisan Safer Communities Act (2022)",
+  "year": 2022,
   "note": "A Senate bill, so it exercises the S. designation rather than H.R. Amends title 18 in short,…",
   "bytes": 97164
  },
@@ -24,13 +27,15 @@
   "id": "hr3746-118-enr",
   "file": "samples/sample-bill.txt",
   "name": "Fiscal Responsibility Act of 2023",
+  "year": 2023,
   "note": "Plain-text enrolled bill.",
   "bytes": 119726
  },
  {
   "id": "hr6201-116-enr",
   "file": "corpus/files/hr6201-116-enr.htm",
-  "name": "Families First Coronavirus Response Act",
+  "name": "Families First Coronavirus Response Act (2020)",
+  "year": 2020,
   "note": "Small and fast-drafted, amending the FMLA, the Social Security Act and the Food and Nutrition…",
   "bytes": 128699
  },
@@ -38,27 +43,31 @@
   "id": "s756-115-enr",
   "file": "corpus/files/s756-115-enr.htm",
   "name": "First Step Act of 2018",
+  "year": 2018,
   "note": "Criminal law: title 18 and title 34, short surgical amendments to sentencing provisions.",
   "bytes": 176740
  },
  {
   "id": "hr3162-107-enr",
   "file": "corpus/files/hr3162-107-enr.htm",
-  "name": "USA PATRIOT Act",
+  "name": "USA PATRIOT Act (2001)",
+  "year": 2001,
   "note": "2001 drafting, ten titles, and amendments spread across titles 18, 31 and 50 — including a lot…",
   "bytes": 416548
  },
  {
   "id": "hr3633-119-rs-substitute",
   "file": "samples/hr3633rs-clarity-act-senate-substitute.txt",
-  "name": "CLARITY Act (H.R. 3633, Senate substitute text)",
+  "name": "CLARITY Act (H.R. 3633, Senate substitute text, 2025)",
+  "year": 2025,
   "note": "The largest plain-text bill here.",
   "bytes": 475095
  },
  {
   "id": "hr1-115-enr",
   "file": "corpus/files/hr1-115-enr.htm",
-  "name": "Tax Cuts and Jobs Act",
+  "name": "Tax Cuts and Jobs Act (2017)",
+  "year": 2017,
   "note": "A second, independent test of the 'Amendment of 1986 Code' declaration, in a bill that is…",
   "bytes": 575287
  },
@@ -66,13 +75,15 @@
   "id": "hr5376-117-enr",
   "file": "corpus/files/hr5376-117-enr.htm",
   "name": "Inflation Reduction Act of 2022",
+  "year": 2022,
   "note": "Internal Revenue Code throughout — the one Act whose section numbers really are the Code's, so…",
   "bytes": 864060
  },
  {
   "id": "hr748-116-enr",
   "file": "corpus/files/hr748-116-enr.htm",
-  "name": "CARES Act",
+  "name": "CARES Act (2020)",
+  "year": 2020,
   "note": "Broad subject matter across many titles, and a bill that both creates freestanding programs and…",
   "bytes": 1060027
  },
@@ -80,13 +91,15 @@
   "id": "hjres31-116-enr",
   "file": "corpus/files/hjres31-116-enr.htm",
   "name": "Consolidated Appropriations Act, 2019",
+  "year": 2019,
   "note": "A joint resolution rather than a bill, so the designation is H.J.Res. rather than H.R. — the…",
   "bytes": 1492223
  },
  {
   "id": "hr3590-111-enr",
   "file": "corpus/files/hr3590-111-enr.htm",
-  "name": "Patient Protection and Affordable Care Act",
+  "name": "Patient Protection and Affordable Care Act (2010)",
+  "year": 2010,
   "note": "The Social Security Act and Public Health Service Act at full scale — the two Acts whose…",
   "bytes": 2907369
  }
