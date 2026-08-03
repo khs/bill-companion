@@ -919,6 +919,76 @@ section('operand placement');
      !spill.some((o) => o.type === 'insert' && o.anchor === 'alpha' && o.text === 'gamma'),
      JSON.stringify(spill.map((o) => `${o.type}:${o.text}`)));
 
+  // ---- the mark NAMED instead of quoted ----------------------------------
+  // A bill that names the mark it removes usually names the mark it puts back,
+  // and RE_INSERT wants a quoted operand — so there was no insert op at all. The
+  // strike drew and nothing replaced it: a redline showing language removed from
+  // the statute book with nothing in its place, which states something the bill
+  // does not. 234 across the corpus, in 20 of the 30 bills.
+  const named = p(
+    'Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking the period ' +
+    'at the end of paragraph (2) and inserting a semicolon.\n'
+  );
+  const ns = named.find((o) => o.type === 'strike');
+  const ni = named.find((o) => o.type === 'insert');
+  eq('a named mark is struck by operand, not by phrase', ns.operand, '.');
+  ok('  and the strike span is the phrase the bill wrote',
+     ns.text.startsWith('striking the period at the end'), ns.text);
+  eq('a named mark is inserted by operand too', ni.operand, ';');
+  eq('  paired to the strike it replaces', ni.replaces, ns.start);
+
+  // The pairing has to cross a closing quote, because the strike replaced is
+  // often the quoted kind. RE_REPLACES cannot see this pairing at all: a named
+  // insert's span starts at the VERB, so the gap in front of it holds no
+  // "inserting" for that pattern to find.
+  const mixed = p(
+    'Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking ``, and\'\' and inserting a period.\n'
+  );
+  const mi = mixed.find((o) => o.type === 'insert' && o.operand);
+  eq('a named insert pairs with a QUOTED strike', mi.operand, '.');
+  eq('  naming that strike', mi.replaces, mixed.find((o) => o.type === 'strike').start);
+
+  // The named phrase is CLAIMED, so the generic scan cannot read across it.
+  // RE_INSERT reaches 120 characters for a quote opener and is tempered only
+  // against "strik", so here it matched the FIRST verb and captured the block
+  // belonging to the SECOND — then, being a global scan, advanced past that
+  // second verb entirely, so the real insertion got no op of its own.
+  const swallow = p(
+    'Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking the period at the end ' +
+    'of paragraph (15) and inserting a comma, and by inserting after paragraph (15) the following ' +
+    'new paragraph: ``(16) the amount includible in gross income.\'\'.\n'
+  );
+  const swIns = swallow.filter((o) => o.type === 'insert');
+  ok('a named insert does not swallow the next block',
+     !swIns.some((o) => o.operand && String(o.text).includes('includible')),
+     JSON.stringify(swIns.map((o) => `${o.operand || '-'}|${String(o.text).slice(0, 40)}`)));
+  ok('  and that block still gets an op of its own',
+     swIns.some((o) => !o.operand && String(o.text).includes('the amount includible in gross income')),
+     JSON.stringify(swIns.map((o) => String(o.text).slice(0, 40))));
+
+  // "by inserting a comma after ``State plan''" — the quoted phrase is the
+  // ANCHOR. The generic scan reported "State plan", language already sitting in
+  // the law, as the language being inserted. 3 of these in the corpus.
+  const anch = p(
+    'Section 2 of the Widget Act (15 U.S.C. 2601) is amended in subparagraph (G) ' +
+    'by inserting a comma after ``State plan\'\'.\n'
+  );
+  const an = anch.find((o) => o.type === 'insert');
+  eq('a named insert takes its anchor from what follows', an.anchor, 'State plan');
+  eq('  and inserts the mark, not the anchor', an.operand, ',');
+
+  // badOpOffsets: a named op's span must slice back to its own text, or the bill
+  // pane marks a run of characters the op does not describe.
+  const rtT = normalizeText(
+    'Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking the period ' +
+    'at the end and inserting a semicolon.\n'
+  );
+  const rtOps = extractAmendments(rtT, extractCitations(rtT))[0].ops.filter((o) => o.operand);
+  eq('both named ops are produced', rtOps.length, 2);
+  ok('  and every named op offset round-trips',
+     rtOps.every((o) => rtT.slice(o.start, o.end) === o.text),
+     JSON.stringify(rtOps.map((o) => [o.text, rtT.slice(o.start, o.end)])));
+
   const each = p('Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking ``fee\'\' each place it appears and inserting ``charge\'\'.\n');
   ok('"each place it appears" marks the strike', each.find((o) => o.type === 'strike').all === true);
   ok('  and still pairs the replacement', each.find((o) => o.type === 'insert').replaces != null);
@@ -2238,9 +2308,15 @@ if (existsSync(clarityPdfPath)) {
 
   // THE regression guard. Every one of these operands is delimited by ‘‘ ’’ and
   // every one of them was silently missing.
+  //
+  // 44 strikes, not 39: the five added are the punctuation idiom with its
+  // position left unsaid — "by striking the period and inserting ‘‘; or’’" —
+  // every one of them followed immediately by "and inserting", and every one a
+  // list being re-punctuated so the next subparagraph can be added after it.
+  // They were checked individually, not inferred from the delta.
   const ops = opCounts(ams);
   eq('house print: extracts ‘‘...’’ operands', JSON.stringify(ops),
-     JSON.stringify({ 'add-at-end': 27, insert: 57, redesignate: 6, strike: 39 }));
+     JSON.stringify({ 'add-at-end': 27, insert: 57, redesignate: 6, strike: 44 }));
 
   // Counted against the source. 31 phrases in the bill, 27 of them inside a
   // parsed amendment — the other four sit in the long tail of amendatory
@@ -2280,7 +2356,9 @@ if (existsSync(clarityPdfPath)) {
   );
   // 84 + the 27 additions, which now carry the offsets of the language they add
   // and so are spans the bill pane can mark. They used to carry none at all.
-  eq('  which collapse to distinct spans', spans.size, 111);
+  // +5 for the position-unsaid punctuation strikes above: one distinct span
+  // each, which is the check that none of them landed on top of an existing op.
+  eq('  which collapse to distinct spans', spans.size, 116);
   const quoted = ams.flatMap((a) => a.ops).filter((o) => o.text);
   ok('  and they are real quoted language', quoted.some((o) => /digital commodity/i.test(o.text)),
      JSON.stringify(quoted.slice(0, 3).map((o) => o.text)));

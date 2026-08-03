@@ -494,6 +494,25 @@ section('redline on the current law');
               'a clause mentioning striking the period at the end')),
      'a clause mentioning striking the period at the end');
 
+  // The mirror, and the half that did not exist: the bill names the mark it
+  // INSERTS. Same split — `text` is the phrase, `operand` is the mark — so what
+  // goes into the law is the mark, not the words "inserting a semicolon".
+  eq('a named insert puts its mark into the law',
+     show(seg([{ type: 'strike', text: 'striking the period at the end', operand: '.',
+                atEnd: true, start: 10, end: 40 },
+               { type: 'insert', text: 'inserting a semicolon', operand: ';',
+                start: 45, end: 66, replaces: 10 }],
+              'consult with the Administrator.')),
+     'consult with the Administrator[del:.][ins:;]');
+
+  // A named insert anchored to a quoted phrase: the phrase stays, the mark lands
+  // beside it. Drawing the anchor as the insertion is the failure this replaces.
+  eq('a named insert anchors without striking the anchor',
+     show(seg([{ type: 'insert', text: 'inserting a comma', operand: ',',
+                relation: 'after', anchor: 'State plan', start: 10, end: 27 }],
+              'under the State plan and any waiver')),
+     'under the State plan[ins:,] and any waiver');
+
   // An operation applies only in the provision the instruction navigated to.
   const scoped = [{ type: 'strike', text: 'or', start: 1, end: 3, atEnd: true, scope: '(d)(2)(A)' }];
   eq('a scoped op marks its own provision', show(createRedline(scoped).apply('apples; or', '(d)(2)(A)')),
@@ -773,11 +792,22 @@ section('additions at the end');
   };
   eq('  under paragraph (3), whose siblings it joins', ownMarker(added[0].parentElement), '(3)');
 
+  // The SAME instruction re-punctuates (C) so that (D) can follow it: "in
+  // subparagraph (C), by striking the period and inserting ``; or''". The
+  // position is not stated in words, and until that idiom was read this drew
+  // nothing — "a swap." stood unchanged while the bill plainly changed it, and
+  // the addition below arrived after a sentence still ending in a full stop.
+  const subC = [...el.querySelectorAll('.node')].find(
+    (n) => (n.querySelector(':scope > .body > .marker') || {}).textContent === '(C)'
+  );
+  eq('the period at the end of (C) is struck', subC.querySelectorAll('.del').length, 1);
+  eq('  and the replacement drawn beside it', subC.querySelector('.ins').textContent, '; or');
+
   // Order, independently of structure: it follows the last existing sibling
   // rather than the parent's own lead-in sentence.
   const flat = el.querySelector('.prov').textContent.replace(/\s+/g, ' ');
   ok('  after the last existing subparagraph',
-     /a swap\.\s*\(D\) a contract of sale/.test(flat), flat);
+     /a swap\.; or\s*\(D\) a contract of sale/.test(flat), flat);
   ok('  and not before them', !/to conduct—\s*\(D\)/.test(flat), flat);
 
   // ---- "by inserting after subparagraph (B) the following" ---------------

@@ -721,7 +721,14 @@ function placeOps(text, ops) {
 
     const prev = spans[i - 1];
     if (prev && prev.type === 'strike' && op.start - prev.end < 100) {
-      if (RE_REPLACES.test(text.slice(prev.end, op.start))) {
+      // Which gap test applies depends on where the op's span begins. A quoted
+      // insert starts INSIDE its quotes, so the verb is left behind in the gap
+      // and RE_REPLACES looks for it there. A named insert ("and inserting a
+      // semicolon") starts at the verb, so the gap in front of it is only the
+      // connective — asking RE_REPLACES about it finds no "inserting" and
+      // silently declines every one of them.
+      const gap = text.slice(prev.end, op.start);
+      if (op.punctuation ? RE_PUNCT_REPLACES.test(gap) : RE_REPLACES.test(gap)) {
         op.replaces = prev.start;
         continue;
       }
@@ -826,14 +833,73 @@ const PUNCT_WORD = { period: '.', semicolon: ';', comma: ',', colon: ':' };
 // below this line: a `const` referenced above its declaration is a temporal dead
 // zone, and at module top level that throws on import rather than failing a
 // test. `RE_UNIT_ANCHOR` spells them out for the same reason.
+const PUNCT_UNIT_TAIL =
+  '(?:\\s+(?:of|in)\\s+(?:such\\s+)?' +
+  '(?:subsection|paragraph|subparagraph|clause|subclause|item|subitem)s?' +
+  '\\s*(?:\\([A-Za-z0-9]{1,8}\\))*)?';
+
+// Two forms, and the second is why "at the end" is not required.
+//
+//   A  by striking the period at the end of paragraph (2) and inserting …
+//   B  by striking the period and inserting a semicolon
+//
+// B is the same idiom with the position left unsaid, 103 times across the corpus
+// — and in 89 of those the very next words are "and inserting", which is the list
+// re-punctuation idiom and nothing else. The mark meant is the terminal one.
+//
+// Form B is admitted ONLY on that lookahead, and the lookahead consumes nothing,
+// so the span still ends at the mark. The other 14 are left alone: "striking the
+// comma after ``in the agreement''" is an anchored strike naming a different
+// comma, and sweeping it in here would strike the wrong character.
+//
+// Both forms carry `atEnd`, which is a claim the redline then CHECKS rather than
+// trusts — it takes the last occurrence and draws only where nothing but
+// punctuation follows it. So inferring the position costs nothing when the
+// inference is wrong: the honest blank is what comes out.
+//
+// `\b` after the mark is load-bearing once "at the end" stops being mandatory,
+// or "the periodic review" reads as a period followed by "ic review".
 const RE_STRIKE_PUNCT_END = new RegExp(
-  'strik(?:e|ing)\\s+(?:out\\s+)?the\\s+(period|semicolon|comma|colon)' +
-    '(?:\\s+at\\s+the\\s+end)' +
-    '(?:\\s+of\\s+(?:such\\s+)?' +
-    '(?:subsection|paragraph|subparagraph|clause|subclause|item|subitem)s?' +
-    '\\s*(?:\\([A-Za-z0-9]{1,8}\\))*)?',
+  'strik(?:e|ing)\\s+(?:out\\s+)?the\\s+(period|semicolon|comma|colon)\\b' +
+    `(?:\\s+at\\s+(?:the\\s+)?end${PUNCT_UNIT_TAIL}` +
+    `|${PUNCT_UNIT_TAIL}(?=\\s*,?\\s+and\\s+insert))`,
   'gi'
 );
+
+// "and inserting a semicolon" — the mirror of the strike above, and the half
+// that was missing.
+//
+// A bill that names the mark it removes usually names the mark it puts back, and
+// `RE_INSERT` wants a QUOTED operand, so no insert op existed at all. The strike
+// drew and nothing replaced it: the reader was shown language being removed from
+// the statute book with nothing put in its place, which is a redline that states
+// something the bill does not say. 234 across the corpus, in 20 of the 30 bills.
+//
+// 157 of those had no insert op whatsoever. The other 77 had something worse —
+// see the `claimed` push at the synthesis site: the generic scan reaches up to
+// 120 characters past the verb for a quote opener, and at these sites the nearest
+// opener regularly belongs to the NEXT instruction, so its added block was
+// reported as this instruction's insertion.
+//
+// Same split as the strike: `text` is the phrase the bill wrote, because the span
+// must round-trip to it, and the mark travels as `operand`. `punctuation` marks
+// it for the pairing rule below — the span begins at the VERB rather than inside
+// a quote, so the gap in front of it is a bare connective.
+const RE_INSERT_PUNCT = new RegExp(
+  'insert(?:ing)?\\s+(?:in\\s+lieu\\s+thereof\\s+)?(?:a|an|the)\\s+' +
+    '(period|semicolon|comma|colon)\\b',
+  'gi'
+);
+
+// The gap between a strike and the named insert that replaces it.
+//
+// `RE_REPLACES` reads the gap expecting to find the words "and inserting" inside
+// it, because a quoted insert's span starts INSIDE its quotes and so leaves the
+// verb behind in the gap. A named insert's span starts at the verb itself, so all
+// that is left in front of it is the connective — and the closing quote, where
+// the strike it replaces was the quoted one ("by striking ``, and'' and inserting
+// a period").
+const RE_PUNCT_REPLACES = /^\s*(?:''|’’|["”])?\s*,?\s*(?:and|or)?\s*$/i;
 
 // "by inserting after ``X'' the following: ``Y''" — the anchor written BEFORE
 // the language it places.
@@ -2202,11 +2268,47 @@ export function extractAmendments(text, citations, divisions = []) {
       });
     }
 
+    // The mirror: "and inserting a semicolon". Claimed, unlike the strike above,
+    // and the claim is doing two separate jobs.
+    //
+    // The strike needs none because RE_STRIKE is tempered against "insert" and so
+    // stops before it ever reaches a quote. RE_INSERT has no such temper against a
+    // second "insert": from "inserting a comma, and by inserting after paragraph
+    // (15) the following new paragraph: ``(16) …''" it matches at the FIRST verb
+    // and captures the block belonging to the SECOND, then — being a global scan —
+    // advances lastIndex past that verb entirely, so the real insertion never gets
+    // an op of its own. The block the bill adds to paragraph (16) was being drawn
+    // as though this instruction added it.
+    RE_INSERT_PUNCT.lastIndex = 0;
+    let im;
+    while ((im = RE_INSERT_PUNCT.exec(body))) {
+      const mark = PUNCT_WORD[im[1].toLowerCase()];
+      if (!mark) continue;
+      claimed.push([im.index, im.index + im[0].length]);
+      ops.push({
+        type: 'insert',
+        text: im[0],
+        operand: mark,
+        start: h.headEnd + im.index,
+        end: h.headEnd + im.index + im[0].length,
+        punctuation: true,
+      });
+    }
+
     for (const [re, type] of [[RE_STRIKE, 'strike'], [RE_INSERT, 'insert']]) {
       re.lastIndex = 0;
       let om;
       while ((om = re.exec(body))) {
-        if (claimed.some(([a, b]) => om.index < b && om.index + om[0].length > a)) continue;
+        const hit = claimed.find(([a, b]) => om.index < b && om.index + om[0].length > a);
+        if (hit) {
+          // Resume just past the claimed phrase rather than past this whole
+          // match. The match being discarded may have run far beyond the claim —
+          // that is exactly the over-reach the claim exists to stop — and leaving
+          // lastIndex at its end would consume the very instruction the claim was
+          // protecting, trading a wrong op for no op at all.
+          re.lastIndex = Math.max(re.lastIndex > hit[1] ? hit[1] : re.lastIndex, om.index + 1);
+          continue;
+        }
         // Absolute offsets of the quoted operand, so the bill pane can mark the
         // exact run of text this instruction adds or removes. The operand is the
         // last thing in the match (the connective precedes it), so lastIndexOf
