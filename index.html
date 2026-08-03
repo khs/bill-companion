@@ -18,7 +18,14 @@
       Open PDF / text
     </label>
     <button class="btn" id="paste-btn">Paste text</button>
-    <button class="btn ghost" id="sample-btn">Load sample</button>
+    <!-- The menu is a sibling of the button rather than a child, so the button
+         keeps its own hit area and the list can be positioned against the
+         wrapper without inheriting button styling. -->
+    <span class="menuwrap">
+      <button class="btn ghost" id="sample-btn" aria-haspopup="true" aria-expanded="false"
+              aria-controls="sample-menu">Load a bill ▾</button>
+      <div class="menu" id="sample-menu" role="menu" aria-labelledby="sample-btn" hidden></div>
+    </span>
     <button class="btn ghost" id="share-btn" hidden title="Copy a link with this bill's text embedded">Copy link</button>
     <button class="btn ghost" id="export-btn" hidden title="Save this reading as one self-contained HTML file that works offline">Export</button>
   </div>

@@ -37,11 +37,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         ".css": "text/css",
     }
 
-    # Not part of the site. corpus/files/ holds whole bills downloaded for
-    # regression testing — megabytes of them — and they are deliberately not
-    # published. Refusing them here means the local server shows exactly what a
-    # deploy would, so nothing can come to depend on a file that won't be there.
-    BLOCKED = ("/corpus/",)
+    # corpus/files/ used to be refused here, so the local server would show
+    # exactly what a deploy showed and nothing could come to depend on a file
+    # that would not be there. The reasoning was sound and its premise has
+    # changed: the block was justified in CLAUDE.md by "nothing in the app links
+    # to them", and samples/library.json now does. A deploy serves whatever is in
+    # the repo, so refusing them locally no longer makes the two agree — it makes
+    # them disagree, in the direction that hides a broken link from the only
+    # person who runs this locally.
+    BLOCKED = ()
 
     def send_head(self):
         if any(self.path.startswith(p) for p in self.BLOCKED):

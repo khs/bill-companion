@@ -9,7 +9,7 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 515 checks, no dependencies
+node tools/selftest.mjs                   # 524 checks, no dependencies
 node tools/rendertest.mjs                 # 284 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
@@ -35,9 +35,13 @@ Three different jobs, and they are not interchangeable:
   each accounted for to the unit (`+8 amendments = 2 instructions × 4 listed
   provisions`) before the baseline was touched. `bun tools/corpus.mjs fetch`
   downloads the bills; `bun tools/corpus.mjs <id>` prints one in detail.
-  `corpus/files/` is **tracked** now, and `serve.py` still 404s `/corpus/` — so
-  it is out of the way locally but a Pages deploy does serve it, since Pages
-  serves whatever is in the repo. That is a deliberate trade for a
+  `corpus/files/` is **tracked**, and `serve.py` no longer refuses `/corpus/`.
+  It used to, so the local server would show exactly what a deploy showed —
+  sound reasoning whose premise was "nothing in the app links to them", and
+  `samples/library.json` now does. A deploy serves whatever is in the repo, so
+  refusing them locally stopped making the two agree and started making them
+  disagree, in the direction that hides a broken link from the only person who
+  runs this locally. That is a deliberate trade for a
   self-contained repo: the bills are U.S. Government works and not copyrighted,
   and nothing in the app links to them. If that ever needs reversing, the fix is
   to move the corpus out of the published tree, not to re-ignore it — an ignored
@@ -142,7 +146,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 515 checks passed
+node tools/selftest.mjs     # all 524 checks passed
 node tools/rendertest.mjs   # all 284 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
@@ -1756,7 +1760,7 @@ app/resolve/          cfr.js (live eCFR) · usc.js (local shards) ·
                       internal.js (refs within the bill) · provision-tree.js ·
                       popular-names.js · data-base.js · index.js (dispatch)
 app/ui/               render-bill.js · render-context.js · redline.js · style.css
-tools/                ingest_usc.py · ingest_plaw.mjs · serve.py ·
+tools/                ingest_usc.py · ingest_plaw.mjs · make-library.mjs · serve.py ·
                       selftest.mjs · rendertest.mjs ·
                       measure.mjs (shared metrics) · impact.mjs · corpus.mjs
 corpus/               corpus.json + baseline.json · files/ — all tracked

@@ -14,7 +14,7 @@ import { buildExport } from './export.js';
 const $ = (id) => document.getElementById(id);
 
 const els = {
-  file: $('file'), pasteBtn: $('paste-btn'), sampleBtn: $('sample-btn'),
+  file: $('file'), pasteBtn: $('paste-btn'), sampleBtn: $('sample-btn'), sampleMenu: $('sample-menu'),
   billBody: $('bill-body'), ctxBody: $('ctx-body'), ctxSrc: $('ctx-src'), ctxBack: $('ctx-back'),
   status: $('status'), meta: $('billmeta'), metaDesig: $('meta-desig'), metaShort: $('meta-short'),
   jump: $('jump'), onlyAmend: $('only-amend'), split: $('split'), gutter: $('gutter'),
@@ -449,15 +449,93 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !els.modal.hidden) els.pasteOk.click();
 });
 
-els.sampleBtn.addEventListener('click', async () => {
-  status('Loading sample…', true);
+// ------------------------------------------------------------ the library
+//
+// "Load sample" loaded one bill. The repo has thirty — they are the regression
+// corpus, tracked, already served — and one 117 KB bill is a poor answer to
+// "what does this do?" when an appropriations act with 660 sections and a
+// ten-kilobyte introduced bill are both sitting next to it. samples/library.json
+// is derived from corpus.json by tools/make-library.mjs, so an entry cannot name
+// a bill the repo does not have.
+
+const KB = (n) => (n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`);
+
+/** Load one library entry by URL, reusing the file path's own PDF/HTML rules. */
+async function loadFromUrl(url, label) {
+  status(`Loading ${label}…`, true);
   try {
-    const r = await fetch('samples/sample-bill.txt');
-    if (!r.ok) throw new Error(`sample not found (${r.status})`);
-    ingest(await r.text());
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`not found (${r.status})`);
+    let text;
+    if (/\.pdf$/i.test(url)) {
+      const res = await pdfToText(await r.arrayBuffer(), (d, t) => status(`Extracting page ${d} of ${t}…`));
+      text = res.text;
+    } else {
+      text = await r.text();
+      if (/\.html?$/i.test(url) || /^\s*</.test(text)) text = htmlToText(text);
+    }
+    ingest(text);
   } catch (err) {
-    showFatal(`Could not load the sample: ${err.message}`);
+    showFatal(`Could not load ${label}: ${err.message}`);
   } finally { status('', false); }
+}
+
+function closeSampleMenu() {
+  els.sampleMenu.hidden = true;
+  els.sampleBtn.setAttribute('aria-expanded', 'false');
+}
+
+let libraryLoaded = null;
+async function openSampleMenu() {
+  if (!libraryLoaded) {
+    libraryLoaded = fetch('samples/library.json')
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+  }
+  const list = await libraryLoaded;
+  if (!list || !list.length) {
+    // The menu is an enhancement; if its manifest is missing there is still a
+    // bill to load, and failing to a working button beats failing to nothing.
+    loadFromUrl('samples/sample-bill.txt', 'the sample bill');
+    return;
+  }
+  els.sampleMenu.replaceChildren();
+  for (const e of list) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'menuitem';
+    item.setAttribute('role', 'menuitem');
+    const t = document.createElement('span');
+    t.className = 'menuitem-name';
+    t.textContent = e.name;
+    const s = document.createElement('span');
+    s.className = 'menuitem-size';
+    s.textContent = KB(e.bytes);
+    const n = document.createElement('span');
+    n.className = 'menuitem-note';
+    n.textContent = e.note || '';
+    item.append(t, s, n);
+    item.addEventListener('click', () => { closeSampleMenu(); loadFromUrl(e.file, e.name); });
+    els.sampleMenu.appendChild(item);
+  }
+  els.sampleMenu.hidden = false;
+  els.sampleBtn.setAttribute('aria-expanded', 'true');
+  const first = els.sampleMenu.querySelector('.menuitem');
+  if (first) first.focus();
+}
+
+els.sampleBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (els.sampleMenu.hidden) openSampleMenu(); else closeSampleMenu();
+});
+// Dismissal, the two ways a menu is dismissed. The click handler is on the
+// document rather than on a backdrop element, so nothing overlays the page and
+// the rest of the UI stays clickable while the menu is open.
+document.addEventListener('click', (e) => {
+  if (!els.sampleMenu.hidden && !els.sampleMenu.contains(e.target)) closeSampleMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !els.sampleMenu.hidden) { closeSampleMenu(); els.sampleBtn.focus(); }
 });
 
 // share link

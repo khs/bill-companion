@@ -131,7 +131,7 @@ section('CSS / markup contract');
 
 section('DOM wiring');
 // Every id main.js looks up must exist in index.html, or the app dies on load.
-const IDS = ['file', 'paste-btn', 'sample-btn', 'bill-body', 'ctx-body', 'ctx-src', 'ctx-back',
+const IDS = ['file', 'paste-btn', 'sample-btn', 'sample-menu', 'bill-body', 'ctx-body', 'ctx-src', 'ctx-back',
   'status', 'billmeta', 'meta-desig', 'meta-short', 'jump', 'only-amend', 'split', 'gutter',
   'theme-btn', 'paste-modal', 'paste-area', 'paste-ok', 'paste-cancel',
   'full-btn', 'about-btn', 'about-modal', 'about-ok', 'embed-snippet', 'embed-copy'];

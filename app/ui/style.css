@@ -134,6 +134,35 @@ body {
   outline: 2px solid var(--focus); outline-offset: 2px;
 }
 
+/* The library menu behind "Load a bill". Anchored to its own wrapper so it
+   hangs under the button wherever the toolbar wraps, and capped in height
+   because thirteen entries is taller than a short viewport. */
+.menuwrap { position: relative; display: inline-block; }
+.menu {
+  position: absolute; top: calc(100% + 5px); left: 0; z-index: 40;
+  min-width: 302px; max-width: min(94vw, 400px);
+  max-height: min(62vh, 460px); overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--rule-strong);
+  border-radius: 9px; padding: 4px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .17);
+}
+.menuitem {
+  display: grid; grid-template-columns: 1fr auto; gap: 0 10px;
+  width: 100%; text-align: left; font: inherit; cursor: pointer;
+  background: none; border: 0; border-radius: 6px; padding: 7px 9px;
+  color: var(--ink);
+}
+.menuitem:hover, .menuitem:focus-visible { background: var(--accent-soft); outline: none; }
+.menuitem:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+.menuitem-name { font-size: 13px; font-weight: 600; }
+/* Right-aligned and dimmed: the size is a warning about load time, not a label,
+   and it must not compete with the bill's name for the eye. */
+.menuitem-size { font-size: 11.5px; color: var(--ink-faint); white-space: nowrap; align-self: center; }
+.menuitem-note {
+  grid-column: 1 / -1; font-size: 11.5px; color: var(--ink-dim);
+  margin-top: 1px; line-height: 1.35;
+}
+
 .billmeta { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .billmeta .desig {
   font-family: var(--mono); font-size: 12px; font-weight: 600;

@@ -6,7 +6,7 @@
 // structure — plus a live eCFR round trip. The DOM renderers aren't exercised
 // here; they need a browser.
 
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -2431,6 +2431,38 @@ section('ingested USC data');
 // failures rather than loud ones.
 section('deployment shape');
 {
+  // ---- the library menu -------------------------------------------------
+  // Every entry is a button that fetches a file. An entry naming a file that is
+  // not there is a menu item that does nothing, and the manifest is generated —
+  // so this is checking the generator and the repo agree, not proofreading a
+  // hand-written list.
+  const lib = JSON.parse(readFileSync(join(ROOT, 'samples/library.json'), 'utf8'));
+  ok('the library offers several bills', lib.length >= 8, `${lib.length}`);
+  const missing = lib.filter((e) => !existsSync(join(ROOT, e.file)));
+  eq('  every entry has its file in the repo', missing.map((e) => e.file).join(', '), '');
+  const wrongSize = lib.filter((e) => statSync(join(ROOT, e.file)).size !== e.bytes);
+  eq('  and the recorded size matches the file', wrongSize.map((e) => e.id).join(', '), '');
+  ok('  paths are relative, like every other fetch',
+     lib.every((e) => !e.file.startsWith('/') && !/^https?:/.test(e.file)),
+     lib.map((e) => e.file).filter((f) => f.startsWith('/')).join(', '));
+  ok('  each is named and described', lib.every((e) => e.name && e.note),
+     lib.filter((e) => !e.name || !e.note).map((e) => e.id).join(', '));
+  // The point of the menu is range: one 117 KB bill was a poor answer to "what
+  // does this do?" when the repo holds an appropriations act with 660 sections.
+  ok('  spanning small to large', lib[0].bytes < 50_000 && lib[lib.length - 1].bytes > 1_000_000,
+     `${lib[0].bytes} … ${lib[lib.length - 1].bytes}`);
+  ok('  sorted so the smallest is first',
+     lib.every((e, i) => i === 0 || lib[i - 1].bytes <= e.bytes), 'not ascending by size');
+  // The local server must serve what a deploy serves. It used to refuse
+  // /corpus/, which was right while nothing linked there and is wrong now that
+  // the menu does — a 404 locally and a working link deployed is the disagreement
+  // the block existed to prevent, pointing the other way.
+  const serve = readFileSync(join(ROOT, 'tools/serve.py'), 'utf8');
+  const fromCorpus = lib.filter((e) => e.file.startsWith('corpus/'));
+  ok('  the library draws on the corpus', fromCorpus.length > 0, `${fromCorpus.length}`);
+  ok('  and the dev server no longer refuses it', /BLOCKED\s*=\s*\(\s*\)/.test(serve),
+     (serve.match(/BLOCKED\s*=\s*\([^)]*\)/) || [''])[0]);
+
   const { DATA, isLocalCheckout } = await imp('app/resolve/data-base.js');
 
   // A leading slash would resolve against the ACCOUNT root, not the repo, and
