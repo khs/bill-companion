@@ -263,6 +263,20 @@ body {
   margin-left: -.4em;
 }
 
+/* A guess, not a match: nothing at the referenced level exists inside the
+   provision the reference sits in, so this came from outside the scope that
+   reference governs. Marked differently from a certain answer because the eye
+   goes to the highlight before it goes to the pane — a dashed rule and the
+   caution colour rather than the focus colour, so the two are not confusable
+   at a glance. The pane says the same thing in words. */
+.billtext p.jump-target.jump-guess {
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  box-shadow: -3px 0 0 0 var(--warn);
+  border-left: 0;
+  outline: 1px dashed color-mix(in srgb, var(--warn) 55%, transparent);
+  outline-offset: 2px;
+}
+
 /* The redline, drawn into the text of the LAW in the right-hand pane: red
    strikethrough for language the bill takes out of the statute book, green for
    language it puts in. These deliberately do not appear in the bill pane — see

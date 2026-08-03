@@ -987,6 +987,48 @@ section('internal cross-references');
   ok('  and they are different provisions', first.start !== second.start, `both at ${first.start}`);
   ok('  each unambiguous inside its own parent', !first.ambiguous && !second.ambiguous,
      `${first.why} / ${second.why}`);
+  ok('  and neither is a guess', !first.guess && !second.guess, `${first.guess} / ${second.guess}`);
+
+  // ---- a guess is flagged as one ----------------------------------------
+  // Where nothing at the referenced level exists inside the enclosing
+  // provision, the match comes from outside the scope the reference governs.
+  // That is a different degree of doubt from "several candidates in the right
+  // parent", and collapsing the two into one flag undersells the worse of them:
+  // 1,581 references across the corpus resolve this way. The user's call is to
+  // keep guessing and say so, so the pane heads the card "Best guess — may be
+  // the wrong provision" and the bill marks the paragraph `jump-guess`.
+  const strayText = normalizeText(
+    'SEC. 4. RULES.\n' +
+    '(a) FIRST.--\n' +
+    '    (1) alpha.\n' +
+    '    (2) beta.\n' +
+    '(b) SECOND.--\n' +
+    '    The Secretary shall act under clause (vii) as required.\n'
+  );
+  const strayBill = parseBill(strayText);
+  const stray = extractCitations(strayText)
+    .find((c) => c.kind === 'internal' && c.subsection === '(vii)');
+  const strayLoc = stray && locateInternal(strayBill, stray);
+  eq('a reference with nothing at its level in the parent declines or guesses',
+     strayLoc ? Boolean(strayLoc.guess) : 'declined', 'declined');
+
+  // The same shape, but with a (vii) elsewhere in the section to be found.
+  const guessText = normalizeText(
+    'SEC. 4. RULES.\n' +
+    '(a) FIRST.--\n' +
+    '    (vii) the seventh clause.\n' +
+    '(b) SECOND.--\n' +
+    '    The Secretary shall act under clause (vii) as required.\n'
+  );
+  const guessBill = parseBill(guessText);
+  const gref = extractCitations(guessText)
+    .find((c) => c.kind === 'internal' && c.subsection === '(vii)');
+  const gloc = gref && locateInternal(guessBill, gref);
+  eq('a match found outside the enclosing provision is marked a guess',
+     gloc && gloc.guess, true);
+  eq('  and ambiguous with it', gloc && gloc.ambiguous, true);
+  ok('  saying so in words, not only in a flag',
+     /no \(vii\) inside the enclosing provision at all/i.test(gloc.why), gloc.why);
   // Nearest-match would have chosen the (ii) above the second reference.
   ok('  the second did not jump backwards', second.start > refs[1].start,
      `ref at ${refs[1].start}, target at ${second.start}`);
@@ -1734,6 +1776,11 @@ section('internal cross-references');
     // own 364-character section, which contains no (2), and declines. A
     // reference out to another Act should resolve to nothing.
     //
+    // 73 again once a run-in marker pair became visible: a drafter opens a
+    // subparagraph and its first clause on one line, "(A)(i) under 18 years of
+    // age", and the outline matcher required whitespace after the marker so it
+    // saw NEITHER. 887 such pairs across the corpus.
+    //
     // 73 until a unit phrase naming its own section stopped being read as an
     // internal reference. The one lost is the heading "Paragraph (2) of Section
     // 102.--Section 102(2) of the National Environmental Policy Act…", where
@@ -1742,7 +1789,7 @@ section('internal cross-references');
     // address the sentence actually states is NEPA § 102(2), and the
     // act-relative matcher has it. 1,460 of these across the corpus, 616 of them
     // answered with no hedge at all.
-    eq('locates the internal refs it can', hits.length, 72);
+    eq('locates the internal refs it can', hits.length, 73);
     ok('  which is most of them', hits.length >= rc.length * 0.75, `${hits.length}/${rc.length}`);
 
     // Every target must land on an outline marker, or on the head of the bill
@@ -1865,14 +1912,19 @@ if (existsSync(substitutePath)) {
   // that phrase started scoping operations instead of sitting inert. The two
   // counts move together and in opposite directions — across the corpus, every
   // bill's refs fell by exactly what its steps gained.
-  eq('substitute: composes the navigation steps', ams.reduce((n, a) => n + a.steps.length, 0), 23);
+  //
+  // 25, not 23, for the same reason again: two more of that phrase were broken
+  // across the 72-column measure ("in the \n   matter following subparagraph
+  // (L)") and every pattern here ran against one physical line, so they matched
+  // nothing and their "(L)" sat inert. Steps +2, refs -2, the same trade.
+  eq('substitute: composes the navigation steps', ams.reduce((n, a) => n + a.steps.length, 0), 25);
   // 29, not 34. Five unit phrases sit inside quoted law the bill is *inserting*
   // — "…identified in clauses (i) through (vi) of subparagraph (A) of this
   // paragraph" says outright that it means the new provision — and composing
   // those against the instruction's target addressed existing law that has
   // nothing to do with them. They stay internal, where locateInternal finds them
   // a few lines up in the quoted block.
-  eq('  and the in-place references', ams.reduce((n, a) => n + a.refs.length, 0), 29);
+  eq('  and the in-place references', ams.reduce((n, a) => n + a.refs.length, 0), 27);
   eq('  into relative addresses', expandRelativeRefs(cs, ams).filter((c) => c.relative).length, 49);
 
   // Named targets, not just counts — a step composed onto the wrong subtree

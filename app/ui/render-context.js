@@ -1034,9 +1034,14 @@ function externalCard(root, res) {
   // marked in the left pane, so the pane's job is to say what was matched and
   // how confident that is — not to restate the words that were clicked.
   if (res.target) {
+    // Three headings, not two. "Shown in the bill" is a statement and must not
+    // be made over a guess: where nothing at the referenced level exists inside
+    // the enclosing provision, the match came from outside the scope the
+    // reference governs and the reader has to be told that before they read it
+    // as the answer. The highlight in the left pane is marked to match.
     root.appendChild(
       card(
-        'Shown in the bill',
+        res.target.guess ? 'Best guess — may be the wrong provision' : 'Shown in the bill',
         `Highlighted ${res.target.label}${
           res.target.section ? ` in Sec. ${res.target.section.num}` : ''
         }. ${res.target.why}`,

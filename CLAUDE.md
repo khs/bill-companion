@@ -9,8 +9,8 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 460 checks, no dependencies
-node tools/rendertest.mjs                 # 263 checks, needs `npm i -D linkedom`
+node tools/selftest.mjs                   # 465 checks, no dependencies
+node tools/rendertest.mjs                 # 268 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
@@ -142,8 +142,8 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 460 checks passed
-node tools/rendertest.mjs   # all 263 render checks passed
+node tools/selftest.mjs     # all 465 checks passed
+node tools/rendertest.mjs   # all 268 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
@@ -1403,6 +1403,63 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    memo keyed on too little is indistinguishable from a resolver bug, and here
    it fails the dangerous way round: without it a bare "section 505 of Public
    Law 115-141" inherits a division nothing in it named.
+
+23. **A line-head marker may be a RUN of markers.** (Fixed 2026-08-02.) A
+   drafter opens a subparagraph and its first clause on one line —
+   `(B)(i) The President may waive …` — and `outline()` in `internal.js` matched
+   a single marker with a whitespace lookahead, so it found **neither**: `(B)`
+   fails because the next character is `(`, and `(i)` is not at a line head.
+   887 such pairs across the corpus, every one of them a provision invisible to
+   `parentSpan` and `walk`.
+   **Revealing only the first is worse than revealing neither** — the one-
+   character fix of adding `(` to the lookahead makes the parent findable while
+   the child it introduces stays missing, so the walk gains a scope to search
+   and still cannot find the thing in it. Both markers must be emitted, at their
+   own depths and their own offsets. The wrap test asks about the line head, so
+   it is the run's *first* marker that answers it.
+
+24. **A phrase wraps, and every pattern here reads one physical line.**
+   (Fixed 2026-08-02.) `extractSteps` splits on `\n` and runs `RE_NAV`,
+   `RE_NAV_MATTER` and `RE_REF` per line, so "by striking paragraph \n(4)" and
+   "in the \n   matter following subparagraph (L)" matched nothing at all —
+   1,035 references and 153 navigation steps across the corpus, invisible.
+   **The lines are not joined, they are overlaid.** Offsets are the first
+   invariant in this file, so the probe replaces the newline with a single
+   space — the same one character — and leaves the continuation's own indent
+   standing as the spaces it already is. Every index into the probe is therefore
+   the same index into the original text. Matches beginning past the physical
+   line's end belong to the next iteration and are dropped, so nothing is
+   emitted twice. The recorded `text` is sliced from the ORIGINAL string, or a
+   wrapped phrase carries spaces where its line break was and `inline()` in
+   `render-bill.js` sees nothing to re-wrap.
+   Two things to check before touching this, because both were checked here:
+   - **The join must not steal a real outline marker.** This is the exact
+     hazard `app/parse/outline.js` exists for, seen from the other side. Of 693
+     new matches spanning a break, `isWrappedMarker` confirms all 693 as wraps
+     and **none** as a real marker — the tell being that a wrapped reference
+     follows the bare unit word that introduces it, where a real marker follows
+     a line that ended a thought.
+   - **182 references disappeared, and that is the fix too.** `quotedSpans` now
+     sees a quoted operand that spans the break, so "by striking ``subsection
+     (f)(3)(B) shall be applied by \n substituting `2012'…''" no longer leaks
+     its reference. Every one of the 182 is inside a quoted operand. Those are
+     words being struck, not provisions being referred to.
+
+25. **Two degrees of doubt, and one flag undersells the worse of them.**
+   (2026-08-02.) `locateInternal` widens to the whole bill section when nothing
+   at the referenced level exists inside the enclosing provision. Several
+   candidates *inside the right parent* is a near-miss — the answer is one of
+   them. Nothing in the right parent at all means the match came from somewhere
+   the reference does not govern, and it is a **guess**: 1,545 across the corpus.
+   Keller's call is to keep guessing and say so, so it is said three times over,
+   because the eye reaches the highlight before the prose. The result carries
+   `guess`, the pane heads the card "Best guess — may be the wrong provision"
+   instead of the statement "Shown in the bill", and the paragraph is marked
+   `.jump-guess` in the caution colour with a dashed outline rather than the
+   focus colour. `jump-guess` is the one class where losing its rule loses the
+   *meaning* rather than the decoration — an unstyled guess renders identically
+   to a certain match — so `rendertest.mjs` asserts it is both toggled and
+   styled, alongside the contract check.
 
 
 ---

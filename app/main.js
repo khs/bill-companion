@@ -191,7 +191,7 @@ async function onCite(cite, el, opts = {}) {
   // each points somewhere different.
   if (cite.kind === 'internal' && state.bill) {
     res.target = locateInternal(state.bill, cite);
-    if (res.target) highlightInBill(res.target.start);
+    if (res.target) highlightInBill(res.target.start, res.target.guess);
   }
   state.current.res = res;
   paint(res);
@@ -204,13 +204,18 @@ async function onCite(cite, el, opts = {}) {
  * the thing it names, and a highlight that fades before the eye arrives is worse
  * than none. It clears on the next click.
  */
-function highlightInBill(offset) {
-  if (state.jumpEl) state.jumpEl.classList.remove('jump-target');
+function highlightInBill(offset, guess) {
+  if (state.jumpEl) state.jumpEl.classList.remove('jump-target', 'jump-guess');
   state.jumpEl = null;
   const paras = els.billBody.querySelectorAll('.billtext p[data-start]');
   for (const p of paras) {
     if (offset >= +p.dataset.start && offset < +p.dataset.end) {
+      // A guess is marked differently from a match. The pane says so too, but
+      // the reader's eye goes to the highlight, and a paragraph marked exactly
+      // like a certain answer reads as one.
       p.classList.add('jump-target');
+      if (guess) p.classList.add('jump-guess');
+      p.title = guess ? 'Best guess — this may be the wrong provision' : '';
       p.scrollIntoView({ block: 'center', behavior: 'smooth' });
       state.jumpEl = p;
       return;

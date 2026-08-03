@@ -1046,9 +1046,29 @@ function extractSteps(text, from, to, basePath) {
   let off = from;
   let inQuotedBlock = false;
 
-  for (const line of text.slice(from, to).split('\n')) {
+  const lines = text.slice(from, to).split('\n');
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
     const lineStart = off;
     off += line.length + 1;
+
+    // A phrase broken across the 72-column measure — "by striking paragraph \n
+    // (4) and by redesignating" — matched nothing, because every pattern here
+    // runs against one physical line. 450 across the corpus sit inside an
+    // amendment with a Code target and outside any quoted block, so they were
+    // never composed into an address at all; they survived as plain internal
+    // references and got pointed at whatever same-shaped marker was nearest.
+    //
+    // The fix has to keep offsets exact — the whole file's first invariant — so
+    // the two lines are not joined but *overlaid*: the newline is replaced by a
+    // single space, which is the same one character, and the next line's own
+    // indent is left standing as the spaces it already is. Every index into
+    // `probe` is therefore the same index into the original text.
+    //
+    // Matches that begin past this line's end belong to the next iteration and
+    // are dropped here, so nothing is emitted twice.
+    const probe = li + 1 < lines.length ? `${line} ${lines[li + 1]}` : line;
+    const onThisLine = (i) => i < line.length;
 
     // Quoted inserted law: not an instruction, and its cross-references point
     // inside itself rather than into the Code. The run persists across
@@ -1063,13 +1083,14 @@ function extractSteps(text, from, to, basePath) {
 
     RE_NAV.lastIndex = 0;
     let nm;
-    while ((nm = RE_NAV.exec(line))) {
-      if (!isInstructionPosition(line.slice(0, nm.index))) continue;
+    while ((nm = RE_NAV.exec(probe))) {
+      if (!onThisLine(nm.index)) continue;
+      if (!isInstructionPosition(probe.slice(0, nm.index))) continue;
       const phraseStart = nm.index + nm[0].indexOf(nm[1]);
       const resolved = resolvePhrase(unitPairs(nm[1]), current);
       if (!resolved) continue;
       claimed.push([phraseStart, nm.index + nm[0].length]);
-      emit(steps, resolved, line, lineStart, phraseStart, nm[1]);
+      emit(steps, resolved, probe, lineStart, phraseStart, nm[1], text);
       // Only the first address of a list advances the cursor.
       current = resolved.addresses[0].levels;
     }
@@ -1087,8 +1108,9 @@ function extractSteps(text, from, to, basePath) {
     // followed by "the".
     RE_NAV_MATTER.lastIndex = 0;
     let mm;
-    while ((mm = RE_NAV_MATTER.exec(line))) {
-      if (!isMatterPosition(line.slice(0, mm.index))) continue;
+    while ((mm = RE_NAV_MATTER.exec(probe))) {
+      if (!onThisLine(mm.index)) continue;
+      if (!isMatterPosition(probe.slice(0, mm.index))) continue;
       const resolved = resolvePhrase(unitPairs(mm[1]), current);
       if (!resolved || !resolved.addresses.length) continue;
       const levels = resolved.addresses[0].levels;
@@ -1100,7 +1122,7 @@ function extractSteps(text, from, to, basePath) {
       steps.push({
         start: lineStart + mm.index,
         end: lineStart + mm.index + mm[0].length,
-        text: line.slice(mm.index, mm.index + mm[0].length),
+        text: text.slice(lineStart + mm.index, lineStart + mm.index + mm[0].length),
         unit: 'matter',
         markers: resolved.addresses[0].item,
         path: parent.map((l) => l.marker).join(''),
@@ -1116,23 +1138,32 @@ function extractSteps(text, from, to, basePath) {
     // Pass 2: bare references anywhere else on the line, except inside an
     // inline quoted operand — "by striking ``paragraph (3)''" quotes the words,
     // it does not refer to the paragraph.
-    const quoted = quotedSpans(line);
+    const quoted = quotedSpans(probe);
     RE_REF.lastIndex = 0;
     let rm;
-    while ((rm = RE_REF.exec(line))) {
+    while ((rm = RE_REF.exec(probe))) {
       const s = rm.index;
+      if (!onThisLine(s)) continue;
       if (claimed.some(([a, b]) => s < b && s + rm[0].length > a)) continue;
       if (quoted.some(([a, b]) => s < b && s + rm[0].length > a)) continue;
       const resolved = resolvePhrase(unitPairs(rm[1]), current);
       if (!resolved) continue;
-      emit(refs, resolved, line, lineStart, s, rm[1]);
+      emit(refs, resolved, probe, lineStart, s, rm[1], text);
     }
   }
   return { steps, refs };
 }
 
-/** Turn a resolved phrase into one entry per address, with exact offsets. */
-function emit(out, resolved, line, lineStart, phraseStart, phrase) {
+/**
+ * Turn a resolved phrase into one entry per address, with exact offsets.
+ *
+ * `line` may be the two-line probe, whose newline has been overlaid with a
+ * space so that indices still line up. The offsets are therefore right either
+ * way — but the recorded `text` must come from the ORIGINAL string, or a phrase
+ * that wrapped carries a run of spaces where its line break was, and every
+ * consumer that re-wraps it (inline() in render-bill.js) sees nothing to fix.
+ */
+function emit(out, resolved, line, lineStart, phraseStart, phrase, source) {
   const { subject, addresses } = resolved;
   let cursor = 0;
   addresses.forEach((addr, i) => {
@@ -1146,7 +1177,7 @@ function emit(out, resolved, line, lineStart, phraseStart, phrase) {
     out.push({
       start: lineStart + start,
       end: lineStart + end,
-      text: line.slice(start, end),
+      text: (source || line).slice(source ? lineStart + start : start, source ? lineStart + end : end),
       unit: subject.unit,
       markers: addr.item,
       path: addr.levels.map((l) => l.marker).join(''),

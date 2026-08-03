@@ -121,6 +121,12 @@ section('CSS / markup contract');
   ok('  and the set is non-trivial', toggled.size >= 10, `${toggled.size} classes`);
   ok('  including the internal-reference highlight', styled.has('jump-target') && toggled.has('jump-target'),
      'jump-target is not both toggled and styled');
+  // The guess mark is the one class where losing the rule loses the meaning
+  // rather than the decoration: an unstyled jump-guess renders identically to a
+  // certain match, which is the exact confusion it exists to prevent.
+  ok('  and the guess mark, which must not look like a match',
+     styled.has('jump-guess') && toggled.has('jump-guess'),
+     'jump-guess is not both toggled and styled');
 }
 
 section('DOM wiring');
@@ -1424,6 +1430,22 @@ section('fallback states');
   ok('  and not the failure note', !/nothing was found/.test(txt), txt);
   ok('  unambiguous matches are not flagged as warnings',
      el.querySelector('.card.warn') === null, 'warn card on an unambiguous match');
+
+  // A guess must not be headed with a statement. "Shown in the bill" over a
+  // match taken from outside the scope the reference governs reads as an
+  // answer; 1,581 references across the corpus resolve that way, and the user's
+  // instruction is to keep guessing and flag it.
+  const g = renderContext(
+    { source: 'Internal reference', citation: 'clause (vii)', internal: true, links: [],
+      target: { label: 'clause (vii)',
+                why: 'There is no (vii) inside the enclosing provision at all, so this is the nearest one anywhere in the section.',
+                section: { num: '4', heading: 'RULES' }, ambiguous: true, guess: true } },
+    { onScope: () => {} });
+  const gtxt = g.textContent;
+  ok('a guess is headed as a guess', /Best guess/.test(gtxt), gtxt.slice(0, 140));
+  ok('  and never as a statement of fact', !/Shown in the bill/.test(gtxt), gtxt.slice(0, 140));
+  ok('  warning the provision may be wrong', /may be the wrong provision/.test(gtxt), gtxt.slice(0, 140));
+  ok('  and carried as a warn card', g.querySelector('.card.warn') !== null, 'no warn card on a guess');
 }
 {
   // More than one candidate: still shown, but flagged rather than asserted.

@@ -73,19 +73,41 @@ const LINE_HEAD = '(?:^|\\n)[ \\t]*(?:``|‘‘|["“])?[ \\t]*';
  * phantom sibling that steals every later reference to the real marker.
  */
 function outline(text, from, to) {
-  const re = new RegExp(`${LINE_HEAD}(\\([A-Za-z0-9]{1,8}\\))(?=[ \\t\\n]|$)`, 'g');
+  // A RUN of markers, not one. A drafter opens a subparagraph and its first
+  // clause on the same line — "(B)(i) The President may waive …" — and matching
+  // a single marker with a whitespace lookahead found *neither*: `(B)` fails
+  // because the next character is `(`, and `(i)` is not at a line head. 887 such
+  // pairs across the corpus, and every provision opened this way was invisible
+  // to `parentSpan` and `walk`, so a reference to "clause (i) of this
+  // subparagraph" found nothing in its parent and fell through to the nearest
+  // match anywhere in the section — 5,594 characters away, onto a *subsection*
+  // letter, in the case that reported this.
+  //
+  // Both markers have to be emitted, at their own depths and their own offsets.
+  // Revealing only the first is worse than revealing neither: the parent becomes
+  // findable while the child it introduces stays missing, so the walk now has a
+  // scope to search and still cannot find the thing in it.
+  const re = new RegExp(`${LINE_HEAD}((?:\\([A-Za-z0-9]{1,8}\\))+)(?=[ \\t\\n]|$)`, 'g');
   const out = [];
   re.lastIndex = from;
   let m;
   while ((m = re.exec(text)) && m.index < to) {
     const at = m.index + m[0].lastIndexOf(m[1]);
+    const end = at + m[1].length;
+    // The wrap test asks about the line head, so it is the run's first marker
+    // that answers it — the rest are not at a line head at all and cannot be
+    // there because a reference broke across the measure.
     if (isWrappedMarker(text, at)) {
-      re.lastIndex = Math.max(re.lastIndex, at + m[1].length);
+      re.lastIndex = Math.max(re.lastIndex, end);
       continue;
     }
-    out.push({ at, marker: m[1], depth: markerDepth(m[1]) });
+    let off = at;
+    for (const marker of m[1].match(/\([A-Za-z0-9]{1,8}\)/g) || []) {
+      out.push({ at: off, marker, depth: markerDepth(marker) });
+      off += marker.length;
+    }
     // Overlapping line starts are impossible, but a zero-width step is not.
-    re.lastIndex = Math.max(re.lastIndex, at + m[1].length);
+    re.lastIndex = Math.max(re.lastIndex, end);
   }
   return out;
 }
@@ -220,9 +242,15 @@ export function locateInternal(bill, cite) {
       ? hits.length > 1
         ? `The nearest ${marks[marks.length - 1]} inside the enclosing provision, which has ${hits.length}.`
         : `The only ${marks[marks.length - 1]} inside the enclosing provision.`
-      : `No ${marks[marks.length - 1]} inside the enclosing provision, so this is the nearest one in the section.`,
+      : `There is no ${marks[marks.length - 1]} inside the enclosing provision at all, so this is the nearest one anywhere in the section — it may belong to a different provision, or the reference may point out to the U.S. Code rather than into the bill.`,
     section: sec,
     ambiguous: hits.length > 1 || !scoped,
+    // Two different degrees of doubt, and collapsing them into one flag
+    // undersells the worse of them. Several candidates inside the RIGHT parent
+    // is a near-miss — the answer is one of them. Nothing in the right parent at
+    // all means this came from somewhere the reference does not govern, and it
+    // is a guess, which the pane and the bill both have to say outright.
+    guess: !scoped,
   };
 }
 
