@@ -103,7 +103,25 @@ export function createRedline(ops, fullText) {
   // told the reader "not drawn into the text" about language that was already
   // in the law.
   const structural = (o) => o.type === 'add-at-end' || (o.type === 'insert' && o.placement === 'after-unit');
-  const work = (ops || [])
+
+  // `operand` is set where the bill NAMES what it operates on instead of quoting
+  // it — "by striking the period at the end", "and inserting a semicolon". The
+  // span in the bill is the phrase the reader clicked, so that is what `text`
+  // holds; what has to be found in — or added to — the LAW is the mark itself.
+  //
+  // Substituted HERE, before the split, and that placement is the whole point.
+  // This map used to sit in the `additions` chain alone, where an operand-bearing
+  // op can never arrive: structural() admits only `add-at-end` and after-unit
+  // inserts, and every op carrying `operand` is a plain strike or insert. So it
+  // was dead code in the one list that could not use it, and missing from the one
+  // that could. Every synthesised punctuation strike matched the PHRASE against
+  // the law's text, found nothing, and drew nothing — and its paired insert went
+  // with it, because `replaces` pointed at a strike that never reached struckAt.
+  // 446 strikes and 343 paired inserts across the corpus, every count green and
+  // not one pixel drawn.
+  const named = (ops || []).map((o) => (o.operand ? { ...o, text: o.operand } : o));
+
+  const work = named
     .filter((o) => (o.type === 'strike' || o.type === 'insert') && typeof o.text === 'string')
     .filter((o) => !structural(o))
     .map((o) => ({ ...o, done: false }));
@@ -123,17 +141,13 @@ export function createRedline(ops, fullText) {
   // apply() with nothing to anchor to — no quoted phrase, no paired strike —
   // so it drew nothing at all. Scoped to (C) itself by scopeUnitInserts(), it
   // lands after (C)'s subtree, which is where the bill puts it.
-  const additions = (ops || [])
+  const additions = named
     .filter((o) => typeof o.text === 'string' && structural(o))
     // `inLaw` is decided here rather than inside additionsAt(), because whether
     // the law already contains this language has nothing to do with which node
     // the renderer happens to be laying out when it asks. Deciding it lazily
     // made appliedNodePaths() depend on walk order, which is the kind of thing
     // that works until a tree is shaped differently.
-    // `operand` is set where the bill NAMES its operand instead of quoting it —
-    // "by striking the period at the end". The span in the bill is the phrase,
-    // so that is what `text` holds; what has to be found in the LAW is the mark.
-    .map((o) => (o.operand ? { ...o, text: o.operand } : o))
     .map((o) => ({ ...o, done: false, inLaw: alreadyIn(fullText, o.text) }));
 
   // Has this amendment already happened?

@@ -468,6 +468,32 @@ section('redline on the current law');
      show(seg([{ type: 'strike', text: 'or', start: 1, end: 3, atEnd: true }], 'apples; or')),
      'apples; [del:or]');
 
+  // The bill NAMES its operand instead of quoting it: "by striking the period at
+  // the end and inserting ``; or''". The span in the bill is the PHRASE — that is
+  // what the reader clicked and what `text` must slice back to, per the
+  // badOpOffsets invariant — and the mark it names travels as `operand`. What has
+  // to be found in the LAW is the mark.
+  //
+  // Every other case here passes the operand as `text`, so this path had no
+  // coverage at all — and it drew nothing whatsoever. The operand substitution sat
+  // in redline's `additions` chain, which a strike can never enter, so apply()
+  // searched the law for the words "striking the period at the end". 446 strikes
+  // and 343 paired inserts across the corpus, every count green, nothing drawn.
+  const punctOps = [
+    { type: 'strike', text: 'striking the period at the end', operand: '.', atEnd: true, start: 10, end: 40 },
+    { type: 'insert', text: '; or', start: 50, end: 54, replaces: 10 },
+  ];
+  eq('a named punctuation operand is struck in the law',
+     show(seg(punctOps, 'consult with the Administrator.')),
+     'consult with the Administrator[del:.][ins:; or]');
+  // The sharp half: before the fix this struck the phrase itself, because the
+  // phrase is what apply() was searching for.
+  eq('  and the phrase naming it is never searched for',
+     show(seg([{ type: 'strike', text: 'striking the period at the end', operand: '.',
+                atEnd: true, start: 10, end: 40 }],
+              'a clause mentioning striking the period at the end')),
+     'a clause mentioning striking the period at the end');
+
   // An operation applies only in the provision the instruction navigated to.
   const scoped = [{ type: 'strike', text: 'or', start: 1, end: 3, atEnd: true, scope: '(d)(2)(A)' }];
   eq('a scoped op marks its own provision', show(createRedline(scoped).apply('apples; or', '(d)(2)(A)')),
