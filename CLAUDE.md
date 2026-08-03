@@ -10,7 +10,7 @@ and is written for a user; this file is for changing it. Read both.
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
 node tools/selftest.mjs                   # 506 checks, no dependencies
-node tools/rendertest.mjs                 # 268 checks, needs `npm i -D linkedom`
+node tools/rendertest.mjs                 # 284 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
@@ -143,7 +143,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 
 ```bash
 node tools/selftest.mjs     # all 506 checks passed
-node tools/rendertest.mjs   # all 268 render checks passed
+node tools/rendertest.mjs   # all 284 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
 
@@ -773,6 +773,48 @@ entities, so tag-stripping does not touch them; they only become text once
 because the enrolled bills in `corpus/files` contain **zero** and widening the
 shared helper would put the corpus baseline at risk to fix a problem it does not
 have.
+
+**A Public Law's own text needs an outline drawn on it.** `data/plaw` stores a
+section as the law prints it — hard-wrapped at 72 columns, indented by depth, one
+string — and putting that string in one element rendered Pub. L. 117-2 § 2001 as
+14,852 characters of solid text. The Code's sections arrive from USLM already
+nested, so `nodeEl` has always had a tree to draw; `parseProvision()` in
+`app/parse/outline.js` gives a Public Law the same one, off the only structure its
+text carries: the markers at the heads of its lines. It defers to that module's
+existing rules rather than restating them — a marker is skipped where
+`isWrappedMarkerLine` says it is only there because a reference ran off the
+measure, and a RUN of markers on one line opens two provisions.
+
+The wrap's line breaks and indents are dropped with it, which is `inline()` from
+`render-bill.js` and safe for the same reason: the slice has already been cut, so
+no offset is computed against the result. A run of spaces NOT touching a line
+break survives — that is the drafter's typography. Statutes at Large page
+furniture (`[[Page 134 STAT. 1923]]`, wedged mid-sentence) goes too; it is the
+same apparatus as the `<<NOTE: …>>` markers, and only stripped at render rather
+than at ingest because the shipped shards already contain it.
+
+**A named subdivision must show its provisions, not its table of contents.**
+"title IV of division M of Public Law 116-260" answered with a row of chips
+reading "Sec. 401. …", which is the contents of something the reader still cannot
+see. Bounded at `PROVISION_BUDGET` sections — each is a separate GET — with the
+rest listed and the cap stated.
+
+**Regenerated data can be stale against the parser that reads it.** The same
+report exposed this: the citation parses correctly to `["DIVISION M","TITLE IV"]`
+and 116-260's shards recorded only `DIVISION M`, because they were built before
+the appropriations-title work of 2026-08-02. The tell is decisive and worth
+reusing — Pub. L. 116-6 IS `hjres31-116-enr.htm`, and `parseBill` gives that file
+26 nested ancestor paths today while its shard had none. Anything in `data/` that
+is produced by `app/parse` is a cache of a parser version, and re-running the
+ingester is part of shipping a parser change. `ingest_plaw.mjs --force` fixed it:
+1,802 nested paths across the 25 laws.
+
+Meanwhile `resolvePlawDivision` shortens the path from the inside out until
+something matches and says which level it dropped, so a level the data cannot
+place gives division M's 30 sections rather than the law's 2,092. Narrow and
+honest beats wide and silent — the same trade the guess flag makes. Test it with
+a level that cannot exist ("subtitle Z of title IV of division M"), never with a
+real one: a test that only passes while the data is broken is not a test.
 
 **A Public Law is an Act, and the index already had it.** `data/usc/acts/`
 contains 1,737 files named `pub_l_<congress>_<law>.json` — the ingester files a
