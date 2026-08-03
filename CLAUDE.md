@@ -1918,11 +1918,18 @@ are `usc`/`cfr` with `relative: true` and ids prefixed `r`.
    658 of 675 are plain U.S.C. cites, not Act-relative, so the Act-numbering
    hazard is not it either. Two of our own faults are confirmed and each is
    worth its own pass:
-   - **A shard tree can be missing a level.** 42 U.S.C. 4332 ships with
-     `(A)`–`(H)` at top level; NEPA's own "(2) all agencies of the Federal
-     Government shall—" is gone, so the correct address `(2)(A)` matches
-     nothing. That is an ingest/USLM structure bug, and it means the shard
-     misrepresents the statute for *reading* too, not only for redlining.
+   - **The CODE can omit a level the statute plainly has, and that is not our
+     bug.** 42 U.S.C. 4332 ships with `(A)`–`(L)` at top level and no `(2)`, so
+     the correct address `(2)(A)` matches nothing. I called this an ingest/USLM
+     structure bug twice before downloading the XML, and it is neither: the
+     OLRC's own markup puts NEPA's "(1) the policies … and (2) all agencies …
+     shall—" inline in the `<chapeau>` and hangs the `(A)`–`(L)`
+     `<subparagraph>` elements straight off the `<section>`. There is no `(2)`
+     element in the source. `build_nodes` reproduces exactly what is there.
+     **Do not "fix" the ingester for this** — synthesising the level would make
+     our shards disagree with the Code they claim to be. 17 sections of 35,054
+     are shaped this way; `reScope()` copes by dropping the leading marker when
+     the tail is a real address.
    - **Scope composition can drop a level.** "section 2(a)(36) of the Investment
      Company Act" reaches 15 U.S.C. 80a-2 as bare `(36)` instead of `(a)(36)`.
 

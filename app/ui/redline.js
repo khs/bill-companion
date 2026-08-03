@@ -156,12 +156,13 @@ function reScope(ops, knownPaths) {
     }
     // Nothing shallower matched, so try dropping markers off the FRONT instead.
     //
-    // This is the shard bug seen from the reading side. 42 U.S.C. 4332 ships
-    // with (A)–(L) at top level and NEPA's own "(2) all agencies … shall—"
-    // flattened into the lead, so the perfectly correct address (2)(A) matches
-    // nothing while (A) is right there. 17 sections Code-wide are shaped this
-    // way; the tree is wrong and the citation is not, so the leading marker is
-    // the one to drop.
+    // A level the CODE ITSELF does not mark up. 42 U.S.C. 4332's USLM puts
+    // NEPA's "(1) the policies … and (2) all agencies … shall—" inline in the
+    // <chapeau> and hangs the (A)–(L) <subparagraph> elements straight off the
+    // section — there is no (2) element in the source at all. So the shard is
+    // faithful, the citation "(2)(A)" is correct, and neither can be fixed:
+    // what is left is to notice that the tail names a real provision. 17
+    // sections Code-wide are shaped this way (checked, of 35,054).
     //
     // Safe because it is still a test, never a guess: the remainder has to be a
     // real path. The Fiscal Responsibility Act's transposed (6)(o)(E) offers
