@@ -1014,6 +1014,66 @@ the verbs that take a quoted operand. Not `amend`, which appears in a gap
 legitimately ("the following new section (and amending the table of sections
 accordingly):", three real additions a broader guard threw away).
 
+**A field the parser sets and no consumer reads is a feature that does not
+exist — and every count stays green while it doesn't.** This is the counts-are-
+not-enough rule with a name, and it is the single most productive thing to audit
+in this codebase. Three found on 2026-08-03, all three documented in this file
+as working:
+
+- `operand` — the mark a bill NAMES instead of quoting ("by striking the period
+  at the end"). `text` is the phrase the reader clicked, because the
+  `badOpOffsets` invariant requires the span to round-trip; `operand` is what has
+  to be found in the LAW. The substitution turning one into the other sat in
+  `redline.js`'s `additions` chain, which an operand-bearing op can never enter —
+  `structural()` admits only `add-at-end` and after-unit inserts, and every
+  operand op is a plain strike. Dead code in the one list that could not use it
+  and missing from the one that could, so `apply()` searched the law for the
+  words "striking the period at the end". **449 strikes and the 346 inserts
+  paired to them, not one pixel drawn.** Worse where the phrase happened to occur
+  in the provision, which struck those words. And it poisoned `stale`: an
+  amendment all of whose strikes carry `operand` was declared stale in full, so
+  its *unrelated* inserts and additions were suppressed too — 19 amendments.
+- `implied` — set on every synthesised target, carrying the reason in prose meant
+  to be read ("title 10, carried from the last title the bill named"). Nothing
+  read it, so the pane named a provision the instruction never mentions exactly
+  as if the bill had written it out. 1,239 targets.
+- `etSeq` — see the next invariant.
+
+The audit that found these enumerated ten such fields; the seven still unread are
+TODO 33. When adding a field, grep the consumers before believing the feature
+works, and write the test at the level the READER meets it — `rendertest.mjs`
+had 284 checks and the redline drew nothing for a whole family of ops, because
+every redline case passed the operand as `text` and so could not fail at this.
+
+**`et seq.` names a range, and the end of a range is not the end of the section
+it begins at.** "The National Environmental Policy Act of 1969 (42 U.S.C. 4321
+et seq.) is amended by adding at the end the following: SEC. 106. …" resolves to
+42 U.S.C. 4321, NEPA's own first section, and the addition had no navigation to
+scope it — so a whole new SECTION OF THE ACT was drawn inside the Act's first
+section, in the insertion colour. 184 across the corpus, 131 opening "SEC. N."
+outright. Nothing here knows where the range stops; the Act's last section is not
+a fact the citation carries. So `markRangeAdditions()` flags the op and the pane
+declines, saying what is added and where it goes. Only additions — a strike names
+language and is checked against the text, so it declines on its own, while an
+addition is placed structurally and is never checked against anything, which is
+exactly why this one went wrong silently.
+
+**Three flags now mean "dealt with but deliberately not drawn", and `placed()`
+must know all of them.** `applied` (the law already contains it), `staleSkip`
+(the amendment has already happened) and `rangeSkip` (it belongs at the end of
+the Act). The node that declines an addition still marks it `done`, so a
+`placed()` that forgets one reports "✓ shown above" about an op it just refused
+to draw. Each of the three was added separately and each broke this the same way.
+
+**A pairing rule reads a gap, and the gap depends on where the op's span
+starts.** `RE_REPLACES` looks for the words "and inserting" between a strike and
+the insert that replaces it — which works only because a QUOTED insert's span
+starts inside its quotes, leaving the verb behind in the gap. A NAMED insert
+("and inserting a semicolon") spans the verb itself, so the gap in front of it
+holds only the connective and `RE_REPLACES` silently declines every one.
+`RE_PUNCT_REPLACES` is the same test for that shape, and it has to admit a
+closing quote too, because the strike being replaced is often the quoted kind.
+
 ---
 
 ## The export
@@ -1743,6 +1803,37 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    so no provision is asserted. Adding the longer name would fix it; adding an
    `enactedAs` to the shorter one without the longer would not.
 
+33. **Seven parser fields are still written and never read.** (2026-08-03.) An
+   audit enumerated every field set on ops, citations, amendments and steps and
+   grepped every consumer in `app/ui`, `app/resolve`, `main.js`, `export.js` and
+   `index.html` — checking destructuring, spreads and computed access, not just
+   a raw grep. Ten came back unread; three were fixed the same day (`operand`,
+   `implied`, `etSeq` — see the invariant above). Ranked by corpus frequency,
+   what remains:
+   - `ladder` (40,995 citations + 8,514 amendments) and `bill.sections[].division`
+     (9,039 of 9,120 sections) — **not bugs.** The pane re-derives the ladder,
+     and `division` is superseded by `ancestors`. Candidates for deletion, not
+     for wiring up; both cost a field on every object.
+   - `amendment.verb` (8,514) — 8,342 "amended", 155 "repealed", 17
+     "redesignated". **13 redesignations produce no ops at all**, so
+     `attachEffect` returns early and the reader gets the provision with no
+     indication the bill renumbers it: "Section 55301 of title 46 … is
+     redesignated as section 55123 of such title" says exactly what it does and
+     the pane says nothing. All 13 are in the NDAA. The destination is not
+     captured anywhere, so this needs a matcher as well as a consumer.
+   - `viaAct` (973 citations, 19 bills) and `subFromProse` (35) — both record how
+     an address was ASSEMBLED, which is the same kind of auditability `implied`
+     and `relative` now show. `subFromProse` is TODO 30's flag: "In carrying out
+     subsection (h) of section 502 of the Housing Act of 1949 (42 U.S.C. 1472)"
+     opens 1472(h) rather than all of 1472, and does not say why.
+   - `cite.unit` (50 CFR citations) and `distributed`/`viaInstruction` (23
+     amendments, 6 instructions, 3 bills). The second is the "Each of the
+     following is amended" form — the pane never says this amendment is one of
+     several sharing one instruction.
+   Also unread and worth its own look: `etSeq` is now consumed for additions but
+   the READER is still not told that "15 U.S.C. 2601 et seq." names a range —
+   2,093 citations answer with a single section under a heading that names it
+   alone.
 
 ---
 

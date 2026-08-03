@@ -14,10 +14,16 @@
 // that change do anything I didn't intend?" — across bills nobody wrote
 // assertions for. Most parser changes should move nothing here at all.
 //
-// The bill files are NOT part of the app. corpus/files/ is gitignored and
-// tools/serve.py refuses to serve it, so nothing here reaches the website.
-// corpus/corpus.json and corpus/baseline.json are small and are the shared
-// definition of the corpus — those are checked in.
+// corpus/files/ IS tracked, and serve.py serves it. That reversed a deliberate
+// earlier decision: refusing it locally was meant to make the dev server show
+// exactly what a deploy shows, on the premise that nothing in the app links to
+// the bills — and samples/library.json now does. A deploy serves whatever is in
+// the repo, so refusing them locally had stopped making the two agree and
+// started hiding a broken link from the only person who runs this locally. The
+// bills are U.S. Government works and not copyrighted. If it ever needs
+// reversing, move the corpus out of the published tree rather than re-ignoring
+// it: an ignored corpus is one a fresh machine silently runs zero bills against.
+// corpus/corpus.json and corpus/baseline.json are the shared definition.
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
