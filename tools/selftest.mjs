@@ -1334,6 +1334,57 @@ section('internal cross-references');
       eq(`${name} § ${sec}`, at && `${at.title} U.S.C. ${at.section}`, `${t} U.S.C. ${s}`);
     }
 
+    // ---- a title of an Act is a range, and the credits say which ----------
+    // This was written off as unresolvable — the Act index maps an Act's
+    // SECTIONS onto the Code and appeared to know nothing about its titles. It
+    // knows: the credit states the title in the same breath as the section,
+    // "(July 15, 1949, ch. 338, title V, § 501, …)", so the ingester inverts
+    // both. 857 Acts carry a title index over 2,222 titles; 697 citations across
+    // the corpus, 690 of which now reach the title's sections instead of the
+    // head of the Act.
+    //
+    // Landmarks, because they are the only check worth running here — these are
+    // the titles these numbers are famous for, and anyone can verify them.
+    const { resolveActTitle } = await imp('app/resolve/act-sections.js');
+    for (const [name, t, wantTitle, wantSec] of [
+      ['Social Security Act', 'XVIII', '42', '1395'],   // Medicare
+      ['Social Security Act', 'XIX', '42', '1396'],     // Medicaid
+      ['Social Security Act', 'II', '42', '401'],       // old-age insurance
+      ['Clean Air Act', 'V', '42', '7661'],             // operating permits
+      ['Clean Air Act', 'II', '42', '7521'],            // mobile sources
+      ['Higher Education Act of 1965', 'IV', '20', '1070'],  // student aid
+      ['Elementary and Secondary Education Act of 1965', 'I', '20', '6301'],
+    ]) {
+      const act = POPULAR_NAMES.find((e) => e.name === name);
+      const got = act && (await resolveActTitle(act, t));
+      eq(`${name} title ${t} begins at`, got && got[0], `${wantTitle}:${wantSec}`);
+    }
+    // A title that does not exist is a decline, not a guess.
+    eq('a title the Act does not have declines',
+       await resolveActTitle(POPULAR_NAMES.find((e) => e.name === 'Clean Air Act'), 'XCIX'), null);
+
+    // The citation spans the title, and resolves to the range rather than the
+    // head of the Act.
+    const titleCite = extractCitations(
+      normalizeText('SEC. 2. X.\nUnder title V of the Clean Air Act, permits are required.\n')
+    ).find((c) => c.kind === 'act');
+    eq('a title citation spans the title', titleCite && titleCite.text, 'title V of the Clean Air Act');
+    eq('  carrying the title', titleCite && titleCite.actTitle, 'V');
+    const titleRes = await resolve(titleCite);
+    ok('  and resolving to that title\'s sections',
+       titleRes.actTitle && titleRes.actTitle.sections.length === 7,
+       JSON.stringify(titleRes.actTitle && titleRes.actTitle.sections.length));
+    eq('  not to the head of the Act', Boolean(titleRes.isActStart), false);
+
+    // A named section beats a named title, the same rule a named division
+    // follows: answering with the title's contents hands back a list when the
+    // citation named one of them.
+    const secInTitle = extractCitations(
+      normalizeText('SEC. 2. X.\nUnder section 501 of title V of the Clean Air Act, permits apply.\n')
+    ).find((c) => c.kind === 'act');
+    eq('a named section beats a named title', secInTitle && secInTitle.actSection, '501');
+    eq('  resolving to the section', (await resolve(secInTitle)).citation, '42 U.S.C. 7661');
+
     // ---- the subdivision chain --------------------------------------------
     // "section 2118(a) of title II of division A of Public Law 116-136".
     // Congress walks down as many levels as it needs, and matching only the

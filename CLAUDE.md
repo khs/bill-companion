@@ -9,7 +9,7 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 479 checks, no dependencies
+node tools/selftest.mjs                   # 493 checks, no dependencies
 node tools/rendertest.mjs                 # 268 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
@@ -142,7 +142,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 479 checks passed
+node tools/selftest.mjs     # all 493 checks passed
 node tools/rendertest.mjs   # all 268 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
@@ -1481,12 +1481,14 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    the corpus before anything was written, which is what turned "these three
    look similar" into a number.
    The two rejected are recorded so nobody re-derives them:
-   - **"title V of the Housing Act of 1949" — 727 occurrences and NOT worth
-     building.** A title of an Act is a range, like a division, but unlike a
-     division there is nothing to resolve it against: `data/usc/acts/` maps an
-     Act's *sections* onto the Code and knows nothing about its titles, and most
-     named Acts are not one Public Law. The honest answer is the one it already
-     gives. Frequency is not tractability.
+   - ~~"title V of the Housing Act of 1949" — 727 occurrences and NOT worth
+     building.~~ **This rejection was wrong; see item 31.** The reasoning was
+     "the Act index maps an Act's *sections* onto the Code and knows nothing
+     about its titles", and that is simply false — the credit names the title
+     right beside the section number. Worth remembering as the failure mode of
+     this whole exercise: the shape was measured correctly at 727 and then
+     dismissed on an assumption about the data that nobody checked. Read a
+     credit before concluding it does not say something.
    - **"paragraph (2) thereof" — 78 occurrences, deferred.** "thereof" means the
      section just named, so composing it is right in principle; the risk is that
      the phrase is commonest inside quoted *inserted* law, where it refers to the
@@ -1553,6 +1555,51 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    rule `RE_ACT_REL_SECTION` follows, because nothing in the text says which of
    two the drafter meant — and the middle may not cross a second section
    reference, or the parenthetical belongs to that one instead.
+
+31. **A title of an Act is a range, and the Code says which sections are in it.**
+   (Fixed 2026-08-03, after the rejection in item 26 was challenged and turned
+   out to be wrong.) The credit states the Act's own title in the same breath as
+   its section number:
+
+   ```
+   42 U.S.C. 1471 -> (July 15, 1949, ch. 338, title V, § 501, 63 Stat. 432; …)
+   42 U.S.C. 7661 -> (July 14, 1955, ch. 360, title V, § 501, as added …)
+   ```
+
+   So the ingester inverts both, and "title V of the Clean Air Act" is a lookup
+   in the same derived data resting on the same claim as the section index —
+   that it only repeats what the Code says about itself. **22,024 credits carry
+   a title, 857 Acts get an index, 2,222 titles.** Across the corpus, 697
+   citations are captured and **690 reach the title's sections** against none
+   before.
+   The two reading rules are the section index's rules, and both are ways to file
+   a title wrongly:
+   - **Only before the first `§`.** "…ch. 531, title XVIII, § 1861, as added Pub.
+     L. 89–97, title I, § 102(a)" names two titles and the second belongs to the
+     law that *inserted* the section. Reading the last one files Medicare under
+     title I.
+   - **A division disqualifies it.** "Pub. L. 119–60, div. C, title XXXI"
+     restarts its title numbering in every division, so a bare title is not an
+     address. Skipped rather than guessed at — the same refusal `divisionAgrees`
+     makes on the resolving side.
+   A title has no uniqueness to violate the way a section number does, so there
+   is no tombstone and no conflicts file; many sections share one. The list is
+   sorted by the Act's own section number, because that is the order the Act
+   reads in and the reader is being shown a table of contents — a plain string
+   sort puts § 12 before § 7.
+   A named **section beats a named title**, the same ordering the division
+   follows, and the corpus does not move at all: the citation spans more text and
+   `dedupe()` already preferred the longer match at equal rank, exactly as when
+   Act-relative sections were first added.
+   Verified on landmarks, which is the only check worth running here: SSA title
+   XVIII is 42 U.S.C. 1395 (Medicare), title XIX is 1396 (Medicaid), title II is
+   401 (old-age insurance); CAA title V is 7661 (permits) and title II is 7521
+   (mobile sources); HEA title IV is 20 U.S.C. 1070 (student aid); ESEA title I
+   is 20 U.S.C. 6301.
+   The 7 that still miss are Acts whose title is entirely uncodified, and the
+   remaining gap in this family is **popular-names coverage, not titles** — "the
+   Housing Act of 1949" is not in the table at all, so nothing matches it. That
+   is the thing to fix next if this is extended.
 
 
 ---

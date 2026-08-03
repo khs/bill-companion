@@ -121,6 +121,27 @@ const RE_ACT_DIVISION = POPULAR_NAMES.map((act) => ({
   ),
 }));
 
+// "title V of the Housing Act of 1949", "title XVIII of the Social Security Act"
+//
+// A title of an Act is a range, exactly as a division of a Public Law is, and
+// for a long time this was written off as unresolvable: the Act index maps an
+// Act's SECTIONS onto the Code and appeared to know nothing about its titles.
+// It knows. The credit states the title in the same breath as the section —
+// "(July 15, 1949, ch. 338, title V, § 501, …)" — so the ingester inverts both,
+// and "title V of the Housing Act of 1949" is 42 U.S.C. 1471 et seq. by the same
+// derivation that makes the section index trustworthy.
+//
+// 727 of these across the corpus, every one of them previously answered with the
+// head of the Act. Only Acts wired to an enacting credit are eligible, the same
+// gate `resolveActSection` is behind.
+const RE_ACT_TITLE = POPULAR_NAMES.filter((a) => a.enactedAs).map((act) => ({
+  act,
+  re: new RegExp(
+    `\\b[Tt]itles?\\s+([IVXLCDM]{1,7}|\\d{1,3}[A-Z]?)\\s+of\\s+(?:the\\s+)?(?:${act.pattern})`,
+    'g'
+  ),
+}));
+
 const RE_ACT_REL_SECTION = POPULAR_NAMES.filter((a) => a.enactedAs && !a.sectionsMatchCode).map(
   (act) => ({
     act,
@@ -1435,6 +1456,17 @@ export function extractCitations(text) {
     while ((m = re.exec(text))) {
       const division = m[2].toUpperCase();
       push(out, m, 'act', { act, division, where: wherePath(m[1], `DIVISION ${division}`) });
+    }
+  }
+
+  // After the division form and before the section form, which is the order
+  // dedupe would settle anyway — but stated here because the reason matters: a
+  // citation naming BOTH a title and a section ("section 501 of title V of …")
+  // is about the section, and the section match is longer.
+  for (const { act, re } of RE_ACT_TITLE) {
+    re.lastIndex = 0;
+    while ((m = re.exec(text))) {
+      push(out, m, 'act', { act, actTitle: m[1].toUpperCase() });
     }
   }
 

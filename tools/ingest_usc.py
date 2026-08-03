@@ -277,8 +277,62 @@ def act_origin(source_credit: str) -> tuple[str, str] | None:
     return re.sub(r"\s+", " ", m.group(1)), num
 
 
+def act_sort_key(num: str):
+    """Sort an Act's own section numbers the way the Act reads.
+
+    "§ 7" before "§ 12", and "§ 1861" before "§ 1861A" — a plain string sort puts
+    12 before 7 and reads as a shuffled table of contents.
+    """
+    m = re.match(r"(\d+)(.*)", str(num))
+    return (int(m.group(1)), m.group(2)) if m else (1 << 30, str(num))
+
+
+ACT_TITLE = re.compile(r"\btitle\s+([IVXLCDM]+|[0-9]+[A-Z]?)\b", re.I)
+ACT_DIV_IN_CREDIT = re.compile(r"\bdiv\.?\s+([A-Z]{1,2})\b")
+
+
+def act_title(source_credit: str) -> str | None:
+    """The Act's OWN title, from the enacting clause, or None.
+
+    The credit states it right beside the section number:
+
+        42 U.S.C. 1471 -> (July 15, 1949, ch. 338, title V, § 501, 63 Stat. 432; …)
+        42 U.S.C. 7661 -> (July 14, 1955, ch. 360, title V, § 501, as added …)
+
+    so "title V of the Housing Act of 1949" and "title V of the Clean Air Act"
+    are lookups in data the Code already prints about itself — the same claim
+    that makes the section index trustworthy. 22,024 credits carry one, over 967
+    Acts.
+
+    Two rules, and they are the section index's rules:
+
+    - **Only before the first §.** "…ch. 531, title XVIII, § 1861, as added Pub.
+      L. 89–97, title I, § 102(a)" names two titles and the second belongs to
+      the law that inserted the section, not to the Act. Reading the last one
+      would file Medicare under title I.
+    - **A division disqualifies it.** "Pub. L. 119–60, div. C, title XXXI"
+      restarts its title numbering in every division, so "title XXXI" alone is
+      not an address. Those are skipped rather than guessed at, which is the
+      same refusal `divisionAgrees()` makes on the resolving side.
+    """
+    if not source_credit:
+        return None
+    first = source_credit.split(";")[0]
+    if not (ACT_DATE_CH.match(first) or ACT_PUBLAW.match(first)):
+        return None
+    hit = ACT_SECNUM.search(first)
+    if not hit:
+        return None
+    head = first[: hit.start()]
+    if ACT_DIV_IN_CREDIT.search(head):
+        return None
+    m = ACT_TITLE.search(head)
+    return m.group(1).upper() if m else None
+
+
 def write_act_index(out_root: Path, origins: dict[str, dict[str, str]],
-                    conflicts: dict[str, list[str]]) -> int:
+                    conflicts: dict[str, list[str]],
+                    titles: dict[str, dict[str, list]] | None = None) -> int:
     """One file per Act, mapping its own section numbers onto the Code's.
 
     One file per Act rather than one big index, for the same reason there is one
@@ -304,9 +358,19 @@ def write_act_index(out_root: Path, origins: dict[str, dict[str, str]],
         keep = {k: v for k, v in sections.items() if v}
         if not keep:
             continue
+        payload = {"act": name, "sections": keep}
+        # A title is a RANGE, so unlike a section number it has no uniqueness to
+        # violate and nothing to tombstone — many sections share one. Sorted by
+        # the Act's own section number, because that is the order the Act reads
+        # in and the reader is being shown a table of contents.
+        tt = (titles or {}).get(name) or {}
+        if tt:
+            payload["titles"] = {
+                t: [w for _, w in sorted(v, key=lambda p: act_sort_key(p[0]))]
+                for t, v in sorted(tt.items())
+            }
         (adir / f"{act_slug(name)}.json").write_text(
-            json.dumps({"act": name, "sections": keep}, ensure_ascii=False,
-                       separators=(",", ":")),
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             encoding="utf-8",
         )
         written += 1
@@ -317,7 +381,7 @@ def write_act_index(out_root: Path, origins: dict[str, dict[str, str]],
     return written
 
 
-def scan_shards_for_origins(out_root: Path) -> tuple[dict, dict]:
+def scan_shards_for_origins(out_root: Path) -> tuple[dict, dict, dict]:
     """Rebuild the Act index from shards already on disk (--acts-only).
 
     Slower than a fresh ingest, because it reads 60,000 files back rather than
@@ -326,6 +390,7 @@ def scan_shards_for_origins(out_root: Path) -> tuple[dict, dict]:
     """
     origins: dict[str, dict[str, str]] = {}
     conflicts: dict[str, list[str]] = {}
+    titles: dict[str, dict[str, list]] = {}
     # Three regexes rather than json.loads(). Fully parsing each shard rebuilds a
     # subsection tree of up to several hundred nodes to read three scalar fields,
     # and over 60,000 files that is the difference between a minute and a quarter
@@ -350,20 +415,26 @@ def scan_shards_for_origins(out_root: Path) -> tuple[dict, dict]:
             if not (mc and mt and ms):
                 continue
             rec = {"title": mt.group(1), "section": ms.group(1)}
-            note_origin(origins, conflicts, rec, json.loads('"' + mc.group(1) + '"'))
+            note_origin(origins, conflicts, rec, json.loads('"' + mc.group(1) + '"'), titles)
             n += 1
             if n % 10000 == 0:
                 log(f"    …{n} shards read")
-    return origins, conflicts
+    return origins, conflicts, titles
 
 
-def note_origin(origins: dict, conflicts: dict, rec: dict, source_credit: str) -> None:
+def note_origin(origins: dict, conflicts: dict, rec: dict, source_credit: str,
+                titles: dict | None = None) -> None:
     """Record one section's Act-relative number, refusing to guess on a clash.
 
     Two Code sections claiming the same Act section means the Act was renumbered
     or the credit is ambiguous. Keeping either one would point a citation at a
     real but unrelated provision, which is the worst output this app has, so the
     entry is dropped and recorded instead.
+
+    The Act's own TITLE is recorded beside it where the credit names one. A title
+    is a range and cannot clash the way a number does, so it has no tombstone —
+    but it is recorded against the same Act-section number, so an ambiguous
+    section still contributes its title only once.
     """
     origin = act_origin(source_credit)
     if not origin:
@@ -377,6 +448,15 @@ def note_origin(origins: dict, conflicts: dict, rec: dict, source_credit: str) -
     elif prev != where and prev != "":
         table[act_sec] = ""  # tombstone: known ambiguous, never resolved
         conflicts.setdefault(name, []).append(f"{act_sec} -> {prev} / {where}")
+
+    if titles is None:
+        return
+    t = act_title(source_credit)
+    if not t:
+        return
+    bucket = titles.setdefault(name, {}).setdefault(t, [])
+    if not any(w == where for _, w in bucket):
+        bucket.append((act_sec, where))
 
 
 def ancestors_of(stack: list[ET.Element]) -> list[dict]:
@@ -594,8 +674,8 @@ def main() -> int:
         root = Path(args.out) if args.out else Path(__file__).resolve().parent.parent / "data" / "usc"
         log(f"Rebuilding the Act index from shards in {root} (no download)")
         t0 = time.time()
-        origins, conflicts = scan_shards_for_origins(root)
-        n = write_act_index(root, origins, conflicts)
+        origins, conflicts, titles = scan_shards_for_origins(root)
+        n = write_act_index(root, origins, conflicts, titles)
         # The manifest count has to follow, or `manifest.acts` describes the
         # previous build and the directory comparison stops meaning anything.
         mp = root / "manifest.json"
@@ -654,8 +734,8 @@ def main() -> int:
     # are also spread across titles, so a subset ingest cannot see a whole Act
     # even in principle. One extra pass over the shards is a small price.
     log("\nBuilding the Act index from every shard on disk")
-    origins, conflicts = scan_shards_for_origins(out_root)
-    acts = write_act_index(out_root, origins, conflicts)
+    origins, conflicts, titles = scan_shards_for_origins(out_root)
+    acts = write_act_index(out_root, origins, conflicts, titles)
     manifest["acts"] = acts
     manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
 

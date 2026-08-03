@@ -63,6 +63,40 @@ export function renderContext(res, handlers) {
       )
     );
   }
+  if (res.actTitle) {
+    // A title of an Act is a RANGE, so the useful answer is which sections are
+    // in it — the same answer a division of a Public Law gets. The first is
+    // rendered below as the provision; these are the rest, so the reader can see
+    // the shape of what was cited without leaving the pane.
+    const t = res.actTitle;
+    const c = document.createElement('div');
+    c.className = 'card';
+    const h = document.createElement('h4');
+    h.textContent = `${t.act}, title ${t.title} — ${t.sections.length} sections in the Code`;
+    c.appendChild(h);
+    const p = document.createElement('p');
+    p.textContent =
+      `The bill cites a title of an Act, which names a range rather than one provision. ` +
+      `These are the sections the Code credits to ${t.act} title ${t.title}, taken from the ` +
+      `source credit each one carries (${t.enactedAs}). The first is shown below.`;
+    c.appendChild(p);
+    const list = document.createElement('div');
+    list.className = 'links';
+    for (const s of t.sections.slice(0, 200)) {
+      const el = document.createElement('span');
+      el.className = 'crumb';
+      el.textContent = `${s.title} U.S.C. ${s.section}`;
+      list.appendChild(el);
+    }
+    c.appendChild(list);
+    if (t.sections.length > 200) {
+      const more = document.createElement('p');
+      more.className = 'dim';
+      more.textContent = `…and ${t.sections.length - 200} more.`;
+      c.appendChild(more);
+    }
+    root.appendChild(c);
+  }
   if (res.crumbs && res.crumbs.length) root.appendChild(crumbs(res.crumbs, res, handlers));
   if (res.also && res.also.length) root.appendChild(alternates(res, handlers));
   if (res.offsetNote) root.appendChild(card('Numbering caveat', res.offsetNote, 'warn'));

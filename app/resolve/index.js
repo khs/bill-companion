@@ -3,7 +3,7 @@
 import { resolveCfr, resolveCfrPart, cfrLinks } from './cfr.js';
 import { resolveUsc, uscLinks } from './usc.js';
 import { findAct } from './popular-names.js';
-import { resolveActSection } from './act-sections.js';
+import { resolveActSection, resolveActTitle } from './act-sections.js';
 import { resolvePlaw, resolvePlawDivision } from './plaw.js';
 
 const cache = new Map();
@@ -113,7 +113,7 @@ function cacheKey(c) {
   // bare citation would inherit a division nothing in it named.
   return [c.kind, c.title, c.part, c.section, c.subsection, c.congress, c.law, c.volume, c.page,
           c.act && c.act.name, c.actSection, c.division, c.where && c.where.join('>'),
-          c.shortTitle]
+          c.shortTitle, c.actTitle && `t${c.actTitle}`]
     .filter(Boolean)
     .join('|');
 }
@@ -147,6 +147,36 @@ async function dispatch(cite) {
             cite.where || [`DIVISION ${cite.division}`]
           );
           if (local) return { ...local, actName: act.name };
+        }
+      }
+
+      // "title V of the Housing Act of 1949" — a title is a range, like a
+      // division, and the credits say which Code sections are in it. Answered
+      // before the head of the Act for the same reason: 40 sections beats 44,
+      // and the reader named the 40.
+      //
+      // Only where no section is named, the same rule the division follows.
+      if (cite.actTitle && !cite.actSection) {
+        const inTitle = await resolveActTitle(act, cite.actTitle);
+        if (inTitle) {
+          const parts = inTitle.map((w) => {
+            const at = w.indexOf(':');
+            return { title: w.slice(0, at), section: w.slice(at + 1) };
+          });
+          const first = await resolveUsc({ ...parts[0], subsection: '' });
+          return {
+            ...first,
+            source: 'Act (title)',
+            actName: act.name,
+            citation: `${act.name}, title ${cite.actTitle}`,
+            actTitle: {
+              act: act.name,
+              title: cite.actTitle,
+              enactedAs: act.enactedAs,
+              sections: parts,
+            },
+            isActStart: false,
+          };
         }
       }
 

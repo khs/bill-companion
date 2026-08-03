@@ -76,6 +76,34 @@ export function loadActIndex(enactedAs) {
  * rather than picking one, because a citation pointing at a real but unrelated
  * provision is the worst output this app has.
  */
+/**
+ * Which Code sections make up "title V of the Housing Act of 1949"?
+ *
+ * A title of an Act is a range, the way a division of a Public Law is, and the
+ * credit states it in the same breath as the section number:
+ *
+ *   42 U.S.C. 1471 -> "(July 15, 1949, ch. 338, title V, § 501, 63 Stat. 432; …)"
+ *
+ * so this is the same lookup in the same derived data, and rests on the same
+ * claim — that it only ever repeats what the Code says about itself. 857 Acts
+ * carry a title index, over 2,222 titles.
+ *
+ * Roman numerals are how Acts number their titles and how the credits spell
+ * them, so no conversion is wanted; the citation is matched as written and
+ * upper-cased. A miss is a real answer: the Act may have no titles, or a title
+ * may be entirely uncodified.
+ *
+ * @returns {Promise<string[]|null>} "42:1471"-style entries in the Act's own
+ *   section order, or null.
+ */
+export async function resolveActTitle(act, actTitle) {
+  if (!act || !act.enactedAs || !actTitle) return null;
+  const index = await loadActIndex(act.enactedAs);
+  if (!index || !index.titles) return null;
+  const hit = index.titles[String(actTitle).toUpperCase()];
+  return hit && hit.length ? hit : null;
+}
+
 export async function resolveActSection(act, actSection) {
   if (!act || !act.enactedAs || !actSection) return null;
   const index = await loadActIndex(act.enactedAs);
