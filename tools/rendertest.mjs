@@ -1104,6 +1104,61 @@ section('resolvers');
        [...el.querySelectorAll('.card.warn h4')].some((h) => /As enacted/.test(h.textContent)),
        [...el.querySelectorAll('h4')].map((h) => h.textContent).join(' | '));
 
+    // ---- a Public Law section renders its OUTLINE, not a wall of text ------
+    // data/plaw stores a section as the law prints it: hard-wrapped at 72
+    // columns, indented by depth, one string. In one element that is 14,852
+    // characters of Pub. L. 117-2 § 2001 with no visible structure. The Code's
+    // sections arrive from USLM already nested and have always had a tree to
+    // draw; parseProvision gives a Public Law the same one.
+    if (existsSync(join(ROOT, 'data/plaw/117-2/manifest.json'))) {
+      const arp = await resolve({ kind: 'publaw', congress: '117', law: '2', actSection: '2001',
+                                  text: 'section 2001 of Public Law 117-2' });
+      const el2 = renderContext(arp, {});
+      const nodes = el2.querySelectorAll('.prov .node');
+      ok('a Public Law section renders as an outline', nodes.length >= 20, `${nodes.length} nodes`);
+      ok('  with markers drawn', el2.querySelectorAll('.prov .marker').length >= 20,
+         `${el2.querySelectorAll('.prov .marker').length} markers`);
+      ok('  and nested levels', el2.querySelectorAll('.prov .kids').length >= 3,
+         `${el2.querySelectorAll('.prov .kids').length} nested groups`);
+      // The 72-column wrap must not survive into the rendered text: a phrase
+      // broken across the measure carries the newline AND the continuation
+      // indent, which renders as a run of spaces through a sentence.
+      const body = [...el2.querySelectorAll('.prov .body')].map((n) => n.textContent).join(' ');
+      ok('  the wrap indent is gone from mid-sentence', !/\S {3,}\S/.test(body),
+         JSON.stringify((body.match(/\S {3,}\S/) || [''])[0]));
+      ok('  and the Statutes page furniture with it', !/\[\[Page/.test(body),
+         JSON.stringify((body.match(/\[\[Page[^\]]*\]\]/) || [''])[0]));
+      // The section head is stripped from the text because it is the entry's
+      // own heading, so it has to be drawn or it is simply lost.
+      ok('  the heading survives as a heading',
+         /ELEMENTARY AND SECONDARY SCHOOL EMERGENCY RELIEF FUND/.test(el2.textContent),
+         el2.textContent.slice(0, 100));
+    }
+
+    // ---- a named subdivision shows its PROVISIONS, not a list of headings --
+    // "title IV of division M of Public Law 116-260" was answered with a row of
+    // chips reading "Sec. 401. …", which is the table of contents of something
+    // the reader still cannot see. And where the law's text does not record the
+    // level named, the path is shortened until something matches rather than
+    // falling through to all 2,092 sections of the law.
+    if (existsSync(join(ROOT, 'data/plaw/116-260/manifest.json'))) {
+      const div = await resolve({ kind: 'publaw', congress: '116', law: '260',
+                                  division: 'M', where: ['DIVISION M', 'TITLE IV'],
+                                  text: 'title IV of division M of Public Law 116-260' });
+      ok('a subdivision citation falls back to the level the law records',
+         /division M/.test(div.citation), div.citation);
+      ok('  and renders provisions rather than a listing',
+         (div.plaw.provisions || []).length > 0, `${(div.plaw.provisions || []).length}`);
+      ok('  far fewer than the whole law', div.plaw.total < 100, `${div.plaw.total} sections`);
+      const dEl = renderContext(div, {});
+      ok('  saying which level it could not place', /Showing a wider level/.test(dEl.textContent),
+         dEl.textContent.slice(0, 120));
+      ok('  and naming what was asked for', /title IV/.test(dEl.textContent), 'no mention of title IV');
+      ok('  with the shared heading drawn once',
+         [...dEl.querySelectorAll('.ctx-sub')].filter((n) => /DIVISION M/.test(n.textContent)).length === 1,
+         `${[...dEl.querySelectorAll('.ctx-sub')].filter((n) => /DIVISION M/.test(n.textContent)).length} copies`);
+    }
+
     const many = await resolve({ kind: 'publaw', congress: '116', law: '6', actSection: '101', text: 'section 101 of Public Law 116-6' });
     const manyEl = renderContext(many, {});
     eq('every section sharing a number is rendered',

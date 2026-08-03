@@ -18,6 +18,11 @@
 
 import { PLAW } from './data-base.js';
 
+// How many sections of a named subdivision are rendered in full before the pane
+// falls back to listing them. Each is a separate static GET, and past this the
+// reader is scrolling rather than reading.
+const PROVISION_BUDGET = 20;
+
 const manifestCache = { p: null };
 const sectionCache = new Map();
 
@@ -237,14 +242,66 @@ export async function resolvePlawDivision(congress, law, where) {
   if (!where || !where.length || !(await havePlaw(congress, law))) return null;
   const index = await loadPlawIndex(congress, law);
   if (!index || !Array.isArray(index.toc)) return null;
-  const toc = index.toc.filter((t) => underPath(String(t.where || '').split(' > '), where));
+  // The path is shortened from the inside out until something matches. A law's
+  // structure is recorded only as deeply as it was parsed when it was ingested,
+  // and "title IV of division M of Public Law 116-260" asks for a level that
+  // law's shards do not carry — so the whole path matched nothing, the caller
+  // fell through, and the reader was handed all 2,092 sections of the law.
+  //
+  // Division M is not what was asked for, but it is 30 sections rather than
+  // 2,092 and it certainly contains title IV. Answering with the nearest
+  // enclosing level the data does know, and saying which level was dropped, is
+  // the same trade the guess flag makes: narrow and honest beats wide and
+  // silent.
+  let want = where;
+  let toc = index.toc.filter((t) => underPath(String(t.where || '').split(' > '), want));
+  const dropped = [];
+  while (!toc.length && want.length > 1) {
+    dropped.unshift(want[want.length - 1]);
+    want = want.slice(0, -1);
+    toc = index.toc.filter((t) => underPath(String(t.where || '').split(' > '), want));
+  }
   if (!toc.length) return null;
+
+  // Listing the headings answers a question nobody asked. Someone who cites
+  // "title IV of division M" wants to READ title IV, and a row of chips saying
+  // "Sec. 401. Definitions." is the table of contents of something still
+  // invisible. So the sections are fetched and shown.
+  //
+  // Bounded, because a division runs to hundreds of sections and each is a
+  // separate GET: past PROVISION_BUDGET the listing is the honest answer and the
+  // pane says which it is doing. A whole-law citation keeps the listing outright
+  // — nobody reading "Public Law 116-260" wants 2,092 sections rendered.
+  const provisions = [];
+  let more = false;
+  if (toc.length <= PROVISION_BUDGET) {
+    for (const t of toc) {
+      const shard = await loadPlawSection(congress, law, t.num);
+      const hit = (shard && shard.entries || []).find((e) => underPath(e.ancestors, want));
+      if (hit) provisions.push({ ...hit, num: t.num, heading: t.heading });
+    }
+  } else {
+    for (const t of toc.slice(0, PROVISION_BUDGET)) {
+      const shard = await loadPlawSection(congress, law, t.num);
+      const hit = (shard && shard.entries || []).find((e) => underPath(e.ancestors, want));
+      if (hit) provisions.push({ ...hit, num: t.num, heading: t.heading });
+    }
+    more = true;
+  }
+
   return {
     source: 'Public Law (as enacted)',
     // Outermost first, the way the law is built — the reverse of the order the
     // citation writes it, and the order the contents below are in.
-    citation: `Pub. L. ${lawId(congress, law)}, ${where.map(pretty).join(', ')}`,
-    plaw: { ...index, toc, entries: null, total: toc.length },
+    citation: `Pub. L. ${lawId(congress, law)}, ${want.map(pretty).join(', ')}`,
+    plaw: {
+      ...index, toc, entries: null, total: toc.length, provisions, more,
+      // The levels the citation named that this law's shards cannot place. The
+      // pane says so rather than quietly answering a wider question.
+      citation: `Pub. L. ${lawId(congress, law)}, ${want.map(pretty).join(', ')}`,
+      droppedLevels: dropped.length ? dropped.map(pretty) : null,
+      askedFor: dropped.length ? where.map(pretty).join(', ') : null,
+    },
     asEnacted: true,
   };
 }

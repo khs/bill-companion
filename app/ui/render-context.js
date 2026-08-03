@@ -6,6 +6,7 @@
 // and expose the ladder as controls that widen the view one sub-level at a time.
 
 import { findNode, pathChain, flattenText } from '../resolve/provision-tree.js';
+import { parseProvision } from '../parse/outline.js';
 import { createRedline } from './redline.js';
 
 export function renderContext(res, handlers) {
@@ -969,6 +970,80 @@ function missingCard(root, res, handlers) {
  * them are shown, each under the division it belongs to. Picking one would be a
  * confident answer to a question the citation does not settle.
  */
+/**
+ * One section of a Public Law, with its outline drawn.
+ *
+ * `data/plaw` stores a section as the law prints it — hard-wrapped at 72
+ * columns, indented by depth, one string — and putting that string in one
+ * element rendered Pub. L. 117-2 § 2001 as 14,852 characters of solid text. The
+ * Code's sections arrive from USLM already nested, so `nodeEl` has always had a
+ * tree to draw; `parseProvision` gives a Public Law the same one, off the only
+ * structure its text carries. The wrap's line breaks and indents go with it —
+ * see joinLines() — because they are an artifact of the measure and not the
+ * drafter's typography.
+ */
+function provisionBox(e, withNumber, hideAncestors) {
+  const box = document.createElement('div');
+  box.className = 'prov';
+  if (!hideAncestors && e.ancestors && e.ancestors.length) {
+    const where = document.createElement('p');
+    where.className = 'ctx-sub';
+    where.textContent = e.ancestors.join('  ›  ');
+    box.appendChild(where);
+  }
+  // The section head — "SEC. 4. STATEMENT OF APPROPRIATIONS." — is stripped from
+  // the text by parseProvision because it is the entry's own heading, so it has
+  // to be drawn or it is simply lost.
+  //
+  // Except on a run-in section, where the heading IS the provision's first
+  // sentence: an appropriations act writes "Sec. 505. Except as otherwise
+  // provided…" with no heading to have, and printing it above the text would
+  // show the same words twice.
+  if (!e.runIn && (e.heading || (withNumber && e.num))) {
+    const h = document.createElement('p');
+    h.className = 'sec-head';
+    h.textContent = `${withNumber && e.num ? `Sec. ${e.num}. ` : ''}${e.heading || ''}`.trim();
+    box.appendChild(h);
+  }
+  const nodes = parseProvision(e.text);
+  if (nodes.length) for (const n of nodes) box.appendChild(nodeEl(n, null, null));
+  else {
+    const body = document.createElement('div');
+    body.className = 'node';
+    const span = document.createElement('span');
+    span.className = 'body';
+    span.textContent = e.text;
+    body.appendChild(span);
+    box.appendChild(body);
+  }
+  return box;
+}
+
+function tocCard(plaw, title, entries) {
+  const c = document.createElement('div');
+  c.className = 'card';
+  const h = document.createElement('h4');
+  h.textContent = title;
+  c.appendChild(h);
+  const list = document.createElement('div');
+  list.className = 'links';
+  for (const t of entries.slice(0, 200)) {
+    const s = document.createElement('span');
+    s.className = 'crumb';
+    s.textContent = `Sec. ${t.num}. ${t.heading}`.slice(0, 90);
+    list.appendChild(s);
+  }
+  c.appendChild(list);
+  if (entries.length > 200) {
+    const more = document.createElement('p');
+    more.className = 'dim';
+    more.textContent = `…and ${entries.length - 200} more.`;
+    c.appendChild(more);
+  }
+  void plaw;
+  return c;
+}
+
 function plawCard(root, res, handlers) {
   head(root, res);
 
@@ -1013,23 +1088,46 @@ function plawCard(root, res, handlers) {
         )
       );
     }
-    for (const e of res.plaw.entries) {
-      const box = document.createElement('div');
-      box.className = 'prov';
-      if (e.ancestors && e.ancestors.length) {
-        const where = document.createElement('p');
-        where.className = 'ctx-sub';
-        where.textContent = e.ancestors.join('  ›  ');
-        box.appendChild(where);
-      }
-      const body = document.createElement('div');
-      body.className = 'node';
-      const span = document.createElement('span');
-      span.className = 'body';
-      span.textContent = e.text;
-      body.appendChild(span);
-      box.appendChild(body);
-      root.appendChild(box);
+    for (const e of res.plaw.entries) root.appendChild(provisionBox(e));
+  } else if (res.plaw.provisions && res.plaw.provisions.length) {
+    if (res.plaw.droppedLevels) {
+      root.appendChild(
+        card(
+          'Showing a wider level',
+          `The citation names ${res.plaw.askedFor}, and this law's text does not record ` +
+            `${res.plaw.droppedLevels.join(' or ')} as a level of its own. Everything below is ` +
+            `${res.plaw.citation.replace(/^Pub\. L\. [\d-]+,\s*/, '')}, which contains what was cited — ` +
+            `${res.plaw.total} sections rather than the whole law.`,
+          'warn'
+        )
+      );
+    }
+    // A subdivision the citation named — "title IV of division M of Public Law
+    // 116-260". Listing the section headings answered a question nobody asked:
+    // the reader named a range in order to READ it, and a row of chips saying
+    // "Sec. 401. Definitions." is the table of contents of something they still
+    // cannot see. These are the provisions themselves.
+    // The subdivision heading is the same on every one of them, so it is drawn
+    // once above rather than repeated over twenty sections.
+    const shared = (res.plaw.provisions[0].ancestors || []).join('  ›  ');
+    if (shared) {
+      const w = document.createElement('p');
+      w.className = 'ctx-sub';
+      w.textContent = shared;
+      root.appendChild(w);
+    }
+    for (const e of res.plaw.provisions) root.appendChild(provisionBox(e, true, true));
+    if (res.plaw.more) {
+      root.appendChild(
+        card(
+          'Not all of it',
+          `This subdivision has ${res.plaw.total} sections; the first ` +
+            `${res.plaw.provisions.length} are shown. The rest are listed below.`,
+          'warn'
+        )
+      );
+      root.appendChild(tocCard(res.plaw, `The remaining ${res.plaw.total - res.plaw.provisions.length} sections`,
+                               res.plaw.toc.slice(res.plaw.provisions.length)));
     }
   } else if (res.plaw.toc && res.plaw.toc.length) {
     // A law named without a section. Its contents, not a guess at which of them
