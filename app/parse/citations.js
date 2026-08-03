@@ -155,6 +155,21 @@ const PUBLAW_NAME = String.raw`(?:Pub(?:lic)?\.?\s*L(?:aw)?\.?|P\.\s?L\.)\s*(?:N
 
 const RE_PUBLAW = new RegExp(`\\b${PUBLAW_NAME}`, 'gi');
 
+// "division E of Public Law 110-161" — an omnibus named by division and no
+// section, which is an address in its own right. RE_ACT_DIVISION reads this
+// shape for the 78 named Acts and nothing read it for a law cited by number, so
+// 153 of these across the corpus kept only the bare "Public Law 110-161" and
+// answered with the whole law: a division of an appropriations act against
+// hundreds of sections of one.
+//
+// At least one level is required, and the division is mandatory — a chain of
+// titles alone does not change WHICH provision is meant, and this pattern exists
+// only for the level that does. `resolvePlawDivision` already answers it.
+const RE_PUBLAW_DIVISION = new RegExp(
+  `\\b((?:${SUBDIV_UNIT}\\s+[A-Za-z0-9]{1,5}\\s+of\\s+){0,3}[Dd]ivisions?\\s+([A-Z]{1,2})\\s+of\\s+)${PUBLAW_NAME}`,
+  'g'
+);
+
 // "section 12306 of Public Law 113-79" — the Act-relative shape again, and it
 // resolves the same way. A Public Law names its own sections, and the Code's
 // source credits say where each one landed ("Pub. L. 113–79, title XII,
@@ -233,7 +248,48 @@ const RE_PUBLAW_PAREN = new RegExp(
     // before the name and "…Act, 2018 (division F of Public Law 115-141)" after.
     `(${SUBDIV_CHAIN})(?:the\\s+)?` +
     `(${PAREN_ACT_NAME}{5,140}?)` +
-    `\\s*\\(\\s*(${SUBDIV_CHAIN})${PUBLAW_NAME}`,
+    // The Public Law is not always the first thing in the parenthetical. An
+    // uncodified section is cited beside the note it is printed under —
+    // "section 8301 of the Agricultural Act of 2014 (16 U.S.C. 1642 note;
+    // Public Law 113-79)" — and requiring the law to come first read none of
+    // them, so 41 across the corpus kept only the bare law and lost the section
+    // number that made the citation an address.
+    //
+    // Exactly one leading clause is admitted, and only a Code or Statutes cite:
+    // that is the apparatus a drafter actually puts there, and anything looser
+    // would let arbitrary text separate a name from a parenthetical it does not
+    // own — the same theft the name guard above exists to stop. Note it is a
+    // *note* cite, which per the note rule must not itself become the target;
+    // the Public Law beside it is what resolves.
+    `\\s*\\(\\s*(?:[^();\\n]{0,40}?(?:U\\.?\\s?S\\.?\\s?C\\.?|Stat\\.)[^();\\n]{0,30};\\s*)?` +
+    `(${SUBDIV_CHAIN})${PUBLAW_NAME}`,
+  'g'
+);
+
+// "subsection (h) of section 502 of the Housing Act of 1949 (42 U.S.C. 1472)"
+//
+// The subsection is stated in the prose and the parenthetical gives only the
+// section, so the two halves of one address arrive separately and the pane opens
+// the whole of 42 U.S.C. 1472 — which is the complaint that produced
+// `defaultScope()`: a reader who asked for (h) should not be handed the section.
+// 33 across the corpus; a further 45 already repeat the subsection inside the
+// parenthetical and need nothing.
+//
+// The unit phrase itself is no longer an internal citation (it names its own
+// section), so nothing is being taken from anywhere — this is the address being
+// assembled instead of dropped.
+//
+// The middle is tempered exactly like the parenthetical-address form: no second
+// section reference, no semicolon, no paren. The alternation "subsection (b) or
+// (j) of section 505" is consumed but not captured, the same rule
+// RE_ACT_REL_SECTION follows — nothing in the text says which of two the drafter
+// meant, and the first is the one already in hand.
+const RE_UNIT_SUB_USC = new RegExp(
+  `\\b(?:subsections?|paragraphs?|subparagraphs?|clauses?)\\s+(${SUBSEC})` +
+    `(?:\\s*(?:,|and|or)\\s*${SUBSEC})*` +
+    `\\s+of\\s+(?:such\\s+section|[Ss]ections?\\s+\\d+[A-Za-z]*(?:${SUBSEC})?)` +
+    `(?:(?![Ss]ections?\\s)[^();\\n]){0,120}?` +
+    `\\(\\s*(\\d{1,2})\\s*U\\.?\\s?S\\.?\\s?C\\.?\\s*(?:§+\\s*)?([0-9]+[A-Za-z0-9\\-–—]*)\\s*\\)`,
   'g'
 );
 
@@ -1430,6 +1486,17 @@ export function extractCitations(text) {
     });
   }
 
+  RE_PUBLAW_DIVISION.lastIndex = 0;
+  while ((m = RE_PUBLAW_DIVISION.exec(text))) {
+    push(out, m, 'publaw', {
+      congress: m[3],
+      law: m[4],
+      division: m[2].toUpperCase(),
+      // The chain already ends with the division, so no outer level is supplied.
+      where: wherePath(m[1]),
+    });
+  }
+
   RE_PUBLAW_PAREN.lastIndex = 0;
   while ((m = RE_PUBLAW_PAREN.exec(text))) {
     // The parenthetical chain sits next to the Public Law and wins where both
@@ -1447,6 +1514,21 @@ export function extractCitations(text) {
       // does not tell a reader.
       shortTitle: m[4].replace(/\s+/g, ' ').trim(),
       ladder: subsectionLadder(m[2]),
+    });
+  }
+
+  RE_UNIT_SUB_USC.lastIndex = 0;
+  while ((m = RE_UNIT_SUB_USC.exec(text))) {
+    push(out, m, 'usc', {
+      title: m[2],
+      section: m[3].replace(/\s+/g, ''),
+      subsection: m[1] || '',
+      etSeq: false,
+      ladder: subsectionLadder(m[1]),
+      // The subsection came from the sentence, not from the parenthetical. Worth
+      // recording: the pane can say where it got it, and a future reader of this
+      // code can tell the two sources apart.
+      subFromProse: true,
     });
   }
 
@@ -1508,7 +1590,18 @@ export function extractCitations(text) {
   // push sites: the regex match end is not the citation end (push() adjusts for
   // boundary groups), and testing from the wrong offset reads as working while
   // flagging nothing at all.
+  // Dedupe needs the flag too, so it is set on the candidates first and then
+  // re-set on the survivors. A note citation outranks everything by kind — it is
+  // a `usc` — and would evict the composite that spans it: "section 8301 of the
+  // Agricultural Act of 2014 (16 U.S.C. 1642 note; Public Law 113-79)" was being
+  // reduced to "16 U.S.C. 1642", the one provision the note rule says it is not.
+  for (const c of out) {
+    if (c.kind === 'usc') c.note = RE_NOTE_SUFFIX.test(text.slice(c.end, c.end + 8));
+  }
   const cites = dedupe(out);
+  // …and again against each survivor's own `end`, which push() may have moved
+  // for a boundary group. Testing from the wrong offset reads as working while
+  // flagging nothing at all.
   for (const c of cites) {
     if (c.kind === 'usc') c.note = RE_NOTE_SUFFIX.test(text.slice(c.end, c.end + 8));
   }
@@ -1519,17 +1612,36 @@ export function extractCitations(text) {
 // a real code citation beats a bare Act name, which beats a vague internal ref.
 const RANK = { usc: 5, cfr: 5, publaw: 4, stat: 4, act: 3, internal: 1 };
 
+/**
+ * Rank, with the one exception the note rule forces.
+ *
+ * A "16 U.S.C. 1642 note" citation is a `usc` and so outranks everything — but
+ * it is the single kind of citation that must NOT stand for the section it
+ * names, and it is written inside a parenthetical belonging to something else:
+ * "section 8301 of the Agricultural Act of 2014 (16 U.S.C. 1642 note; Public
+ * Law 113-79)". Ranked normally it evicts the address that spans it and leaves
+ * the reader with the provision the note is printed under, which is exactly the
+ * confident wrong answer the note rule exists to prevent.
+ *
+ * It keeps its rank against everything else, so a note cited on its own is still
+ * preferred over a bare Act name; only a Public Law is allowed to outrank it,
+ * and only by spanning it.
+ */
+function rankOfCite(c) {
+  return c.kind === 'usc' && c.note ? RANK.publaw - 0.5 : RANK[c.kind];
+}
+
 function dedupe(all) {
   const sorted = all
     .slice()
-    .sort((a, b) => a.start - b.start || b.end - a.end || RANK[b.kind] - RANK[a.kind]);
+    .sort((a, b) => a.start - b.start || b.end - a.end || rankOfCite(b) - rankOfCite(a));
   const kept = [];
   for (const c of sorted) {
     const prev = kept[kept.length - 1];
     if (prev && c.start < prev.end) {
       // Overlap: replace the incumbent only if this match is strictly better.
-      const better = RANK[c.kind] > RANK[prev.kind] ||
-        (RANK[c.kind] === RANK[prev.kind] && c.end - c.start > prev.end - prev.start);
+      const better = rankOfCite(c) > rankOfCite(prev) ||
+        (rankOfCite(c) === rankOfCite(prev) && c.end - c.start > prev.end - prev.start);
       if (better) kept[kept.length - 1] = c;
       continue;
     }

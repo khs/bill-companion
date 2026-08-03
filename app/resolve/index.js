@@ -208,6 +208,20 @@ async function dispatch(cite) {
     }
 
     case 'publaw': {
+      // "division E of Public Law 110-161" — a division with no section is an
+      // address, and the same one the named-Act path already answers for
+      // "division J of the Infrastructure Investment and Jobs Act". Answered
+      // first and only where no section is named, for the reason given there:
+      // where the citation gives both, the section is the more specific.
+      if (cite.division && !cite.actSection) {
+        const local = await resolvePlawDivision(
+          cite.congress,
+          cite.law,
+          cite.where || [`DIVISION ${cite.division}`]
+        );
+        if (local) return { ...local, links: publawLinks(cite) };
+      }
+
       // "section 12306 of Public Law 113-79" names a provision, and the Code's
       // own source credits say where it landed — 7 U.S.C. 1632c. That table is
       // already on disk for 1,737 Public Laws, built by the ingester alongside

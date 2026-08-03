@@ -9,7 +9,7 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 465 checks, no dependencies
+node tools/selftest.mjs                   # 479 checks, no dependencies
 node tools/rendertest.mjs                 # 268 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
@@ -142,7 +142,7 @@ rendertest assert against; the other 26 corpus bills are fetched.
 ### Verifying the move actually worked
 
 ```bash
-node tools/selftest.mjs     # all 465 checks passed
+node tools/selftest.mjs     # all 479 checks passed
 node tools/rendertest.mjs   # all 268 render checks passed
 node tools/corpus.mjs       # no deviation from baseline across 30 bills
 ```
@@ -1469,6 +1469,90 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    *meaning* rather than the decoration — an unstyled guess renders identically
    to a certain match — so `rendertest.mjs` asserts it is both toggled and
    styled, alongside the contract check.
+
+26. **A vague answer is worth auditing, not just a wrong one.** (2026-08-03.)
+   The first two spot-check passes sampled *answers* and asked whether they were
+   right. The third sampled the **imprecise** ones — head-of-an-Act, whole
+   Public Law, guess, decline, whole-section-with-no-subsection, no-target — and
+   gave each one the paragraph it sits in plus the paragraphs either side, then
+   asked a different question: *is a more precise target stated right here that
+   the parser failed to read?* 450 cases, 301 correctly vague, 41 proposals.
+   Three shapes were worth building and two were not; each was measured against
+   the corpus before anything was written, which is what turned "these three
+   look similar" into a number.
+   The two rejected are recorded so nobody re-derives them:
+   - **"title V of the Housing Act of 1949" — 727 occurrences and NOT worth
+     building.** A title of an Act is a range, like a division, but unlike a
+     division there is nothing to resolve it against: `data/usc/acts/` maps an
+     Act's *sections* onto the Code and knows nothing about its titles, and most
+     named Acts are not one Public Law. The honest answer is the one it already
+     gives. Frequency is not tractability.
+   - **"paragraph (2) thereof" — 78 occurrences, deferred.** "thereof" means the
+     section just named, so composing it is right in principle; the risk is that
+     the phrase is commonest inside quoted *inserted* law, where it refers to the
+     new provision and not the enclosing one. Worth doing with the quoted-block
+     state machine, not with a regex.
+
+27. **A note citation must not evict the address that spans it.** (Fixed
+   2026-08-03.) The complement to item 14, and a sharper form of it. A note is a
+   `usc` citation, so it outranks everything by kind — but it is written *inside*
+   a parenthetical belonging to something else:
+
+   ```
+   Section 8301 of the Agricultural Act of 2014 (16 U.S.C. 1642 note; Pub. L. 113-79)
+   ```
+
+   Ranked normally, "16 U.S.C. 1642" evicts the whole address and the reader is
+   shown the provision the note is printed *under* — precisely the confident
+   wrong answer item 14 exists to prevent, arriving through `dedupe()` instead of
+   through the target chain. `rankOfCite()` drops a note below `publaw` so an
+   address spanning it wins, and nothing else changes: a note cited on its own
+   still outranks an Act name and is still flagged.
+   The flag has to be set **before** `dedupe` as well as after — before, so the
+   ranking can see it; after, because `push()` may have moved the citation's
+   `end` past a boundary group and testing from the wrong offset reads as working
+   while flagging nothing. 102 across the corpus, every one of them a note.
+
+28. **The Public Law is not always first in the parenthetical.** (Fixed
+   2026-08-03.) An uncodified section is cited beside the note it is printed
+   under — `(16 U.S.C. 1642 note; Public Law 113-79)` — and requiring the law to
+   come first read none of them, so 41 kept only the bare law and lost the
+   section number that made the citation an address. Exactly one leading clause
+   is admitted and only a Code or Statutes cite, because that is the apparatus a
+   drafter actually writes there; anything looser would let arbitrary text
+   separate a name from a parenthetical it does not own, which is the same theft
+   item 18's name guard exists to stop.
+
+29. **"division E of Public Law 110-161" is an address.** (Fixed 2026-08-03.)
+   `RE_ACT_DIVISION` read this shape for the 78 named Acts and nothing read it
+   for a law cited by number, so 153 across the corpus kept only the bare
+   "Public Law 110-161" and answered with all of it — a division of an
+   appropriations act against hundreds of sections of one. `resolvePlawDivision`
+   already existed; only the matcher and one branch in `index.js` were missing.
+   The division is mandatory in the pattern and at least one level is required:
+   a chain of titles alone does not change *which* provision is meant, and this
+   exists only for the level that does.
+
+30. **A subsection stated in prose belongs to the Code cite beside it.** (Fixed
+   2026-08-03.)
+
+   ```
+   In carrying out subsection (h) of section 502 of the Housing Act of 1949
+   (42 U.S.C. 1472), the Secretary shall act.
+   ```
+
+   Two halves of one address, arriving separately: the pane opened the whole of
+   42 U.S.C. 1472 for a reader who had asked for (h). The same complaint that
+   produced `defaultScope()`, one step earlier in the pipeline — 43 across the
+   corpus, with a further 45 that repeat the subsection inside the parenthetical
+   and needed nothing.
+   Nothing is taken from anywhere to do this: the unit phrase stopped being an
+   internal citation under item 20 precisely because it names its own section, so
+   this is the address being *assembled* rather than dropped. The alternation in
+   "subsection (b) or (j) of section 505" is consumed but not captured — the same
+   rule `RE_ACT_REL_SECTION` follows, because nothing in the text says which of
+   two the drafter meant — and the middle may not cross a second section
+   reference, or the parenthetical belongs to that one instead.
 
 
 ---

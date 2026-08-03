@@ -1433,6 +1433,60 @@ section('internal cross-references');
        badRes.plaw.entries.length, 4);
     eq('  and does not claim to have narrowed', badRes.plaw.narrowedBy, null);
 
+    // ---- a division of a Public Law, with no section ----------------------
+    // "division E of Public Law 110-161" is an address in its own right, and the
+    // named-Act path already answered the same shape for "division J of the
+    // Infrastructure Investment and Jobs Act". 153 across the corpus kept only
+    // the bare law and answered with all of it.
+    const plDiv = extractCitations(
+      normalizeText('SEC. 2. X.\nAmounts under division N of Public Law 116-260 remain available.\n')
+    ).filter((x) => x.kind === 'publaw').sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
+    eq('a division of a Public Law spans the division too', plDiv && plDiv.text,
+       'division N of Public Law 116-260');
+    const plDivRes = await resolve(plDiv);
+    eq('  answering with that division', plDivRes.citation, 'Pub. L. 116-260, division N');
+    const bareLaw = extractCitations(
+      normalizeText('SEC. 2. X.\nAmounts under Public Law 116-260 remain available.\n')
+    ).find((x) => x.kind === 'publaw');
+    ok('  where the bare law still gives the whole law',
+       (await resolve(bareLaw)).plaw.total > plDivRes.plaw.total * 5,
+       `${(await resolve(bareLaw)).plaw.total} vs ${plDivRes.plaw.total}`);
+    // The chain narrows it further, exactly as it does with a section number.
+    const plChain = extractCitations(
+      normalizeText('SEC. 2. X.\nUnder title VII of division N of Public Law 116-260, funds apply.\n')
+    ).filter((x) => x.kind === 'publaw').sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
+    ok('  and a chain above it narrows further',
+       (await resolve(plChain)).plaw.total < plDivRes.plaw.total,
+       `${(await resolve(plChain)).plaw.total} vs ${plDivRes.plaw.total}`);
+
+    // ---- the subsection stated in prose, the section in the parenthetical --
+    // "subsection (h) of section 502 of the Housing Act of 1949 (42 U.S.C. 1472)"
+    // arrives as two halves of one address, and the pane opened the whole
+    // section — the complaint that produced defaultScope(). 43 across the corpus.
+    const prose = extractCitations(normalizeText(
+      'SEC. 2. X.\nIn carrying out subsection (h) of section 502 of the Housing Act ' +
+      'of 1949 (42 U.S.C. 1472), the Secretary shall act.\n'
+    )).find((x) => x.kind === 'usc');
+    eq('a subsection stated in prose reaches the Code citation',
+       prose && `${prose.title} U.S.C. ${prose.section}${prose.subsection}`, '42 U.S.C. 1472(h)');
+    eq('  and records where it came from', prose && prose.subFromProse, true);
+    ok('  spanning the whole address', prose && /^subsection \(h\) of section 502/.test(prose.text),
+       JSON.stringify(prose && prose.text));
+    // The alternation is consumed, not captured: nothing says which was meant.
+    const altSub = extractCitations(normalizeText(
+      'SEC. 2. X.\nsubsection (b) or (j) of section 505 of the Federal Food, Drug, and ' +
+      'Cosmetic Act (21 U.S.C. 355) applies.\n'
+    )).find((x) => x.kind === 'usc');
+    eq('  an alternation keeps the first subsection only', altSub && altSub.subsection, '(b)');
+    // It must not reach across a second section reference to a parenthetical
+    // that belongs to that one — the same theft the name guard prevents.
+    const across2 = extractCitations(normalizeText(
+      'SEC. 2. X.\nsubsection (a) of section 3 of the Foo Act, as applied by section 9 ' +
+      'of the Bar Act (42 U.S.C. 1234), applies.\n'
+    )).find((x) => x.kind === 'usc');
+    eq('  and never across an intervening section reference',
+       across2 && across2.subsection, '');
+
     // ---- the parenthetical address ----------------------------------------
     // "Section 252 of the Military Construction … Act, 2018 (division J of
     // Public Law 115-141)" names a DIVISION's own short title, so the name
@@ -1504,6 +1558,30 @@ section('internal cross-references');
     )).find((x) => x.kind === 'publaw' && x.actSection === '247');
     eq('a division in an "as added" clause is not the cited law\'s',
        (await resolve(added)).citation, '42 U.S.C. 15883');
+
+    // ---- a note must not evict the address that spans it -------------------
+    // "Section 8301 of the Agricultural Act of 2014 (16 U.S.C. 1642 note; Public
+    // Law 113-79)" — the note is a `usc` and so outranked the whole address,
+    // reducing it to 16 U.S.C. 1642: the one provision the note rule says it is
+    // not. 102 across the corpus, every one of them a note.
+    const noteFirst = extractCitations(normalizeText(
+      'SEC. 2. X.\nSection 8301 of the Agricultural Act of 2014 (16 U.S.C. 1642 note; ' +
+      'Public Law 113-79) is amended.\n'
+    ));
+    const composite = noteFirst.find((x) => x.kind === 'publaw' && x.actSection === '8301');
+    ok('a note does not evict the address spanning it', Boolean(composite),
+       noteFirst.map((x) => `${x.kind}:${x.text.slice(0, 40)}`).join(' | '));
+    eq('  which carries the law beside the note', composite && `${composite.congress}-${composite.law}`,
+       '113-79');
+    eq('  and no bare section citation survives inside it',
+       noteFirst.filter((x) => x.kind === 'usc').length, 0);
+    // A note cited on its own is untouched — it still outranks an Act name, and
+    // it is still flagged so the amendment chain skips it.
+    const loneNote = extractCitations(
+      normalizeText('SEC. 2. X.\nFunds under 10 U.S.C. 1580 note are available.\n')
+    ).find((x) => x.kind === 'usc');
+    eq('a note cited alone is still a citation', Boolean(loneNote), true);
+    eq('  and is still flagged as a note', loneNote && loneNote.note, true);
 
     // A richer citation must never resolve to LESS than its parts. Where the
     // section is uncodified and the law is not one of the 25 held, the Act name
