@@ -698,6 +698,33 @@ function scopeUnitInserts(ops) {
   }
 }
 
+/**
+ * "The National Environmental Policy Act of 1969 (42 U.S.C. 4321 et seq.) is
+ * amended by adding at the end the following: SEC. 106. …"
+ *
+ * `et seq.` names a RANGE, and the resolver answers with the section it begins
+ * at — 42 U.S.C. 4321, NEPA's own first section. The addition then had no
+ * navigation to scope it, so it landed at that section's root, and the pane drew
+ * a whole new SECTION OF THE ACT inside the Act's first section, in the
+ * insertion colour, as though the bill had put it there. 184 across the corpus,
+ * 131 of them opening with "SEC. N." outright.
+ *
+ * The end of a range is not the end of the section it starts at, and nothing
+ * here knows where the range stops — the Act's last section is not a fact this
+ * citation carries. So the op is marked and the pane declines to place it,
+ * saying what is being added and where it goes. Blank beats wrong, and this was
+ * the wrong kind of wrong: a real provision, in the right colour, in a section
+ * the bill never mentions.
+ *
+ * Only additions. A strike on the same target searches for its language and
+ * simply fails to find it, which is already the honest answer; an addition is
+ * placed structurally and so is never checked against anything.
+ */
+function markRangeAdditions(ops, target) {
+  if (!target || !target.etSeq) return;
+  for (const op of ops) if (op.type === 'add-at-end') op.rangeEnd = true;
+}
+
 function placeOps(text, ops) {
   const spans = ops.filter((o) => o.start != null).sort((a, b) => a.start - b.start);
   for (let i = 0; i < spans.length; i++) {
@@ -2420,6 +2447,7 @@ export function extractAmendments(text, citations, divisions = []) {
     scopeOps(ops, nav.steps);
     scopeAdditions(ops);
     scopeUnitInserts(ops);
+    markRangeAdditions(ops, target);
 
     return [{
       start: h.start,

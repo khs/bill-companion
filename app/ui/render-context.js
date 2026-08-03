@@ -648,6 +648,16 @@ function effect(eff, handlers) {
       // go hunting for green text, nor conclude the change was missed.
       const applied = eff.redline ? eff.redline.appliedAdditions() : [];
       const f = document.createElement('span');
+      if (op.rangeEnd) {
+        // Not a failure to place it — a refusal. The bill cited the Act as a
+        // range and adds at the end of the Act; this pane holds the one section
+        // the range begins at, which is where the addition used to be drawn.
+        f.className = 'notfound';
+        f.textContent = '⚠ added at the end of the Act, not of this section';
+        row.appendChild(f);
+        c.appendChild(row);
+        continue;
+      }
       if (applied.some((p) => p.start === op.start)) {
         f.className = 'found';
         f.textContent = '✓ already in the law as it stands';

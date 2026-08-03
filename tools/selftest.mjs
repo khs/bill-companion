@@ -989,6 +989,41 @@ section('operand placement');
      rtOps.every((o) => rtT.slice(o.start, o.end) === o.text),
      JSON.stringify(rtOps.map((o) => [o.text, rtT.slice(o.start, o.end)])));
 
+  // ---- "at the end" of a RANGE ------------------------------------------
+  // "et seq." names the Act, and the resolver answers with the section it
+  // begins at. An addition then has nothing to scope it, so it landed at that
+  // section's root and a whole new SECTION OF THE ACT was drawn inside the
+  // Act's first section, coloured as an insertion. 184 across the corpus, 131
+  // of them opening "SEC. N." outright.
+  const rangeAdd = p(
+    'The National Environmental Policy Act of 1969 (42 U.S.C. 4321 et seq.) is amended ' +
+    'by adding at the end the following:\n``SEC. 106. PROCEDURE FOR DETERMINATION.\n' +
+    '``(a) In general.\'\'.\n'
+  );
+  const ra = rangeAdd.find((o) => o.type === 'add-at-end');
+  ok('an addition to an "et seq." range is marked', ra && ra.rangeEnd === true,
+     JSON.stringify(rangeAdd.map((o) => `${o.type}:${o.rangeEnd}`)));
+
+  // The control, and the reason the flag is on the TARGET rather than on the
+  // words "et seq.": the same instruction against a section cited outright is
+  // placed exactly as before.
+  const plainAdd = p(
+    'Section 4321 of title 42, United States Code, is amended by adding at the end ' +
+    'the following:\n``(d) New subsection.\'\'.\n'
+  );
+  const pa = plainAdd.find((o) => o.type === 'add-at-end');
+  ok('  and one to a section cited outright is not', pa && !pa.rangeEnd,
+     JSON.stringify(plainAdd.map((o) => `${o.type}:${o.rangeEnd}`)));
+
+  // Only additions. A strike names language and is checked against the text, so
+  // it declines on its own; an addition is placed structurally and never is.
+  const rangeStrike = p(
+    'The Widget Act (15 U.S.C. 2601 et seq.) is amended by striking ``old\'\' and inserting ``new\'\'.\n'
+  );
+  ok('  and a strike on the same target is left alone',
+     rangeStrike.filter((o) => o.rangeEnd).length === 0,
+     JSON.stringify(rangeStrike.map((o) => `${o.type}:${o.rangeEnd}`)));
+
   const each = p('Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking ``fee\'\' each place it appears and inserting ``charge\'\'.\n');
   ok('"each place it appears" marks the strike', each.find((o) => o.type === 'strike').all === true);
   ok('  and still pairs the replacement', each.find((o) => o.type === 'insert').replaces != null);

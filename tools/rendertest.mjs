@@ -870,6 +870,45 @@ section('additions at the end');
      /a swap\.; or\s*\(D\) a contract of sale/.test(flat), flat);
   ok('  and not before them', !/to conduct—\s*\(D\)/.test(flat), flat);
 
+  // ---- an addition at the end of a RANGE ---------------------------------
+  // The bill cites the Act ("42 U.S.C. 4321 et seq.") and adds a new SECTION at
+  // the end of it. The resolver answers with the section the range begins at,
+  // the addition has nothing to scope it, and it was drawn at that section's
+  // root — a whole new section of NEPA rendered inside NEPA's first section, in
+  // the insertion colour. The refusal is the fix; the panel says where it goes.
+  {
+    const rangeRes = {
+      source: 'U.S. Code', citation: '42 U.S.C. 4321', links: [],
+      tree: [{ marker: '', path: '', heading: '', text: 'The purposes of this chapter are:', children: [] }],
+      focusPath: '',
+      effect: {
+        ops: [{
+          type: 'add-at-end', rangeEnd: true, scope: '',
+          text: 'SEC. 106. PROCEDURE FOR DETERMINATION OF LEVEL OF REVIEW.',
+          start: 500, end: 556,
+        }],
+        unmatched: false,
+      },
+    };
+    const rel = rc(rangeRes, { onScope: () => {} });
+    eq('a range addition is not drawn into the first section',
+       rel.querySelectorAll('.node.added').length, 0);
+    const rtxt = rel.textContent.replace(/\s+/g, ' ');
+    ok('  and the panel says where it actually goes',
+       /at the end of the Act, not of this section/.test(rtxt), rtxt.slice(0, 300));
+    ok('  while still naming the language being added',
+       /SEC\. 106\./.test(rtxt), rtxt.slice(0, 300));
+
+    // The control: without the flag the same op is drawn, so the assertion above
+    // is about the refusal and not about some unrelated failure to render.
+    const drawn = rc(
+      { ...rangeRes, effect: { ops: [{ ...rangeRes.effect.ops[0], rangeEnd: false }], unmatched: false } },
+      { onScope: () => {} }
+    );
+    eq('  and without the flag it is drawn as before',
+       drawn.querySelectorAll('.node.added').length, 1);
+  }
+
   // ---- "by inserting after subparagraph (B) the following" ---------------
   // Same structural job as add-at-end, written with a different verb, and it
   // was drawing NOTHING. apply() only places an insert that either replaces a

@@ -269,6 +269,12 @@ export function createRedline(ops, fullText) {
     for (const op of additions) {
       if (op.done || (op.scope || '') !== (path || '')) continue;
       op.done = true;
+      // Asked before `inLaw`, and for a stronger reason than the ordering below:
+      // this op is not about the provision on screen at all. The bill cited a
+      // range ("42 U.S.C. 4321 et seq.") and adds at the end of THAT, so testing
+      // whether the language is already in the first section, or drawing it
+      // there, both answer a question nobody asked. The panel says where it goes.
+      if (op.rangeEnd) { op.rangeSkip = true; continue; }
       // `inLaw` is asked FIRST. Both flags say "this has already happened", but
       // one is evidence about this very language and the other is an inference
       // from the amendment's strikes. Where they agree the order is immaterial;
@@ -323,8 +329,12 @@ export function createRedline(ops, fullText) {
     // Drawn into the law, which is not the same as dealt with: an addition the
     // law already contains is marked done and deliberately not drawn, and
     // reporting it as "shown above" would send the reader looking for green text
-    // that isn't there.
-    placed: () => [...work, ...additions.filter((o) => !o.applied && !o.staleSkip)].filter((o) => o.done),
+    // that isn't there. `rangeSkip` is the third of these and the same trap —
+    // an addition at the end of an Act is marked done by the node that declined
+    // it, and calling that "shown above" is the opposite of what was decided.
+    placed: () =>
+      [...work, ...additions.filter((o) => !o.applied && !o.staleSkip && !o.rangeSkip)]
+        .filter((o) => o.done),
     /** Additions whose scope names a provision that isn't in the tree shown. */
     unplacedAdditions: () => additions.filter((o) => !o.done),
     /** Additions the law already contains — the bill has been enacted. */
