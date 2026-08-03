@@ -102,7 +102,56 @@ function occurrences(folded, needle) {
 // unanchored case is subject to it — an anchor is positional proof on its own.
 const ENACTED_MIN = 24;
 
-export function createRedline(ops, fullText) {
+/**
+ * An operation scoped to a path the provision does not have.
+ *
+ * `inScope` asks whether the node's path starts with the op's scope, so a scope
+ * naming a level that does not exist matches NOTHING and every operation under
+ * it silently vanishes — no mark, no message, nothing for the reader to notice.
+ * 496 across the corpus.
+ *
+ * The cause is usually the bill, faithfully read. The Fiscal Responsibility Act
+ * writes "Section 6(o)(3) of the Food and Nutrition Act of 2008 (7 U.S.C.
+ * 2015(6)(o)(3))", duplicating the Act's own section number into the U.S.C.
+ * parenthetical; the real provision is 2015(o)(3), and the same bill cites it
+ * correctly thirty lines later. So this is not a parse to fix — it is an address
+ * that has to be reported rather than obeyed.
+ *
+ * Shortened from the inside out until something matches, which is exactly what
+ * `resolvePlawDivision` does with a Public Law subdivision, and for the same
+ * reason: narrow and honest beats wide and silent. Two rules keep it honest —
+ *
+ *   - it never shortens to nothing. Falling back to the whole section would let
+ *     a one-word operand land in a sentence the instruction never mentions,
+ *     which is the hazard `scope` exists to prevent. An address that survives
+ *     nowhere is recorded as lost and drawn nowhere.
+ *   - it never REORDERS. (6)(o)(E) against a provision holding (o)(6)(E) is a
+ *     transposition anyone can see, and correcting it would be a guess about
+ *     what the drafter meant.
+ */
+function reScope(ops, knownPaths) {
+  const paths = [...knownPaths];
+  const exists = (s) => paths.some((p) => String(p).startsWith(s));
+  return ops.map((o) => {
+    const scope = String(o.scope || '');
+    if (!scope || exists(scope)) return o;
+    const marks = scope.match(/\([A-Za-z0-9]{1,8}\)/g) || [];
+    for (let i = marks.length - 1; i > 0; i--) {
+      const shorter = marks.slice(0, i).join('');
+      if (exists(shorter)) return { ...o, scope: shorter, scopeWidened: scope };
+    }
+    return { ...o, scopeLost: scope };
+  });
+}
+
+/**
+ * @param {Array}  ops        the amendment's ops, already carrying placement
+ * @param {string} fullText   the whole provision, for the already-happened tests
+ * @param {Set}    knownPaths every path in the tree being rendered, so an op
+ *                            addressed to a level that does not exist can be
+ *                            widened to one that does rather than disappearing
+ */
+export function createRedline(ops, fullText, knownPaths) {
   // An insert placed structurally belongs to `additions` and to nothing else.
   // It used to be in both lists as two separate objects: the additions copy was
   // handled and the work copy was never marked done, so unplaced() reported a
@@ -127,10 +176,14 @@ export function createRedline(ops, fullText) {
   // 446 strikes and 343 paired inserts across the corpus, every count green and
   // not one pixel drawn.
   const named = (ops || []).map((o) => (o.operand ? { ...o, text: o.operand } : o));
+  // Addresses are reconciled against the tree BEFORE anything is split or
+  // measured, so `work`, `additions` and `stale` all reason about the same
+  // scopes the renderer will ask with.
+  const scoped = knownPaths ? reScope(named, knownPaths) : named;
 
-  const work = named
+  const work = scoped
     .filter((o) => (o.type === 'strike' || o.type === 'insert') && typeof o.text === 'string')
-    .filter((o) => !structural(o))
+    .filter((o) => !structural(o) && !o.scopeLost)
     .map((o) => ({ ...o, done: false }));
 
   // Additions are placed structurally rather than woven into a run of text.
@@ -148,8 +201,8 @@ export function createRedline(ops, fullText) {
   // apply() with nothing to anchor to — no quoted phrase, no paired strike —
   // so it drew nothing at all. Scoped to (C) itself by scopeUnitInserts(), it
   // lands after (C)'s subtree, which is where the bill puts it.
-  const additions = named
-    .filter((o) => typeof o.text === 'string' && structural(o))
+  const additions = scoped
+    .filter((o) => typeof o.text === 'string' && structural(o) && !o.scopeLost)
     // `inLaw` is decided here rather than inside additionsAt(), because whether
     // the law already contains this language has nothing to do with which node
     // the renderer happens to be laying out when it asks. Deciding it lazily
@@ -408,6 +461,16 @@ export function createRedline(ops, fullText) {
      * words in front of them are not a proposal.
      */
     enactedInserts: () => work.filter((o) => o.enacted),
+    /**
+     * Operations whose address does not exist in this provision at all.
+     *
+     * Deliberately drawn nowhere — see reScope() — but they are the one outcome
+     * the reader most needs told, because the bill plainly says it changes
+     * something and the page would otherwise be blank about it.
+     */
+    lostScope: () => scoped.filter((o) => o.scopeLost),
+    /** Operations drawn at a shallower level than the bill addressed. */
+    widenedScope: () => scoped.filter((o) => o.scopeWidened),
     /** Additions the law already contains — the bill has been enacted. */
     appliedAdditions: () => additions.filter((o) => o.applied),
   };

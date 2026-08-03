@@ -30,7 +30,14 @@ export function renderContext(res, handlers) {
       : res.sections
       ? res.sections.map((s) => s.paragraphs.join('\n')).join('\n')
       : '';
-    res.effect.redline = createRedline(res.effect.ops, whole);
+    // Every path in the tree, so an operation addressed to a level this
+    // provision does not have can be widened to one it does instead of matching
+    // nothing and vanishing. Collected here because this is the only place that
+    // knows both the ops and the shape of what is about to be rendered.
+    const paths = new Set();
+    const collect = (n) => { paths.add(String(n.path || '')); (n.children || []).forEach(collect); };
+    (res.tree || []).forEach(collect);
+    res.effect.redline = createRedline(res.effect.ops, whole, paths.size ? paths : null);
   }
 
   head(root, res);
@@ -621,6 +628,22 @@ function effect(eff, handlers) {
     // operation the redline could not place is the one the reader most needs
     // flagged — it is the case where the panel and the provision disagree.
     const shown = eff.redline ? eff.redline.placed().some((p) => p.start === op.start) : false;
+    // The bill names a level this provision does not have. Almost always the
+    // bill's own slip — the Fiscal Responsibility Act cites "7 U.S.C.
+    // 2015(6)(o)(3)" for 2015(o)(3) — and it is the one outcome the reader most
+    // needs told, because the instruction plainly changes something and the
+    // page would otherwise be silent about it.
+    const lost = eff.redline && eff.redline.lostScope
+      ? eff.redline.lostScope().find((p) => p.start === op.start)
+      : null;
+    if (lost) {
+      const f = document.createElement('span');
+      f.className = 'notfound';
+      f.textContent = `⚠ the bill addresses ${lost.scopeLost}, which is not in this provision`;
+      row.appendChild(f);
+      c.appendChild(row);
+      continue;
+    }
     if (shown) {
       const f = document.createElement('span');
       f.className = 'found';

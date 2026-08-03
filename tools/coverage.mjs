@@ -58,6 +58,7 @@ const bills = (Array.isArray(manifest) ? manifest : manifest.bills || Object.val
 const zero = () => ({
   drawn: 0, enacted: 0, withheld: 0, missing: 0,
   addDrawn: 0, addApplied: 0, addStranded: 0,
+  widened: 0, lost: 0,
 });
 const total = zero();
 
@@ -84,7 +85,12 @@ for (const bill of bills) {
     if (!res || !res.tree) continue;
 
     const whole = [res.lead || '', ...res.tree.map(flattenText)].join('\n');
-    const red = createRedline(a.ops, whole);
+    // Same three arguments render-context passes, or this measures a rendering
+    // nobody sees — scopes would go unreconciled here and reconciled on screen.
+    const paths = new Set();
+    const collect = (n) => { paths.add(String(n.path || '')); (n.children || []).forEach(collect); };
+    res.tree.forEach(collect);
+    const red = createRedline(a.ops, whole, paths.size ? paths : null);
     // The same walk render-context does: apply() at each node with its own
     // path, then additionsAt() once that node's children are laid out. Asking
     // in any other order would measure a rendering nobody sees.
@@ -100,6 +106,10 @@ for (const bill of bills) {
     const placed = red.placed();
     const enacted = red.enactedInserts();
     const applied = red.appliedAdditions();
+    // Addresses the provision does not have: widened to a level it does, or
+    // surviving nowhere and drawn nowhere. Counted per op, not per amendment.
+    s.widened += red.widenedScope().length;
+    s.lost += red.lostScope().length;
     const here = (list, o) => list.some((q) => q.start === o.start);
     for (const o of a.ops) {
       const structural = o.type === 'add-at-end' || o.placement === 'after-unit';
@@ -142,6 +152,10 @@ console.log(`  withheld (amendment stale) : ${total.withheld}`);
 console.log(`  not found in the provision : ${total.missing}`);
 console.log(bold(`  shown to the reader        : ${shown}` +
                  ` (${inline ? Math.round((shown / inline) * 100) : 0}%)`));
+console.log(bold('\naddresses the provision does not have'), total.widened + total.lost);
+console.log(`  widened to a level it does : ${total.widened}`);
+console.log(`  no such level at all       : ${total.lost}` +
+            dim('  (drawn nowhere, reported to the reader)'));
 console.log(bold('\nadditions'), adds);
 console.log(`  drawn                      : ${total.addDrawn}`);
 console.log(`  already in the law         : ${total.addApplied}`);

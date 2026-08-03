@@ -639,6 +639,42 @@ section('redline on the current law');
                relation: 'after', anchor: 'the Secretary' }],
             'the Secretary shall act.'),
      'the Secretary[ins:wholly new language here] shall act[del:.]');
+
+  // ---- an address the provision does not have ----------------------------
+  // `inScope` asks whether a node's path STARTS WITH the op's scope, so a scope
+  // naming a level that does not exist matches nothing and every operation
+  // under it silently vanishes. 1,285 across the corpus.
+  const tree = new Set(['(a)', '(a)(1)', '(o)', '(o)(6)', '(o)(6)(E)']);
+  const lawC = 'apples; or pears';
+  const scopedRed = (ops) => createRedline(ops, lawC, tree);
+
+  const tooDeep = scopedRed([{ type: 'strike', text: 'apples', start: 1, end: 7, scope: '(a)(1)(Z)' }]);
+  eq('an address one level too deep is widened', tooDeep.widenedScope().length, 1);
+  eq('  to the deepest level the provision actually has', tooDeep.widenedScope()[0].scope, '(a)(1)');
+  eq('  and it draws there', show(tooDeep.apply(lawC, '(a)(1)')), '[del:apples]; or pears');
+
+  // The Fiscal Responsibility Act writes "7 U.S.C. 2015(6)(o)(3)" for
+  // 2015(o)(3) -- the Act's own section number duplicated into the U.S.C.
+  // parenthetical -- and cites the same provision correctly thirty lines later.
+  // The transposition is visible and correcting it would still be a guess.
+  const transposed = scopedRed([{ type: 'strike', text: 'apples', start: 1, end: 7, scope: '(6)(o)(E)' }]);
+  eq('a transposed address survives nowhere', transposed.lostScope().length, 1);
+  eq('  keeping what the bill wrote, for the pane to report',
+     transposed.lostScope()[0].scopeLost, '(6)(o)(E)');
+  // THE guard: never shortened to nothing. Falling back to the whole provision
+  // would let a one-word operand land in a sentence the bill never mentions,
+  // which is the hazard `scope` exists to prevent.
+  eq('  and is drawn nowhere, not across the whole provision',
+     show(transposed.apply(lawC, '')), lawC);
+  eq('  nor at any node of it', show(transposed.apply(lawC, '(o)(6)(E)')), lawC);
+
+  // An address that IS in the provision is left exactly alone, and without a
+  // tree to check against nothing is reconciled at all.
+  const fine = scopedRed([{ type: 'strike', text: 'apples', start: 1, end: 7, scope: '(o)(6)' }]);
+  eq('a good address is untouched', fine.widenedScope().length + fine.lostScope().length, 0);
+  eq('  and still draws', show(fine.apply(lawC, '(o)(6)')), '[del:apples]; or pears');
+  const untold = createRedline([{ type: 'strike', text: 'apples', start: 1, end: 7, scope: '(z)(9)' }], lawC);
+  eq('with no tree given, no address is reconciled', untold.lostScope().length, 0);
 }
 
 // --- additions at the end --------------------------------------------------
