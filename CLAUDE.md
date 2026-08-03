@@ -316,6 +316,15 @@ sections are claimed by two Code sections and are dropped rather than guessed;
   verify rendering with `tools/rendertest.mjs` (linkedom) and ask the user for
   anything genuinely visual. **No one has ever seen this UI render except the
   user** — say so rather than implying otherwise.
+- **The govinfo quote convention breaks the host language, not just the
+  parser.** ` ``…'' ` is two backticks and two apostrophes, and both halves are
+  string delimiters somewhere. Writing a test fixture in a single-quoted JS
+  string — `'…by striking ``a''.\n'` — the `''` closes the string early;
+  writing a prompt inside a template literal, the ` `` ` closes the template and
+  the rest parses as code ("… is not a function"). Both happened on
+  2026-08-02, one in `selftest.mjs` and one in a workflow script. Use a
+  different example in the literal, or escape it — the convention only has to
+  be *exact* where the matcher sees it, never where the source does.
 - **PowerShell mangles quotes in `python -c "..."`.** Write a script file to
   `$CLAUDE_JOB_DIR/tmp` and run that.
 - **`/tmp` in the Bash tool is invisible to native Windows Python.** Different
