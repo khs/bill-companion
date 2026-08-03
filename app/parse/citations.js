@@ -803,9 +803,35 @@ const RE_ADD_END = /adding\s+at\s+the\s+end\s+the\s+following/gi;
 // provision and the one meant is the last, which is the same reason the flag
 // exists for a quoted operand.
 const PUNCT_WORD = { period: '.', semicolon: ';', comma: ',', colon: ':' };
+// The unit is part of the phrase, not a gap after it: "striking the period at
+// the end OF PARAGRAPH (2) and inserting" names both the mark and which
+// provision's end it sits at. Left out of the match, those words fell into the
+// gap that `RE_REPLACES` reads — and that gap admits only a short connective,
+// correctly, so the insert never paired.
+//
+// 94 across the corpus, 77 of which pair; the other 17 are strikes with no
+// insert after them, which is the bill re-punctuating without replacing. The
+// count of synthesised strikes does not move at all (446 either way) — this
+// only extends a span so the gap after it reads as the connective it is.
+//
+// The corpus cannot see this. `opSpans` is the SIZE of a set of
+// `type:start-end` keys, so moving an `end` changes every key and no count;
+// the same blind spot TODO 12 records. Measured directly instead.
+//
+// The unit is consumed rather than captured. The step machinery has already
+// scoped the op to the provision the instruction walked to, so a second opinion
+// here could only disagree with it.
+//
+// The units are spelled out rather than sharing `UNIT_WORDS`, which is declared
+// below this line: a `const` referenced above its declaration is a temporal dead
+// zone, and at module top level that throws on import rather than failing a
+// test. `RE_UNIT_ANCHOR` spells them out for the same reason.
 const RE_STRIKE_PUNCT_END = new RegExp(
   'strik(?:e|ing)\\s+(?:out\\s+)?the\\s+(period|semicolon|comma|colon)' +
-    '(?:\\s+at\\s+the\\s+end)',
+    '(?:\\s+at\\s+the\\s+end)' +
+    '(?:\\s+of\\s+(?:such\\s+)?' +
+    '(?:subsection|paragraph|subparagraph|clause|subclause|item|subitem)s?' +
+    '\\s*(?:\\([A-Za-z0-9]{1,8}\\))*)?',
   'gi'
 );
 
