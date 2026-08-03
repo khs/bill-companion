@@ -613,6 +613,32 @@ section('redline on the current law');
      judged([goneStrike, { type: 'insert', text: '; or', start: 30, end: 34, replaces: 1 }],
             'apples; or pears'),
      'apples; or pears');
+
+  // Staleness is judged only on strikes that could go MISSING. A bill strikes
+  // ".", ";" and "or" constantly and those occur throughout every provision, so
+  // finding one says nothing — yet any strike being found held the whole
+  // amendment open. One period kept 157 amendments "pending" across the corpus.
+  // 7 U.S.C. 2015(o)(6) is the shape of it: it reads the way the Fiscal
+  // Responsibility Act wrote it, and every insertion was withheld because two of
+  // seven strikes were punctuation that trivially matched.
+  const punctStale = [
+    goneStrike,                                                   // real, and gone
+    { type: 'strike', text: '.', operand: '.', start: 60, end: 61 },   // always present
+    longIns,
+  ];
+  // The period is still struck — it really is there, and striking it is a real
+  // pending change. What it no longer does is vouch for the whole amendment.
+  eq('a punctuation strike does not hold an amendment open',
+     judged(punctStale, lawB),
+     'the Secretary shall apply [was:a substantially longer replacement phrase] here[del:.]');
+  // And where the ONLY strike is punctuation there is no evidence either way,
+  // so the previous answer stands rather than being called stale on an empty set.
+  eq('  and where every strike is punctuation, nothing is inferred',
+     judged([{ type: 'strike', text: '.', operand: '.', start: 60, end: 61 },
+             { type: 'insert', text: 'wholly new language here', start: 70, end: 94,
+               relation: 'after', anchor: 'the Secretary' }],
+            'the Secretary shall act.'),
+     'the Secretary[ins:wholly new language here] shall act[del:.]');
 }
 
 // --- additions at the end --------------------------------------------------

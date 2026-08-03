@@ -169,11 +169,29 @@ export function createRedline(ops, fullText) {
   // currently says. When not one of its strikes can be found, that claim is
   // false, the provision has moved on, and its insertions are being anchored to
   // text that no longer means what the drafter meant. Draw nothing and say so.
-  const strikes = work.filter((o) => o.type === 'strike');
+  // ...but only a strike whose operand could go missing is evidence either way.
+  //
+  // Bills strike ".", ";", "or" and "and" constantly, and those occur
+  // throughout every provision — so finding one says nothing about whether this
+  // amendment has happened, while ANY strike being found held the whole
+  // amendment open. One period kept 157 amendments "pending" across the corpus,
+  // and 580 rested on nothing longer than four characters. The Fiscal
+  // Responsibility Act's SNAP changes are the shape of it: 7 U.S.C. 2015(o)(6)
+  // reads "Subject to subparagraphs (G) through (I)" — the words this bill
+  // inserted, in force — and every insertion in that instruction was withheld
+  // because two of its seven strikes were punctuation that trivially matched.
+  //
+  // Four alphanumeric characters is the floor, which is what separates "or",
+  // "and" and a lone semicolon from a phrase. Where an amendment strikes
+  // nothing else, there is no evidence to reason from and the old answer stands
+  // — `evidence.length > 0` keeps that case unchanged rather than calling it
+  // stale on an empty set.
+  const distinctive = (o) => String(o.text).replace(/[^A-Za-z0-9]/g, '').length >= 4;
+  const evidence = work.filter((o) => o.type === 'strike' && distinctive(o));
   const stale =
     typeof fullText === 'string' &&
-    strikes.length > 0 &&
-    !strikes.some((o) => occurrences(fold(fullText), o.text).length);
+    evidence.length > 0 &&
+    !evidence.some((o) => occurrences(fold(fullText), o.text).length);
 
   // Where each strike landed, keyed by its offset in the bill, so an insert that
   // replaces it can be placed immediately after.
