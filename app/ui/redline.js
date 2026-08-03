@@ -154,6 +154,23 @@ function reScope(ops, knownPaths) {
       const shorter = marks.slice(0, i).join('');
       if (exists(shorter)) return { ...o, scope: shorter, scopeWidened: scope };
     }
+    // Nothing shallower matched, so try dropping markers off the FRONT instead.
+    //
+    // This is the shard bug seen from the reading side. 42 U.S.C. 4332 ships
+    // with (A)–(L) at top level and NEPA's own "(2) all agencies … shall—"
+    // flattened into the lead, so the perfectly correct address (2)(A) matches
+    // nothing while (A) is right there. 17 sections Code-wide are shaped this
+    // way; the tree is wrong and the citation is not, so the leading marker is
+    // the one to drop.
+    //
+    // Safe because it is still a test, never a guess: the remainder has to be a
+    // real path. The Fiscal Responsibility Act's transposed (6)(o)(E) offers
+    // (o)(E), which is a prefix of nothing in 7 U.S.C. 2015, so it stays lost
+    // rather than being quietly relocated.
+    for (let i = 1; i < marks.length; i++) {
+      const tail = marks.slice(i).join('');
+      if (exists(tail)) return { ...o, scope: tail, scopeWidened: scope };
+    }
     return { ...o, scopeLost: scope };
   });
 }

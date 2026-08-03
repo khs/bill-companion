@@ -675,6 +675,22 @@ section('redline on the current law');
   eq('  and still draws', show(fine.apply(lawC, '(o)(6)')), '[del:apples]; or pears');
   const untold = createRedline([{ type: 'strike', text: 'apples', start: 1, end: 7, scope: '(z)(9)' }], lawC);
   eq('with no tree given, no address is reconciled', untold.lostScope().length, 0);
+
+  // A LEADING marker can be the spurious one, which is the shard bug seen from
+  // the reading side: 42 U.S.C. 4332 ships with (A)–(L) at top level and NEPA's
+  // own "(2) all agencies … shall—" flattened into the lead, so the correct
+  // address (2)(A) matches nothing while (A) sits right there.
+  const promoted = new Set(['(A)', '(B)', '(C)', '(C)(i)']);
+  const headless = createRedline(
+    [{ type: 'strike', text: 'apples', start: 1, end: 7, scope: '(2)(A)' }], lawC, promoted);
+  eq('a spurious LEADING marker is dropped', headless.widenedScope().length, 1);
+  eq('  leaving the address the provision actually has', headless.widenedScope()[0].scope, '(A)');
+  eq('  and it draws there', show(headless.apply(lawC, '(A)')), '[del:apples]; or pears');
+  // Still a test and never a guess: the remainder has to be a real path, so the
+  // transposition above is not quietly relocated by this second pass either.
+  eq('  while a transposition still survives nowhere',
+     scopedRed([{ type: 'strike', text: 'apples', start: 1, end: 7, scope: '(6)(o)(E)' }]).lostScope().length,
+     1);
 }
 
 // --- additions at the end --------------------------------------------------
