@@ -130,8 +130,8 @@ export function renderContext(res, handlers) {
     root.appendChild(
       card(
         'Whole Act',
-        `This names an Act, not a single provision. Showing its first codified section` +
-          (res.range ? ` — the Act runs to ${escapeText(res.range)}.` : '.'),
+        `This looks like the entire law, not a single provision. Shown below is its ` +
+          `first section.` + (res.range ? ` ${escapeText(res.range)}` : ''),
         ''
       )
     );

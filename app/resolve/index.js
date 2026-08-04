@@ -77,6 +77,40 @@ function publawIdOf(act) {
   return m ? { congress: m[1], law: m[2] } : null;
 }
 
+/**
+ * Where the whole Act sits in the Code, as a phrase a reader can act on.
+ *
+ * `range` is overloaded across the 182 entries that carry one, and the card that
+ * printed it raw said something different — and sometimes untrue — for each
+ * shape. "the Act runs to 7401 et seq." drops the title, so it names no
+ * provision at all; "the Act runs to Pub. L. 116-136" calls an enacting law a
+ * range; and "the Act runs to title 26 generally" reads to anyone not steeped in
+ * citation form as though the Act HAS 26 titles, when it means the Internal
+ * Revenue Code is classified TO title 26. That last one was misread in exactly
+ * that way the first time a reader met it.
+ *
+ * So each shape gets its own sentence, and a shape with nothing useful to say
+ * ("varies", a bare chapter) says nothing. Returning null is a real answer here:
+ * the card still names the Act and shows its first section.
+ */
+function rangeLabel(act) {
+  const range = act.range;
+  if (!range || range === 'varies') return null;
+  // "1531 et seq." already ends in a full stop and "title 26 generally" does
+  // not, so the sentence closes itself rather than always appending one.
+  const stop = (s) => (/[.]$/.test(s) ? s : `${s}.`);
+  // "title 26 generally" — the Act is codified as a whole title.
+  if (/^title\s/i.test(range)) return stop(`The whole Act is codified at ${range}`);
+  // "1531 et seq." — a section range inside the Act's own title, which the
+  // entry records separately and which the phrase is useless without.
+  if (/^[0-9]/.test(range) && act.title) {
+    return stop(`The whole Act is codified at ${act.title} U.S.C. ${range}`);
+  }
+  // "Pub. L. 116-136" — not a codification range at all. Say what it is.
+  if (/^Pub\. L\./i.test(range)) return stop(`The Act as a whole is ${range}`);
+  return null;
+}
+
 /** The three places a Public Law can be read outside this app. */
 function publawLinks(cite) {
   return [
@@ -231,7 +265,7 @@ async function dispatch(cite) {
         source: 'Act (popular name)',
         actName: act.name,
         citation: act.name,
-        range: act.range || null,
+        range: rangeLabel(act),
         offsetNote: act.offsetNote || null,
         isActStart: true,
       };
@@ -310,7 +344,7 @@ async function dispatch(cite) {
           source: 'Act (popular name)',
           actName: named.name,
           citation: named.name,
-          range: named.range || null,
+          range: rangeLabel(named),
           offsetNote: named.offsetNote || null,
           isActStart: true,
           links: publawLinks(cite),

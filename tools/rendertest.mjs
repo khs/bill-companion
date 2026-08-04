@@ -967,6 +967,41 @@ section('Act-relative derivation');
   const utxt = un.textContent.replace(/\s+/g, ' ');
   ok('an unresolved Act cite still carries the caveat', /Numbering caveat/.test(utxt), utxt.slice(0, 160));
   ok('  and claims no derivation', !/taken from the source credit/.test(utxt), utxt.slice(0, 160));
+
+  // ---- the "Whole Act" card says where the Act sits ----------------------
+  // `range` is overloaded across 182 entries and used to be printed raw after
+  // "the Act runs to", which said something different for each shape and
+  // something untrue for two of them. resolve() shapes it into a sentence now,
+  // so these assert the sentence rather than the field.
+  // The card itself, not the whole pane — the provision renders after it, so
+  // matching the pane's tail would assert about the statute rather than the copy.
+  const wholeAct = (range) => {
+    const root = rc({ ...base, citation: 'Widget Act', isActStart: true, range }, { onScope: () => {} });
+    const el = [...root.querySelectorAll('.card')].find((x) => /Whole Act/i.test(x.textContent));
+    return el ? el.textContent.replace(/\s+/g, ' ').trim() : '(no Whole Act card)';
+  };
+
+  const seq = wholeAct('The whole Act is codified at 42 U.S.C. 7401 et seq.');
+  ok('the Whole Act card names the title, not a bare section number',
+     /codified at 42 U\.S\.C\. 7401 et seq\./.test(seq), seq.slice(0, 200));
+  ok('  and says plainly that this is the entire law',
+     /entire law, not a single provision/.test(seq), seq.slice(0, 200));
+  ok('  with no doubled full stop after "et seq."', !/et seq\.\./.test(seq), seq.slice(0, 200));
+
+  // THE one that was misread. "title 26 generally" means the Internal Revenue
+  // Code is classified TO title 26 — not that it HAS 26 titles. "codified at"
+  // is what makes the relationship explicit, and it must not be dropped.
+  const irc = wholeAct('The whole Act is codified at title 26 generally.');
+  ok('an Act codified as a whole title says "codified at"',
+     /codified at title 26 generally/.test(irc), irc.slice(0, 200));
+  ok('  and never claims the Act HAS that many titles',
+     !/\b26 titles\b/.test(irc), irc.slice(0, 200));
+
+  // A shape with nothing useful to say says nothing, rather than trailing an
+  // orphan phrase off the end of the sentence.
+  const bare = wholeAct(null);
+  ok('an Act with no usable range adds no dangling phrase',
+     /first section\.$/.test(bare.trim()), JSON.stringify(bare.slice(-90)));
 }
 
 section('additions at the end');
