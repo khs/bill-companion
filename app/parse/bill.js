@@ -161,6 +161,21 @@ export function parseBill(text) {
       // (DEFINITIONS), which sits above TITLE I, under "TITLE IX—OTHER MATTERS".
       if (inToc && !realBodyFollows(lines, i)) continue;
       inToc = false;
+      // A division heading ends the section above it. Only a following SECTION
+      // used to close one, so the last section of every division ran on through
+      // the heading that ended it — Pub. L. 117-58 § 905 finished with
+      // "…may be cited as the ``Infrastructure Investments and Jobs
+      // Appropriations Act''. DIVISION K-- MINORITY BUSINESS DEVELOPMENT", and
+      // the pane showed that to the reader as part of § 905. 352 of the 19,612
+      // section entries in data/plaw, 1.79%.
+      //
+      // `current` is cleared as well as closed: the next section's own
+      // `current.end = lineStart` would otherwise reopen this one and push its
+      // end past the division again, which is the same bug one step later.
+      if (current) {
+        current.end = lineStart;
+        current = null;
+      }
       const label = dm[1].trim();
       const division = {
         label,

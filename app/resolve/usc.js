@@ -146,6 +146,12 @@ export async function resolveUsc(cite) {
     // are this shape. Carrying "et seq." into the heading costs nothing and is
     // the difference between showing a section and claiming one.
     citation: `${title} U.S.C. ${section}${subsection}${cite.etSeq ? ' et seq.' : ''}`,
+    // Carried as data beside the display string, so nothing downstream has to
+    // parse the one to get the other. The level ladder used to take the last
+    // word of `citation` as the section number, which held right up until the
+    // citation ended in something else.
+    title: String(title),
+    section: String(section),
     // The pane says what a range is and what it is showing; see rangeStartCard().
     isRangeStart: Boolean(cite.etSeq),
     heading: data.heading || '',

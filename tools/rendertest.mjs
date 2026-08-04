@@ -949,6 +949,13 @@ section('Act-relative derivation');
     // ends, which is the same refusal markRangeAdditions() makes.
     ok('  and admitting it does not know where it ends',
        /nothing in the citation says where it ends/i.test(txt), txt);
+    // The level ladder took the LAST WORD of the display citation as the section
+    // number, so the moment "et seq." reached the heading every rung read
+    // "§ seq.". Caught by looking at the screen, not by any assertion.
+    const rungs = [...rc({ ...rangeRes, section: '2601', focusPath: '' }, { onScope: () => {} })
+      .querySelectorAll('.ladder button')].map((b) => b.textContent);
+    ok('the level ladder shows the section number, not the last word of the citation',
+       rungs.includes('§ 2601'), JSON.stringify(rungs));
     // The CHAPTER, not the deepest crumb: an Act codified as a block is normally
     // one chapter, where the subchapter is a slice of the range.
     const a = cardEl.querySelector('a');

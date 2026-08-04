@@ -78,10 +78,17 @@ export function renderContext(res, handlers) {
     // wrong, so the derivation is shown rather than asserted — and it names the
     // source credit it came from, which is checkable against the section itself.
     const v = res.viaActSection;
+    // "the" belongs in front of an Act's NAME and nowhere else. This path also
+    // serves a Public Law cited by number, where `act` is the synthesised
+    // "Pub. L. 116-93" — so the card read: the bill says "section 111 of the
+    // Pub. L. 116-93". A definite article is not worth a wrong sentence on
+    // every one of them.
+    const named = !/^(?:Pub\. L\.|ch\.|\d)/i.test(v.act);
+    const of = named ? `the ${v.act}` : v.act;
     root.appendChild(
       card(
         'Read in context',
-        `The bill says “section ${v.actSection} of the ${v.act}”. That Act's own section ` +
+        `The bill says “section ${v.actSection} of ${of}”. That Act's own section ` +
           `numbers are not the ones the Code uses, so ${v.act} § ${v.actSection} is ` +
           `${v.codified} — taken from the source credit the Code prints on that section ` +
           `(${v.enactedAs}).`,
@@ -402,9 +409,19 @@ function ladder(res, scope, handlers) {
       )
     : [''];
 
+  // The section number is read off the result, not re-derived from the display
+  // citation. It used to be `citation.split(' ').pop()`, which is the section
+  // number only while the citation ends in one — the moment "15 U.S.C. 2601 et
+  // seq." carried its range into the heading, every one of those rungs read
+  // "§ seq.". A display string is for display; the number is data, and the
+  // resolver has it.
+  const sectionLabel = res.section != null
+    ? `§ ${res.section}`
+    : `§ ${String(res.citation || '').split(' ').pop().replace(/\(.*/, '')}`;
+
   for (const path of rungs) {
     const b = document.createElement('button');
-    b.textContent = path === '' ? `§ ${res.citation.split(' ').pop().replace(/\(.*/, '')}` : path;
+    b.textContent = path === '' ? sectionLabel : path;
     b.title = path === '' ? 'Whole section' : `Scope to ${path}`;
     if (path === scope) b.classList.add('on');
     b.addEventListener('click', () => handlers.onScope(path));

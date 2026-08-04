@@ -237,6 +237,56 @@ section('relative navigation inside amendments');
   eq('(a)/(1)/(A) outline nests correctly', paths.join(' '), '(b) (b)(2) (b)(2)(C)');
 }
 {
+  // A division heading ends the section above it.
+  //
+  // Only a following SECTION used to close one, so the last section of every
+  // division ran on through the heading that ended it. Pub. L. 117-58 § 905
+  // finished with "…may be cited as the ``Infrastructure Investments and Jobs
+  // Appropriations Act''. DIVISION K-- MINORITY BUSINESS DEVELOPMENT" and the
+  // pane showed that to the reader as part of § 905. 352 of the 19,612 section
+  // entries in data/plaw, and no metric could see it — a section's `end` is not
+  // counted by anything, which is why it survived. Found by looking at the pane.
+  const t =
+    '                   DIVISION A--FIRST DIVISION\n\n' +
+    'SEC. 101. LAST SECTION OF THE DIVISION.\n' +
+    '    This is the operative text of section 101.\n\n' +
+    '                   DIVISION B--SECOND DIVISION\n\n' +
+    'SEC. 201. FIRST SECTION OF THE NEXT.\n' +
+    '    This is the operative text of section 201.\n';
+  const bill = parseBill(t);
+  const s101 = bill.sections.find((s) => s.num === '101');
+  const body = t.slice(s101.start, s101.end);
+  ok('a section ends where the next division begins', !/DIVISION B/.test(body),
+     JSON.stringify(body.slice(-70)));
+  ok('  keeping its own text whole', /operative text of section 101/.test(body), body);
+  // And the section after the heading is unaffected — the close must not also
+  // swallow the division it ends at.
+  eq('  and both divisions are still seen', bill.divisions.length, 2);
+  eq('  and both sections', bill.sections.length, 2);
+  // A table of contents legitimately LISTS division headings, and the inToc
+  // guard means those are not real divisions — so it must not be split there.
+  // What follows each one here is another LISTING ("Sec. 101. …" flush left,
+  // sentence case), not a real body, which is exactly what realBodyFollows()
+  // asks. Get that wrong and the table is cut into pieces at every division it
+  // names.
+  const toc =
+    'SEC. 2. TABLE OF CONTENTS.\n' +
+    '    The table of contents for this Act is as follows:\n' +
+    'Sec. 1. Short title.\n\n' +
+    '                   DIVISION A--LIMIT FEDERAL SPENDING\n\n' +
+    'Sec. 101. Discretionary spending limits.\n' +
+    'Sec. 102. Special adjustments.\n\n' +
+    '                   DIVISION B--SAVE TAXPAYER DOLLARS\n\n' +
+    'Sec. 201. Rescission of unobligated funds.\n';
+  const tb = parseBill(toc);
+  const s2 = tb.sections.find((s) => s.num === '2');
+  const tocBody = toc.slice(s2.start, s2.end);
+  ok('a table of contents still lists the divisions it names',
+     /DIVISION A/.test(tocBody) && /DIVISION B/.test(tocBody),
+     JSON.stringify(tocBody.slice(0, 90)));
+  eq('  and none of them is read as a real division', tb.divisions.length, 0);
+}
+{
   // "Section 55301 of title 46 … is redesignated as section 55123 of such
   // title" says exactly what it does, and the pane said nothing at all: `verb`
   // recorded "redesignated", no op was ever emitted, and attachEffect() returns
