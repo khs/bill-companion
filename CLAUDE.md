@@ -2160,3 +2160,44 @@ are `usc`/`cfr` with `relative: true` and ids prefixed `r`.
    moves a provision between sections and the destination phrase is not this
    one. Declining is right; guessing at it would name a provision the bill did
    not.
+
+40. **A division heading ends the section above it.** (Fixed 2026-08-04, found
+   by LOOKING at the Public Law pane.) `parseBill` closed a section only when
+   the next SECTION started, so the last section of every division ran on
+   through the heading that ended it:
+
+   ```
+   Pub. L. 117-58 § 905
+     …This division may be cited as the ``Infrastructure Investments and
+     Jobs Appropriations Act''. DIVISION K-- MINORITY BUSINESS DEVELOPMENT
+   ```
+
+   — the next division's heading, shown to the reader as part of § 905. 352 of
+   the 19,612 section entries in `data/plaw`, 1.79%.
+   **No metric could see it, and that is the lesson.** A section's `end` is not
+   counted by anything: the corpus does not move by a single number, selftest
+   and rendertest both passed, and it had been true for the whole life of the
+   project. It took one screenshot.
+   `current` is cleared as well as closed, or the next section's own
+   `current.end = lineStart` reopens it and pushes the end past the division
+   again — the same bug one step later. The table of contents is untouched,
+   because what follows a division heading THERE is another listing rather than
+   a real body, which `realBodyFollows()` already asks; assert both ways, since
+   a fix that cut the table into pieces at every division it names would also
+   pass "no section contains a later heading".
+   After re-ingesting `data/plaw`: 352 → 1, entry count unchanged at 19,612, so
+   the fix only trimmed boundaries. The one left is Pub. L. 116-283 § 8513,
+   where the label itself wraps (`TITLE 
+LVXXXVI--FEDERAL MARITIME
+   COMMISSION`) on a roman numeral the law malforms. Matching a wrapped label
+   would risk false positives across every bill to fix one instance.
+
+   Two more from the same sweep, both invisible to every test:
+   - **The level ladder read the section number off the LAST WORD of the display
+     citation**, so the moment "et seq." reached the heading every rung rendered
+     `§ seq.`. A regression shipped an hour earlier, caught by eye rather than
+     by assertion. `resolveUsc` carries `title` and `section` as data now — a
+     display string is for display.
+   - **"The bill says 'section 111 of the Pub. L. 116-93'".** The definite
+     article belongs in front of an Act's NAME, and `viaActSection` also serves
+     a Public Law cited by number.
