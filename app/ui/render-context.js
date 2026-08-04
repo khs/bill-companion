@@ -137,6 +137,44 @@ export function renderContext(res, handlers) {
       )
     );
   }
+  // "15 U.S.C. 2601 et seq." is the Toxic Substances Control Act, not § 2601.
+  // The bill named a RANGE and the pane answered with one section — silently,
+  // under a heading that named it alone. 2,620 citations across 28 corpus bills.
+  //
+  // Nothing here knows where the range stops; that is not a fact the citation
+  // carries, and it is the same limit markRangeAdditions() declines on. So the
+  // card states exactly what IS known — where the range begins, and that this is
+  // its first section — and the crumb above it links to the chapter the section
+  // sits in, which is the level a reader wanting the rest of the range actually
+  // wants. Naming the chapter as though it WERE the range would be a guess.
+  else if (res.isRangeStart) {
+    // The CHAPTER, not the deepest crumb. An Act codified as a block is
+    // normally one chapter — TSCA is chapter 53 of title 15 — where the deepest
+    // level is a subchapter, which is a slice of the range rather than the range.
+    // Falls back to the outermost linkable crumb where there is no chapter,
+    // which is the title: wider than the range and honest about being so, and
+    // the card never claims either one IS the range.
+    const linkable = (res.crumbs || []).filter((c) => c.href);
+    const chapter = linkable.find((c) => c.type === 'chapter') || linkable[0];
+    root.appendChild(
+      card(
+        'A range, not one section',
+        `The bill cited "${res.citation}" — that section and the ones following it, ` +
+          `which is usually a whole Act. Shown below is the section the range starts ` +
+          `at; nothing in the citation says where it ends.`,
+        '',
+        // `short` is the shard's own `num`, which ends in the separator that
+        // introduces the heading — "CHAPTER 17A—". Fine inside a crumb where the
+        // heading follows it; in a sentence it trails off mid-dash.
+        chapter
+          ? {
+              label: `Read ${String(chapter.short || chapter.label).replace(/[\s—–-]+$/, '')}`,
+              href: chapter.href,
+            }
+          : null
+      )
+    );
+  }
 
   // --- U.S. Code shape: a parsed subsection tree we can navigate -----------
   if (res.tree) {

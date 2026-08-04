@@ -237,6 +237,40 @@ section('relative navigation inside amendments');
   eq('(a)/(1)/(A) outline nests correctly', paths.join(' '), '(b) (b)(2) (b)(2)(C)');
 }
 {
+  // "Section 55301 of title 46 … is redesignated as section 55123 of such
+  // title" says exactly what it does, and the pane said nothing at all: `verb`
+  // recorded "redesignated", no op was ever emitted, and attachEffect() returns
+  // early on `!ops.length`. 13 of the corpus's 17, all silent.
+  const t = 'Section 55301 of title 46, United States Code, is redesignated as section 55123 of such title.\n';
+  const ams = extractAmendments(t, extractCitations(t));
+  const rd = (ams[0]?.ops || []).filter((o) => o.type === 'redesignate');
+  eq('a whole-section redesignation produces an operation', rd.length, 1);
+  eq('  naming what it was', rd[0]?.from, 'Section 55301');
+  eq('  and what it becomes', rd[0]?.to, 'section 55123');
+  // No span: nothing in the bill is being marked, and a span that did not
+  // round-trip to op.text would break the badOpOffsets invariant for nothing.
+  eq('  and claiming no span in the bill', rd[0]?.start, undefined);
+
+  // The destination keeps a subsection and a dashed number, because dropping
+  // either names a different provision. Both are real: "redesignated as section
+  // 2534(a) of title 14" and "as section 399V-1".
+  const t2 = 'Section 3 of the Act (33 U.S.C. 773), is redesignated as section 2534(a) of title 14, United States Code.\n';
+  const r2 = (extractAmendments(t2, extractCitations(t2))[0]?.ops || [])
+    .find((o) => o.type === 'redesignate');
+  eq('a redesignation into a subsection keeps it', r2?.to, 'section 2534(a)');
+  const t3 = 'Section 399W of the Public Health Service Act is redesignated as section 399V-1.\n';
+  const r3 = (extractAmendments(t3, extractCitations(t3))[0]?.ops || [])
+    .find((o) => o.type === 'redesignate');
+  eq('  and a dashed section number survives', r3?.to, 'section 399V-1');
+
+  // "is transferred to section X" is a different operation and is declined
+  // rather than guessed at — 4 of the 17 are this shape.
+  const t4 = 'Subsection (a) of section 2305 of title 10, United States Code, is transferred to section 3241 and redesignated as subsection (b).\n';
+  const r4 = (extractAmendments(t4, extractCitations(t4))[0]?.ops || [])
+    .filter((o) => o.type === 'redesignate' && o.start == null);
+  eq('a transfer is not read as a plain redesignation', r4.length, 0);
+}
+{
   // A new provision is longer than a phrase, and the operand budget deleted it.
   //
   // Verbatim from the Fiscal Responsibility Act, whose whole substantive change

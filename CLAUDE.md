@@ -2118,3 +2118,45 @@ are `usc`/`cfr` with `relative: true` and ids prefixed `r`.
    anchor inside a pill reads as a mistake and the hover rule was already the
    affordance. Confirmed by computed style rather than by eye: same background,
    ink, radius and padding as the inert pill, with `cursor: pointer`.
+
+38. **`et seq.` names a range, and the pane now says so.** (2026-08-04.) The
+   last of the fields TODO 33 listed as written-and-never-read at the READER.
+   "15 U.S.C. 2601 et seq." is the Toxic Substances Control Act; the pane
+   answered with § 2601 alone, under a heading printing a bare "15 U.S.C. 2601".
+   **2,620 citations across 28 corpus bills** — a confident answer to a question
+   the citation did not ask, which is this app's worst category.
+   The heading carries "et seq." now, and a card states what is known and
+   refuses what is not: where the range begins, that this is its first section,
+   and that **nothing in the citation says where it ends**. That is the same
+   refusal `markRangeAdditions()` already makes on the drawing side.
+   The way out is the CHAPTER crumb, not the deepest one: an Act codified as a
+   block is normally one chapter (TSCA is chapter 53 of title 15) where the
+   deepest level is a subchapter, which is a slice of the range rather than the
+   range. The card never claims either one IS the range.
+   **`cacheKey` needed `etSeq`, for the fifth time this pattern has cost
+   something.** "15 U.S.C. 2601" and "15 U.S.C. 2601 et seq." agree on kind,
+   title, section and subsection, so without it the first of the two clicked
+   answered for both — silently, and in whichever direction the reader happened
+   to click first. Asserted in both orders, because a memo is order-dependent by
+   nature. `isRangeStart` is set on the missing-section branch too: whether the
+   bill named a range is a fact about the CITATION, not about whether we hold
+   the section it starts at.
+   Corpus does not move at all — this is resolution and rendering.
+
+39. **A redesignation says what it does.** (2026-08-04, closing the largest
+   half of TODO 33's `amendment.verb`.) "Section 55301 of title 46 … is
+   redesignated as section 55123 of such title" states its own destination and
+   the pane said nothing whatever: `verb` recorded "redesignated", no op was
+   emitted, and `attachEffect()` returns early on `!ops.length`. 13 of the
+   corpus's 17.
+   Emitted as an ordinary `redesignate` op, because the panel already draws that
+   shape as "from → to" — the destination was the only thing missing, so the
+   consumer came free. The op carries **no span**: the language is not changing,
+   so there is nothing in the bill to mark, and a span that did not round-trip
+   would break `badOpOffsets` for nothing.
+   Corpus `redesignate +13`, accounted exactly: 17 amendments with the verb, 13
+   gained a head-level op, 4 decline and 0 doubled. The 4 are "is transferred to
+   section X and redesignated as…", which is a different operation — a transfer
+   moves a provision between sections and the destination phrase is not this
+   one. Declining is right; guessing at it would name a provision the bill did
+   not.

@@ -347,7 +347,7 @@
    "insert": 2468,
    "strike": 1721,
    "add-at-end": 355,
-   "redesignate": 224,
+   "redesignate": 233,
    "repeal": 36
   },
   "opSpans": 4544,
@@ -589,7 +589,7 @@
    "strike": 869,
    "insert": 1084,
    "add-at-end": 356,
-   "redesignate": 92,
+   "redesignate": 93,
    "repeal": 5
   },
   "opSpans": 2309,
@@ -620,7 +620,7 @@
    "insert": 830,
    "add-at-end": 385,
    "strike": 622,
-   "redesignate": 56,
+   "redesignate": 59,
    "repeal": 2
   },
   "opSpans": 1837,

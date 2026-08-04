@@ -923,6 +923,69 @@ section('Act-relative derivation');
        !list.textContent.includes('as added'), list.textContent.slice(0, 90));
   }
 
+  // ---- "et seq." names a range, and the pane has to say so ---------------
+  // "15 U.S.C. 2601 et seq." is the Toxic Substances Control Act, not § 2601.
+  // The pane answered with one section under a heading naming it alone — 2,620
+  // citations across 28 corpus bills, every one a confident answer to a question
+  // the citation did not ask.
+  {
+    const crumbs = [
+      { type: 'title', label: 'Title 15— COMMERCE', short: 'Title 15—', href: 'https://www.law.cornell.edu/uscode/text/15' },
+      { type: 'chapter', label: 'CHAPTER 53— TOXIC SUBSTANCES', short: 'CHAPTER 53—', href: 'https://www.law.cornell.edu/uscode/text/15/chapter-53' },
+      { type: 'subchapter', label: 'SUBCHAPTER I', short: 'SUBCHAPTER I—', href: 'https://www.law.cornell.edu/uscode/text/15/chapter-53/subchapter-I' },
+    ];
+    const rangeRes = {
+      source: 'U.S. Code', citation: '15 U.S.C. 2601 et seq.', isRangeStart: true, links: [],
+      heading: 'Findings, policy, and intent', lead: 'The Congress finds…', tree: [], notes: [],
+      sourceCredit: '', crumbs,
+    };
+    const el = rc(rangeRes, { onScope: () => {} });
+    const cardEl = [...el.querySelectorAll('.card')].find((x) => /A range, not one section/i.test(x.textContent));
+    ok('a range citation says it is a range', Boolean(cardEl), el.textContent.slice(0, 160));
+    const txt = cardEl.textContent.replace(/\s+/g, ' ');
+    ok('  quoting what the bill actually wrote', /15 U\.S\.C\. 2601 et seq\./.test(txt), txt);
+    ok('  and saying this is where it starts', /section the range starts at/.test(txt), txt);
+    // The limit, stated rather than papered over: nothing knows where a range
+    // ends, which is the same refusal markRangeAdditions() makes.
+    ok('  and admitting it does not know where it ends',
+       /nothing in the citation says where it ends/i.test(txt), txt);
+    // The CHAPTER, not the deepest crumb: an Act codified as a block is normally
+    // one chapter, where the subchapter is a slice of the range.
+    const a = cardEl.querySelector('a');
+    eq('  offering the chapter as the way out',
+       a && a.getAttribute('href'), 'https://www.law.cornell.edu/uscode/text/15/chapter-53');
+    // The shard's `num` ends in the separator that introduces the heading, so a
+    // label taken raw trails off mid-dash: "Read CHAPTER 53—".
+    eq('    labelled without the crumb\'s trailing separator', a && a.textContent, 'Read CHAPTER 53');
+
+    // A plain section must gain none of this.
+    const plainEl = rc({ ...rangeRes, citation: '15 U.S.C. 2601', isRangeStart: false }, { onScope: () => {} });
+    eq('an ordinary section says nothing about ranges',
+       [...plainEl.querySelectorAll('.card')].filter((x) => /A range, not one section/i.test(x.textContent)).length, 0);
+  }
+  {
+    // THE cache hazard, which this codebase has paid for four times before.
+    // "15 U.S.C. 2601" and "15 U.S.C. 2601 et seq." agree on kind, title,
+    // section and subsection and differ only in `etSeq` — so without it in the
+    // key the first of the two clicked answers for BOTH, silently, in whichever
+    // direction the reader happened to click first.
+    const { resolve } = await imp('app/resolve/index.js');
+    const bare = { id: 'c1', kind: 'usc', title: '15', section: '2601', subsection: '' };
+    const range = { id: 'c2', kind: 'usc', title: '15', section: '2601', subsection: '', etSeq: true };
+    const first = await resolve(bare);
+    const second = await resolve(range);
+    eq('a bare section resolves as itself', first.citation, '15 U.S.C. 2601');
+    eq('  and the et seq. cite is not served its cached answer',
+       second.citation, '15 U.S.C. 2601 et seq.');
+    ok('  nor its range flag', second.isRangeStart === true && !first.isRangeStart,
+       `${first.isRangeStart} / ${second.isRangeStart}`);
+    // And the other way round, since a memo is order-dependent by nature.
+    const rangeFirst = await resolve({ ...range, id: 'c3', section: '2602' });
+    const bareAfter = await resolve({ ...bare, id: 'c4', section: '2602' });
+    eq('the same holds when the range is clicked first',
+       `${rangeFirst.citation} | ${bareAfter.citation}`, '15 U.S.C. 2602 et seq. | 15 U.S.C. 2602');
+  }
+
   // ---- the crumbs are a way out, not a caption ---------------------------
   // They have always carried the USLM identifier and rendered as inert grey
   // text: the reader could SEE that 7 U.S.C. 2011 sits in chapter 51 of title 7

@@ -82,7 +82,13 @@ export async function resolveUsc(cite) {
   if (!data) {
     return {
       source: 'U.S. Code',
-      citation: `${title} U.S.C. ${section}${subsection}`,
+      citation: `${title} U.S.C. ${section}${subsection}${cite.etSeq ? ' et seq.' : ''}`,
+      // Set here too: whether the bill named a range is a fact about the
+      // CITATION, not about whether we happen to hold the section it starts at.
+      // Only the missing-section card renders in this branch, but a flag that is
+      // true on one path and undefined on the other is the kind of divergence
+      // that makes a later consumer work in testing and not in the app.
+      isRangeStart: Boolean(cite.etSeq),
       missing: true,
       // Three different failures, three different fixes. Conflating the first
       // with the second sent someone looking for missing data that was sitting
@@ -133,7 +139,15 @@ export async function resolveUsc(cite) {
   return {
     source: 'U.S. Code',
     asOf: data.releasePoint || mf.releasePoint || null,
-    citation: `${title} U.S.C. ${section}${subsection}`,
+    // "15 U.S.C. 2601 et seq." is a RANGE, and the heading is the first thing
+    // the reader reads. Printing it as a bare "15 U.S.C. 2601" over the text of
+    // § 2601 alone says the bill cited that section — which it did not; it cited
+    // the Toxic Substances Control Act. 2,620 citations across 28 corpus bills
+    // are this shape. Carrying "et seq." into the heading costs nothing and is
+    // the difference between showing a section and claiming one.
+    citation: `${title} U.S.C. ${section}${subsection}${cite.etSeq ? ' et seq.' : ''}`,
+    // The pane says what a range is and what it is showing; see rangeStartCard().
+    isRangeStart: Boolean(cite.etSeq),
     heading: data.heading || '',
     // The section's flush lead-in text, above any subsection. For a section that
     // was never subdivided this is the entire operative provision — 15 U.S.C.

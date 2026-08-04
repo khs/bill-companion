@@ -1111,6 +1111,17 @@ const RE_REDESIG = new RegExp(
   `redesignat(?:e|ing)\\s+(${REDESIG_LIST})\\s+as\\s+(${REDESIG_LIST})`, 'gi'
 );
 
+// The destination of a whole-section redesignation, read forwards from the
+// instruction head: "… is redesignated as section 55123 of such title".
+//
+// Anchored at the head's end, so the "as section N" found is this instruction's
+// and not one belonging to a sentence further down. A section number may carry
+// a letter or a dash (399V-1, 2851a) and may be followed by a subsection, which
+// is kept — "redesignated as section 2534(a) of title 14" renumbers into a
+// subsection and saying just "section 2534" would name a different provision.
+const RE_REDESIG_DEST =
+  /^[\s,]*as\s+section\s+([0-9]+[A-Za-z]*(?:[-–—][0-9A-Za-z]+)?(?:\([A-Za-z0-9]{1,8}\))*)/i;
+
 // Navigation steps inside an amendment body:
 //
 //   Section 40007(a) of the ... Act (49 U.S.C. 44504) is amended—
@@ -2471,6 +2482,26 @@ export function extractAmendments(text, citations, divisions = []) {
       });
     }
     if (h.verb === 'repealed') ops.push({ type: 'repeal' });
+
+    // "Section 55301 of title 46, United States Code, is redesignated as section
+    // 55123 of such title" — the instruction says exactly what it does and the
+    // pane said nothing at all about it. `verb` recorded "redesignated" and no
+    // op was ever emitted, so attachEffect() returned early on `!ops.length` and
+    // the reader got the provision with no indication the bill renumbers it.
+    // 13 of the corpus's 17 section-level redesignations, all in the NDAA.
+    //
+    // Emitted as an ordinary `redesignate` op because the panel already draws
+    // that shape as "from → to"; the destination was the only thing missing.
+    // The op carries no span: the language is not being changed, so there is
+    // nothing in the bill for the redline to mark, and a span that did not
+    // round-trip would break the badOpOffsets invariant for nothing.
+    if (h.verb === 'redesignated' && !ops.some((o) => o.type === 'redesignate')) {
+      const dest = text.slice(h.headEnd, h.headEnd + 160).match(RE_REDESIG_DEST);
+      if (dest) {
+        const from = `${h.unit.replace(/\.$/, '')} ${h.section}${h.subsection}`.trim();
+        ops.push({ type: 'redesignate', from, to: `section ${dest[1]}` });
+      }
+    }
 
     // One instruction over a list of provisions becomes one amendment per
     // provision, each anchored on its own list item. That keeps the model's

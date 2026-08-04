@@ -179,9 +179,15 @@ function cacheKey(c) {
   // bare "section 505 of Public Law 115-141" must still show all five. Without
   // it the first clicked answered for both — and the wrong way round, since the
   // bare citation would inherit a division nothing in it named.
+  // `etSeq` for the FIFTH time this pattern has cost something. "15 U.S.C. 2601"
+  // and "15 U.S.C. 2601 et seq." are the same kind, title, section and
+  // subsection, and differ only in whether a range was named — which is now the
+  // whole difference between a heading that says § 2601 and one that says the
+  // Toxic Substances Control Act. Without it the first of the two clicked
+  // answers for both, and the failure is silent in either direction.
   return [c.kind, c.title, c.part, c.section, c.subsection, c.congress, c.law, c.volume, c.page,
           c.act && c.act.name, c.actSection, c.division, c.where && c.where.join('>'),
-          c.shortTitle, c.actTitle && `t${c.actTitle}`]
+          c.shortTitle, c.actTitle && `t${c.actTitle}`, c.etSeq ? 'etseq' : '']
     .filter(Boolean)
     .join('|');
 }
