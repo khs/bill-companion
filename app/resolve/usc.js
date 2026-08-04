@@ -146,6 +146,7 @@ export async function resolveUsc(cite) {
       label: a.heading ? `${a.num} ${a.heading}`.trim() : a.num,
       short: a.num,
       identifier: a.identifier,
+      href: crumbHref(a.identifier),
     })),
     tree,
     notes: data.notes || [],
@@ -181,6 +182,7 @@ export async function resolveUsc(cite) {
         label: c.heading ? `${c.num} ${c.heading}`.trim() : c.num,
         short: c.num,
         identifier: c.identifier,
+        href: crumbHref(c.identifier),
       })),
     })),
     links,
@@ -221,6 +223,64 @@ function runInLevels(tree, lead, subsection) {
     if (node) return { path: rest, node, dropped: dropped.join('') };
   }
   return null;
+}
+
+// The USLM identifier's own vocabulary for the levels above a section, and the
+// word Cornell spells each one with. Both sides are fixed by the source rather
+// than chosen here: the left is what the OLRC writes in `<... identifier>`, the
+// right is what law.cornell.edu puts in a path.
+//
+// Order matters, and it is prefix order, not alphabetical: `spt` must be tried
+// before `st` and `sch` before `ch`, or "sptA" parses as a subtitle. The number
+// after the prefix runs to the end of the segment and is NOT restricted to
+// uppercase — `/us/usc/t42/ch6A/schII/ptD/sptiii` is subpart iii, and a pattern
+// anchored on `[A-Z0-9]` silently drops every one of those.
+const USLM_LEVELS = [
+  ['sch', 'subchapter'],
+  ['spt', 'subpart'],
+  ['sd', 'subdivision'],
+  ['st', 'subtitle'],
+  ['ch', 'chapter'],
+  ['pt', 'part'],
+  ['d', 'division'],
+];
+
+/**
+ * A link to the level a crumb names — the chapter a section sits in, the
+ * subtitle above that — built from the identifier the shard already carries.
+ *
+ * The crumbs have always held `/us/usc/t7/ch51` and the pane rendered them as
+ * inert grey text, so the reader could SEE that the section sits in chapter 51
+ * of title 7 and could do nothing with it. This is precision the data already
+ * had; only the anchor was missing.
+ *
+ * Cornell mirrors the USLM hierarchy exactly, so the transform is mechanical and
+ * every level checked resolves — title, chapter, subchapter, part, subpart,
+ * subtitle, division and subdivision, nested to four deep.
+ *
+ * A segment whose prefix is not in the table returns null and the crumb stays
+ * text. That is the whole safety of this: a guessed path would send the reader
+ * to a 404 wearing the app's confidence, and an unlinked crumb costs them
+ * nothing they had before.
+ */
+export function crumbHref(identifier) {
+  // The EN DASH again, and in the same role it plays for slug(): USLM writes
+  // "subchapter III–A" with one and every URL wants an ASCII hyphen. Left out,
+  // this declined 1,583 of the Code's 200,675 crumbs — every one of them a real
+  // subchapter with a real page behind it — and declined them silently, which is
+  // the failure mode that makes a safe default expensive rather than free.
+  const id = String(identifier || '').replace(/[–—]/g, '-');
+  const m = /^\/us\/usc\/t([0-9]+[A-Za-z]?)((?:\/[A-Za-z]+[A-Za-z0-9-]*)*)$/.exec(id);
+  if (!m) return null;
+  const [, title, rest] = m;
+  const segs = rest ? rest.slice(1).split('/') : [];
+  const out = [];
+  for (const seg of segs) {
+    const hit = USLM_LEVELS.find(([p]) => seg.startsWith(p) && seg.length > p.length);
+    if (!hit) return null;
+    out.push(`${hit[1]}-${seg.slice(hit[0].length)}`);
+  }
+  return `https://www.law.cornell.edu/uscode/text/${title}${out.length ? `/${out.join('/')}` : ''}`;
 }
 
 export function uscLinks(cite) {

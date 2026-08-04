@@ -923,6 +923,71 @@ section('Act-relative derivation');
        !list.textContent.includes('as added'), list.textContent.slice(0, 90));
   }
 
+  // ---- the crumbs are a way out, not a caption ---------------------------
+  // They have always carried the USLM identifier and rendered as inert grey
+  // text: the reader could SEE that 7 U.S.C. 2011 sits in chapter 51 of title 7
+  // and could do nothing with it. This app has no whole-chapter view, so the
+  // honest "expand out" is out to the Code.
+  {
+    const { crumbHref } = await imp('app/resolve/usc.js');
+    // Every level checked live against law.cornell.edu; the transform is
+    // mechanical because Cornell mirrors the USLM hierarchy exactly.
+    eq('a title crumb links to the title',
+       crumbHref('/us/usc/t7'), 'https://www.law.cornell.edu/uscode/text/7');
+    eq('a chapter crumb links to the chapter',
+       crumbHref('/us/usc/t7/ch51'), 'https://www.law.cornell.edu/uscode/text/7/chapter-51');
+    eq('  nested through subchapter and part',
+       crumbHref('/us/usc/t42/ch7/schIV/ptA'),
+       'https://www.law.cornell.edu/uscode/text/42/chapter-7/subchapter-IV/part-A');
+    eq('  and subtitle, division, subdivision',
+       crumbHref('/us/usc/t54/stIII/dA/sd2'),
+       'https://www.law.cornell.edu/uscode/text/54/subtitle-III/division-A/subdivision-2');
+    // THE parsing trap. `spt` takes a LOWERCASE roman number with no separator,
+    // so a pattern anchored on [A-Z0-9] drops every one — and `spt` must be
+    // tried before `st`, or "sptiii" reads as a subtitle.
+    eq('  a lowercase-roman subpart is not mistaken for a subtitle',
+       crumbHref('/us/usc/t42/ch6A/schII/ptD/sptiii'),
+       'https://www.law.cornell.edu/uscode/text/42/chapter-6A/subchapter-II/part-D/subpart-iii');
+    // The EN DASH, in the same role it plays for slug(): USLM writes
+    // "subchapter III–A" with one and the URL wants an ASCII hyphen. Left out,
+    // this declined 1,583 of the Code's 200,675 crumbs — silently, which is what
+    // makes a safe default expensive rather than free.
+    eq('an en-dashed subchapter is normalised, not declined',
+       crumbHref('/us/usc/t42/ch6A/schIII–A'),
+       'https://www.law.cornell.edu/uscode/text/42/chapter-6A/subchapter-III-A');
+    // Safety: an unknown level is declined outright rather than guessed into a
+    // path, because a 404 wearing this app's confidence is worse than grey text.
+    eq('an unrecognised level declines', crumbHref('/us/usc/t7/zz9'), null);
+    eq('  as does a non-USC identifier', crumbHref('/us/cfr/t40/s60.13'), null);
+    eq('  and a missing one', crumbHref(null), null);
+
+    const linked = rc({
+      source: 'U.S. Code', citation: '7 U.S.C. 2011', links: [], heading: 'Congressional declaration',
+      lead: 'It is declared…', tree: [], notes: [], sourceCredit: '',
+      crumbs: [
+        { type: 'title', label: 'Title 7— AGRICULTURE', short: 'Title 7—', href: crumbHref('/us/usc/t7') },
+        { type: 'chapter', label: 'CHAPTER 51— SNAP', short: 'CHAPTER 51—', href: crumbHref('/us/usc/t7/ch51') },
+      ],
+    }, { onScope: () => {} });
+    const anchors = [...linked.querySelectorAll('.crumbs a.crumb')];
+    eq('both crumbs render as links', anchors.length, 2);
+    eq('  the chapter one to the chapter',
+       anchors[1].getAttribute('href'), 'https://www.law.cornell.edu/uscode/text/7/chapter-51');
+    eq('  opening away from the reading, opener severed',
+       anchors[1].getAttribute('rel'), 'noopener noreferrer');
+    ok('  and carrying the affordance class the stylesheet hangs hover off',
+       anchors[1].classList.contains('clickable'), anchors[1].className);
+    // A crumb with no link must stay a span, or an <a href=""> reloads the app
+    // and throws the reader's reading away.
+    const inert = rc({
+      source: 'U.S. Code', citation: '7 U.S.C. 2011', links: [], heading: 'x',
+      lead: '', tree: [], notes: [], sourceCredit: '',
+      crumbs: [{ type: 'title', label: 'Title 7', short: 'Title 7', href: null }],
+    }, { onScope: () => {} });
+    eq('an unlinkable crumb stays plain text', inert.querySelectorAll('.crumbs a').length, 0);
+    eq('  and is still shown', inert.querySelectorAll('.crumbs .crumb').length, 1);
+  }
+
   // ---- two sections, one number ------------------------------------------
   // The pane has to say so, and has to let the reader read the other one.
   // Named by heading and credit, because a bare "alternative 2" tells nobody

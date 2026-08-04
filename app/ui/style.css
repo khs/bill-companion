@@ -427,6 +427,11 @@ body {
   color: var(--ink-dim); background: var(--internal-soft);
   padding: 2px 8px; border-radius: 20px; border: 1px solid transparent;
   cursor: default; max-width: 46ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* A crumb that links out is an <a>, and the UA underlines those. Inside a
+     pill that reads as a mistake, and the hover rule below is already the
+     affordance — border and ink both change. Set here rather than on a link
+     variant so the two element types are pixel-identical. */
+  text-decoration: none;
 }
 .crumbs .crumb.clickable { cursor: pointer; }
 .crumbs .crumb.clickable:hover { border-color: var(--accent); color: var(--ink); }

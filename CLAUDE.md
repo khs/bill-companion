@@ -2087,3 +2087,34 @@ are `usc`/`cfr` with `relative: true` and ids prefixed `r`.
    3,061**, of which **+220 are drawn** and **+108 are correctly marked already
    in force**. Inline coverage barely moves (23%), because this family was never
    in it.
+
+37. **The crumbs are a way out, not a caption.** (2026-08-04, from Keller's
+   standing rule: *err towards giving the user more safe precision, while
+   showing with the chip structure that they can expand out.*) Every shard has
+   carried the USLM identifier on every ancestor since ingest —
+   `/us/usc/t7/ch51` — and the pane rendered it as inert grey text. The reader
+   could SEE that 7 U.S.C. 2011 sits in chapter 51 of title 7 and could do
+   nothing with it. This app has no whole-chapter view, so the honest "expand
+   out" is out to the Code.
+   `crumbHref()` maps the identifier onto law.cornell.edu, which mirrors the
+   USLM hierarchy exactly, so the transform is mechanical rather than inferred.
+   **200,675 crumbs Code-wide, 100% linked, 0 declined**, and all 25 distinct
+   hierarchy shapes checked live at 200.
+   Three things earned their place:
+   - **`spt` before `st`, and the number may be LOWERCASE.**
+     `/us/usc/t42/ch6A/schII/ptD/sptiii` is subpart iii. A prefix table tried in
+     alphabetical order reads it as a subtitle, and a number pattern anchored on
+     `[A-Z0-9]` drops every one of them.
+   - **The EN DASH, again.** `schIII–A` is a real subchapter with a real page
+     behind it, and the URL wants an ASCII hyphen — the same normalisation
+     `slug()` does. Left out it declined 1,583 crumbs *silently*, which is what
+     makes a safe default expensive rather than free: the last 0.79% was invisible
+     until it was counted.
+   - **An unrecognised level returns null and the crumb stays a `<span>`.** A
+     guessed path is a 404 wearing this app's confidence; grey text costs the
+     reader nothing they did not already have. It must stay a `<span>` and not
+     become `<a href="">`, which reloads the app and throws the reading away.
+   `.crumbs .crumb` gained `text-decoration: none`, because a UA-underlined
+   anchor inside a pill reads as a mistake and the hover rule was already the
+   affordance. Confirmed by computed style rather than by eye: same background,
+   ink, radius and padding as the inert pill, with `cursor: pointer`.

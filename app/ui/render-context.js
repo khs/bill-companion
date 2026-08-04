@@ -289,14 +289,28 @@ function crumbs(list, res, handlers) {
       sep.textContent = '›';
       wrap.appendChild(sep);
     }
-    const el = document.createElement('span');
+    // The part level is the one worth zooming out to for a CFR section, and
+    // that one is handled IN the app — so it stays a span with a click handler
+    // and must not become an outbound link.
+    const inApp = handlers.onCrumb && c.type === 'part' && res.source === 'eCFR';
+    // Every other level goes out to the Code, where the reader can actually read
+    // the chapter this section sits in. The crumbs have always carried the USLM
+    // identifier and rendered as inert grey text: the reader could see that
+    // 7 U.S.C. 2011 is in chapter 51 and could do nothing with it. This app has
+    // no whole-chapter view to offer, so "expand out" means out.
+    const el = document.createElement(!inApp && c.href ? 'a' : 'span');
     el.className = 'crumb';
     el.textContent = c.label || c.short;
-    // The part level is the one worth zooming out to for a CFR section.
-    if (handlers.onCrumb && c.type === 'part' && res.source === 'eCFR') {
+    if (inApp) {
       el.classList.add('clickable');
       el.title = 'Show the whole part';
       el.addEventListener('click', () => handlers.onCrumb(c));
+    } else if (c.href) {
+      el.classList.add('clickable');
+      el.href = c.href;
+      el.target = '_blank';
+      el.rel = 'noopener noreferrer';
+      el.title = `Read ${c.label || c.short} on the U.S. Code`;
     }
     wrap.appendChild(el);
   });
