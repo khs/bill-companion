@@ -17,12 +17,12 @@
   "refs": 28,
   "relative": 39,
   "ops": {
+   "insert": 30,
    "strike": 24,
-   "insert": 27,
    "add-at-end": 6,
    "redesignate": 1
   },
-  "opSpans": 57,
+  "opSpans": 60,
   "uncoveredVerbs": 0,
   "badOffsets": 0,
   "overlaps": 0,
@@ -71,11 +71,11 @@
   "relative": 99,
   "ops": {
    "add-at-end": 27,
-   "insert": 57,
+   "insert": 64,
    "redesignate": 6,
    "strike": 44
   },
-  "opSpans": 116,
+  "opSpans": 123,
   "uncoveredVerbs": 0,
   "badOffsets": 0,
   "overlaps": 0,
@@ -102,11 +102,11 @@
   "relative": 47,
   "ops": {
    "strike": 16,
-   "insert": 28,
+   "insert": 30,
    "add-at-end": 10,
    "redesignate": 4
   },
-  "opSpans": 54,
+  "opSpans": 56,
   "uncoveredVerbs": 0,
   "badOffsets": 0,
   "overlaps": 0,
@@ -131,11 +131,11 @@
   "relative": 85,
   "ops": {
    "add-at-end": 27,
-   "insert": 56,
+   "insert": 62,
    "redesignate": 5,
    "strike": 44
   },
-  "opSpans": 115,
+  "opSpans": 121,
   "uncoveredVerbs": 0,
   "badOffsets": 0,
   "overlaps": 0,
@@ -161,12 +161,12 @@
   "relative": 497,
   "ops": {
    "add-at-end": 124,
-   "insert": 330,
+   "insert": 344,
    "strike": 276,
    "redesignate": 20,
    "repeal": 1
   },
-  "opSpans": 729,
+  "opSpans": 743,
   "uncoveredVerbs": 1,
   "badOffsets": 0,
   "overlaps": 0,
@@ -192,13 +192,13 @@
   "refs": 997,
   "relative": 1528,
   "ops": {
+   "insert": 852,
    "strike": 678,
-   "insert": 813,
    "redesignate": 104,
    "add-at-end": 266,
    "repeal": 11
   },
-  "opSpans": 1747,
+  "opSpans": 1786,
   "uncoveredVerbs": 6,
   "badOffsets": 0,
   "overlaps": 0,
@@ -224,12 +224,12 @@
   "relative": 476,
   "ops": {
    "strike": 293,
-   "insert": 331,
+   "insert": 341,
    "add-at-end": 116,
    "redesignate": 19,
    "repeal": 6
   },
-  "opSpans": 740,
+  "opSpans": 750,
   "uncoveredVerbs": 7,
   "badOffsets": 0,
   "overlaps": 0,
@@ -256,12 +256,12 @@
   "relative": 331,
   "ops": {
    "strike": 188,
-   "insert": 226,
+   "insert": 234,
    "add-at-end": 61,
    "redesignate": 13,
    "repeal": 2
   },
-  "opSpans": 475,
+  "opSpans": 483,
   "uncoveredVerbs": 1,
   "badOffsets": 0,
   "overlaps": 0,
@@ -315,11 +315,11 @@
   "relative": 55,
   "ops": {
    "strike": 29,
-   "insert": 37,
+   "insert": 40,
    "add-at-end": 16,
    "redesignate": 3
   },
-  "opSpans": 82,
+  "opSpans": 85,
   "uncoveredVerbs": 0,
   "badOffsets": 0,
   "overlaps": 0,
@@ -344,13 +344,13 @@
   "refs": 2902,
   "relative": 2758,
   "ops": {
-   "insert": 2420,
+   "insert": 2468,
    "strike": 1721,
    "add-at-end": 355,
    "redesignate": 224,
    "repeal": 36
   },
-  "opSpans": 4496,
+  "opSpans": 4544,
   "uncoveredVerbs": 32,
   "badOffsets": 0,
   "overlaps": 0,
@@ -376,12 +376,12 @@
   "relative": 131,
   "ops": {
    "strike": 96,
-   "insert": 121,
+   "insert": 126,
    "add-at-end": 70,
    "redesignate": 7,
    "repeal": 1
   },
-  "opSpans": 287,
+  "opSpans": 292,
   "uncoveredVerbs": 4,
   "badOffsets": 0,
   "overlaps": 0,
@@ -406,13 +406,13 @@
   "refs": 952,
   "relative": 1725,
   "ops": {
+   "insert": 1067,
    "redesignate": 106,
-   "insert": 1031,
    "add-at-end": 249,
    "strike": 913,
    "repeal": 50
   },
-  "opSpans": 2193,
+  "opSpans": 2229,
   "uncoveredVerbs": 4,
   "badOffsets": 0,
   "overlaps": 0,
@@ -437,13 +437,13 @@
   "refs": 218,
   "relative": 378,
   "ops": {
-   "insert": 188,
+   "insert": 200,
    "redesignate": 23,
    "add-at-end": 46,
    "strike": 152,
    "repeal": 1
   },
-  "opSpans": 386,
+  "opSpans": 398,
   "uncoveredVerbs": 7,
   "badOffsets": 0,
   "overlaps": 0,
@@ -470,12 +470,12 @@
   "relative": 452,
   "ops": {
    "strike": 381,
-   "insert": 397,
+   "insert": 410,
    "add-at-end": 114,
    "repeal": 7,
    "redesignate": 16
   },
-  "opSpans": 892,
+  "opSpans": 905,
   "uncoveredVerbs": 5,
   "badOffsets": 0,
   "overlaps": 0,
@@ -527,13 +527,13 @@
   "refs": 181,
   "relative": 146,
   "ops": {
-   "insert": 162,
+   "insert": 166,
    "strike": 132,
    "redesignate": 14,
    "add-at-end": 52,
    "repeal": 2
   },
-  "opSpans": 346,
+  "opSpans": 350,
   "uncoveredVerbs": 6,
   "badOffsets": 0,
   "overlaps": 0,
@@ -558,9 +558,9 @@
   "ops": {
    "add-at-end": 17,
    "strike": 24,
-   "insert": 21
+   "insert": 22
   },
-  "opSpans": 62,
+  "opSpans": 63,
   "uncoveredVerbs": 0,
   "badOffsets": 0,
   "overlaps": 0,
@@ -587,12 +587,12 @@
   "relative": 1412,
   "ops": {
    "strike": 869,
-   "insert": 1040,
+   "insert": 1084,
    "add-at-end": 356,
    "redesignate": 92,
    "repeal": 5
   },
-  "opSpans": 2265,
+  "opSpans": 2309,
   "uncoveredVerbs": 16,
   "badOffsets": 0,
   "overlaps": 0,
@@ -617,13 +617,13 @@
   "refs": 699,
   "relative": 1012,
   "ops": {
-   "insert": 787,
+   "insert": 830,
    "add-at-end": 385,
    "strike": 622,
    "redesignate": 56,
    "repeal": 2
   },
-  "opSpans": 1794,
+  "opSpans": 1837,
   "uncoveredVerbs": 9,
   "badOffsets": 0,
   "overlaps": 0,
@@ -649,11 +649,11 @@
   "relative": 650,
   "ops": {
    "add-at-end": 115,
+   "insert": 303,
    "redesignate": 50,
-   "strike": 269,
-   "insert": 283
+   "strike": 269
   },
-  "opSpans": 667,
+  "opSpans": 687,
   "uncoveredVerbs": 3,
   "badOffsets": 0,
   "overlaps": 0,
@@ -681,11 +681,11 @@
   "ops": {
    "add-at-end": 221,
    "strike": 525,
-   "insert": 603,
+   "insert": 639,
    "redesignate": 66,
    "repeal": 1
   },
-  "opSpans": 1349,
+  "opSpans": 1385,
   "uncoveredVerbs": 9,
   "badOffsets": 0,
   "overlaps": 0,
@@ -712,11 +712,11 @@
   "ops": {
    "redesignate": 17,
    "strike": 408,
-   "insert": 445,
+   "insert": 449,
    "add-at-end": 20,
    "repeal": 2
   },
-  "opSpans": 873,
+  "opSpans": 877,
   "uncoveredVerbs": 5,
   "badOffsets": 0,
   "overlaps": 0,
@@ -743,11 +743,11 @@
   "ops": {
    "add-at-end": 17,
    "strike": 38,
-   "insert": 50,
+   "insert": 53,
    "redesignate": 8,
    "repeal": 4
   },
-  "opSpans": 105,
+  "opSpans": 108,
   "uncoveredVerbs": 1,
   "badOffsets": 0,
   "overlaps": 0,
@@ -806,10 +806,10 @@
    "repeal": 4,
    "strike": 89,
    "add-at-end": 25,
-   "insert": 130,
+   "insert": 136,
    "redesignate": 13
   },
-  "opSpans": 244,
+  "opSpans": 250,
   "uncoveredVerbs": 2,
   "badOffsets": 0,
   "overlaps": 0,
@@ -836,11 +836,11 @@
   "ops": {
    "redesignate": 44,
    "strike": 399,
-   "insert": 374,
+   "insert": 394,
    "repeal": 17,
    "add-at-end": 95
   },
-  "opSpans": 868,
+  "opSpans": 888,
   "uncoveredVerbs": 8,
   "badOffsets": 0,
   "overlaps": 0,
@@ -867,11 +867,11 @@
   "relative": 241,
   "ops": {
    "strike": 166,
-   "insert": 251,
+   "insert": 257,
    "redesignate": 11,
    "add-at-end": 56
   },
-  "opSpans": 473,
+  "opSpans": 479,
   "uncoveredVerbs": 5,
   "badOffsets": 0,
   "overlaps": 0,

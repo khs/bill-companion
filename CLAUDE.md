@@ -1355,14 +1355,26 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    hand without checking a real shard's source credit.
 10. **Share links are long** — 117 KB bill → 35 KB URL. Fine in a doc or ticket,
    wraps in chat/mail. Shorter would need a backend, which is a different product.
-11. **No visual verification has ever happened.** Colours, spacing, dark mode, the
-   green/red diff — all unconfirmed by anyone but the user. The `.node.added`
-   block added on 2026-08-01 is still unseen. Three more things were added on
-   2026-08-02 that nobody has looked at either, and all three are *layout*
-   rather than colour, which is the kind linkedom cannot check:
-   - `.sec-where`, the breadcrumb inside each section head. It renders inside a
-     `.sec-head`, so it has to opt out of that rule's caps and accent colour —
-     if the opt-out loses, every breadcrumb SHOUTS IN ACCENT BLUE.
+11. **The agent CAN see this app now, and looking found things at once.**
+   (2026-08-03. This item was "No visual verification has ever happened" for
+   the whole life of the project.) On this machine Chrome tooling reaches
+   `localhost:8000`: `python tools/serve.py` in the background, then navigate and
+   screenshot. **Do this after any UI change, and do it before believing a
+   metric.** Keller's standing complaint is that every problem he brings has come
+   from looking at the rendering, and the first screenshot ever taken proved him
+   right inside two minutes — it exposed TODO 35's whole chain (an amendment
+   showing one operation where the bill states two, and the pane warning about
+   the one thing that had gone right).
+   Two mechanical notes, both of which cost time. The `Load a bill` menu is a
+   toggle and the agent's clicks outrun it, so drive it from `javascript_tool`
+   (click the button, wait, click the item) rather than by coordinate. And ES
+   modules are cached hard: `ctrl+shift+r` after every edit, or you will verify
+   the previous build and believe it.
+   Confirmed by eye and no longer in doubt: `.sec-where` renders small and grey
+   above the accent-coloured section head (the opt-out holds), the `↳` on a
+   composed citation is legible without shouting, and the redline's green
+   insert / struck-through strike read correctly side by side.
+   Still unlooked-at, and all *layout*, which is the kind linkedom cannot check:
    - `.sec-head.run-in`, the appropriations heading that carries its own first
      sentence. Same risk in reverse: if the override loses, 648 paragraphs of
      H.J. Res. 31 render as uppercase accent-coloured headings.
@@ -1372,9 +1384,9 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    "As enacted", `.prov` blocks for each section, and a `.links` row reused as a
    table of contents for up to 200 entries — which is a lot of chips in a row
    and has never been looked at.
-   Ask for a screenshot of the Fiscal Responsibility Act (breadcrumbs, and the
-   run-in sections in division B) and of a Public Law citation before trusting
-   any of it.
+   Go and look at these rather than asking; the tooling is there now. Dark mode
+   is the one thing still needing Keller, since the agent screenshots whatever
+   theme the browser is in.
 12. **`inserting after subparagraph (C) the following` is placed.** (Fixed
    2026-08-02.) It was worse than "misplaced": an insert reaches `apply()` with
    either a paired strike or a quoted anchor, and this shape has neither, so it
@@ -2013,3 +2025,65 @@ are `usc`/`cfr` with `relative: true` and ids prefixed `r`.
    reclassified plus the 68 absorbed), `relative -63` (67 removed, each
    overlapping a removed ref; 11 added, each on a new step). Nothing else moved
    at all — not citations, amendments, targeted, opSpans or diffSpans.
+
+36. **A new provision is longer than a phrase, and the operand budget was
+   deleting it.** (Fixed 2026-08-03. Found by *looking at the screen* — see item
+   11 — after Keller pointed out that every problem he brings comes from the
+   rendering. It took one screenshot.) The symptom on screen: the Fiscal
+   Responsibility Act's § 101 showed a single `strike` chip, and the pane said
+   "⚠ not found verbatim … usually means the amendment targets a different
+   subsection than the one shown" about a strike whose subsection was exactly the
+   one shown. The bill's actual substantive change — the FY2024 and FY2025
+   discretionary caps — appeared nowhere. Three faults in a chain, and each one
+   alone would have kept the screen wrong:
+
+   - **`RE_INSERT` capped its quoted operand at 400 characters, and the cap did
+     not truncate.** The lazy run cannot reach the closer, so the whole match
+     fails and NO op is created. Across the corpus 779 "inserting after ⟨unit⟩
+     (N) the following" phrases yielded 307 operations; 379 of the 428 missing
+     blocks that can be measured run past the cap, at 800 to 3,450 characters
+     each. `readAddedBlock()` has read `adding at the end the following` this way
+     since 2026-08-01 for exactly this reason; the sibling form never got it.
+     **A character budget is the wrong instrument for a block delimited by
+     quotes.** Worse than missing: where the block contained a single-quoted term
+     (``` `mine land' ```, not a closer), the engine gave up on the first quote
+     pair and RE-MATCHED FROM A LATER OPENER, recording a span that began 59
+     characters into the new paragraph, mid-definition.
+   - **`fold()` knew the four quote conventions and not the dash.** govinfo writes
+     the em dash as `--` and the Code writes `—`, so `(9) for fiscal year 2024--`
+     and `(9) for fiscal year 2024—` differ in one character out of eighty and
+     `alreadyIn()` said no. Fixing only the cap would therefore have made the
+     screen WORSE: paragraphs (9) and (10) drawn in the insertion colour beside
+     the identical paragraphs already in the law. The ASCII hyphen is left
+     distinct on purpose — `REG-ISTRATION` and `PAY-AS-YOU-GO` carry real ones.
+   - **A block's own paragraph openers are structure, not words.** GPO opens every
+     paragraph of a multi-paragraph addition with a quote mark and closes once at
+     the end, so `fold` turned each interior opener into a `"` the Code can never
+     match. Stripped in `alreadyIn()`, and only at a line head.
+
+   Two reporting faults fell out of the same screen. `appliedAdditions()` filtered
+   on `applied`, which is set inside `additionsAt()` — so "has this amendment
+   already happened?" depended on which node the renderer happened to be laying
+   out. It asks `inLaw` now, decided at construction against the whole provision,
+   which is what the comment where `inLaw` is computed already said it was for.
+   And the `unmatched` caveat printed unconditionally: `unmatched` is true of an
+   enacted amendment BY DEFINITION, so the sentence sat directly beneath
+   "✓ already struck from the law" contradicting it.
+
+   Corpus: `opSpans +393` and **nothing else at all** — no citations, amendments,
+   targeted, diffSpans, refs, steps, relative, `overlaps` or `badOpOffsets`.
+   Accounted exactly: 394 spans added, 1 replaced. Every one of the 394 is a
+   block over the old budget; 383 are placed structurally as `after-unit` and 11
+   open with a flush sentence rather than a marker, so they are captured but
+   deliberately not placed, per the rule `scopeAdditions()` already follows. The
+   1 replaced is the `mine land` span above — same end offset, correct start.
+   Checked before `--update`: 0 ops sharing a start, 0 overlapping insert spans,
+   0 spans failing the `badOpOffsets` round-trip, and in **371 of 375** the added
+   block's leading marker is the anchor's successor ((2)→(3), (F)→(G), (a)→(b)).
+   Of the four that are not, two are limits of the checker (roman past XX,
+   doubled letters) and two are bills that skip a letter.
+
+   For the reader, which is the number that matters here: **additions 2,687 →
+   3,061**, of which **+220 are drawn** and **+108 are correctly marked already
+   in force**. Inline coverage barely moves (23%), because this family was never
+   in it.

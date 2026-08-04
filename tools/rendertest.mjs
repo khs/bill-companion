@@ -714,6 +714,45 @@ section('redline on the current law');
   eq('  while the same address from a navigation step stays lost',
      fromNav.lostScope().length, 1);
   eq('  and draws nowhere', show(fromNav.apply(lawC, '')), lawC);
+
+  // ---- the same text, written two ways -----------------------------------
+  // govinfo writes the em dash as two hyphens and the Code writes a real one, so
+  // a block differing in one character out of eighty matched nothing. This is
+  // the quote convention's exact twin and was missed for as long as it existed:
+  // the Fiscal Responsibility Act's new spending caps are IN 2 U.S.C. 901(c),
+  // and without this the pane draws them in the insertion colour beside the
+  // identical paragraphs already there.
+  //
+  // Asserted through the reader-facing consequence — an addition the law already
+  // contains is reported as in force and is NOT drawn — rather than through
+  // fold() directly, because that is where the bug did its damage.
+  const lawDash = '(9) for fiscal year 2024—\n(A) for the revised security category, $886,349,000,000 in new budget authority; and';
+  const billBlock =
+    '(9) for fiscal year 2024--\n            ``(A) for the revised security category, $886,349,000,000 \n        in new budget authority; and';
+  const enactedAdd = createRedline(
+    [{ type: 'insert', placement: 'after-unit', text: billBlock, start: 0, end: billBlock.length, scope: '(8)' }],
+    lawDash, new Set(['(8)', '(9)']));
+  eq('a block the law already holds is recognised across the dash conventions',
+     enactedAdd.appliedAdditions().length, 1);
+  eq('  and is not drawn again', enactedAdd.additionsAt('(8)').length, 0);
+  // Both halves are load-bearing, and each fails alone. The dash is one; the
+  // block's own paragraph openers are the other — GPO opens EVERY paragraph of a
+  // multi-paragraph addition with a quote mark and the Code has none of them, so
+  // `fold` turned each into a `"` the law could never match.
+  const noOpeners = createRedline(
+    [{ type: 'insert', placement: 'after-unit', text: billBlock.replace(/``/g, ''), start: 0, end: 10, scope: '(8)' }],
+    lawDash, new Set(['(8)', '(9)']));
+  eq('  openers or no openers, the same block is recognised',
+     noOpeners.appliedAdditions().length, 1);
+  // And the guard still declines where the law does NOT contain it: this is the
+  // test that the two normalisations widened the match rather than blunting it.
+  const notThere = createRedline(
+    [{ type: 'insert', placement: 'after-unit', text: billBlock, start: 0, end: billBlock.length, scope: '(8)' }],
+    '(9) for fiscal year 2031—\n(A) for the revised security category, $12 in new budget authority.',
+    new Set(['(8)', '(9)']));
+  eq('  a block the law does NOT hold is still drawn as new',
+     notThere.appliedAdditions().length, 0);
+  eq('    and is placed', notThere.additionsAt('(8)').length, 1);
 }
 
 // --- additions at the end --------------------------------------------------

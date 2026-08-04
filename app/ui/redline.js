@@ -25,9 +25,24 @@
  * Fold a passage onto the common ground the two sources share, keeping a map
  * back to the original offsets.
  *
- * Quote convention, case and whitespace runs are all normalised away — the same
- * fold main.js uses to decide whether struck language is present at all, except
- * that this one can say *where*.
+ * Quote convention, DASH convention, case and whitespace runs are all normalised
+ * away — the same fold main.js uses to decide whether struck language is present
+ * at all, except that this one can say *where*.
+ *
+ * The dash is the quote convention's exact twin, and was missed for as long as
+ * this existed. govinfo writes the em dash as two hyphens and the Code writes a
+ * real one, so the Fiscal Responsibility Act's new spending caps —
+ *
+ *   bill:  ``(9) for fiscal year 2024--
+ *   law:     (9) for fiscal year 2024—
+ *
+ * — differ in one character out of eighty and matched nothing. That is the same
+ * text, and alreadyIn() has to be able to say so: without it an addition the law
+ * demonstrably contains is drawn in the insertion colour beside the identical
+ * paragraph already there, which is the duplication every guard here exists to
+ * prevent. The em dash is canonical because the ASCII hyphen must stay distinct
+ * — "REG-ISTRATION" and "PAY-AS-YOU-GO" carry real hyphens, and folding those
+ * together would match across words the drafter kept apart.
  */
 export function fold(s) {
   let norm = '';
@@ -40,6 +55,11 @@ export function fold(s) {
     if (two === '``' || two === "''" || two === '‘‘' || two === '’’') {
       norm += '"'; from.push(i); to.push(i + 2); i += 2; lastWasSpace = false; continue;
     }
+    // Two hyphens are one em dash, and take two characters of the original the
+    // same way a doubled quote mark does.
+    if (two === '--') {
+      norm += '—'; from.push(i); to.push(i + 2); i += 2; lastWasSpace = false; continue;
+    }
     const c = s[i];
     if (/\s/.test(c)) {
       // A run of whitespace folds to one space, mapped over the whole run so a
@@ -51,7 +71,10 @@ export function fold(s) {
       continue;
     }
     lastWasSpace = false;
-    norm += c === '“' || c === '”' ? '"' : c.toLowerCase();
+    // The en dash joins the em dash: USLM prints both, and a bill writing either
+    // means the same separator. The ASCII hyphen is deliberately left alone.
+    norm +=
+      c === '“' || c === '”' ? '"' : c === '–' || c === '—' ? '—' : c.toLowerCase();
     from.push(i); to.push(i + 1); i++;
   }
   return { norm, from, to };
@@ -525,8 +548,33 @@ export function createRedline(ops, fullText, knownPaths) {
     lostScope: () => scoped.filter((o) => o.scopeLost),
     /** Operations drawn at a shallower level than the bill addressed. */
     widenedScope: () => scoped.filter((o) => o.scopeWidened),
-    /** Additions the law already contains — the bill has been enacted. */
-    appliedAdditions: () => additions.filter((o) => o.applied),
+    /**
+     * Additions the law already contains — the bill has been enacted.
+     *
+     * Asks `inLaw`, not `applied`, and the difference is the whole point.
+     * `applied` is set inside additionsAt(), so it exists only once the renderer
+     * has laid out the node that addition is scoped to — which makes "has this
+     * amendment already happened?" depend on what the reader happens to be
+     * looking at. `inLaw` is decided at construction against the whole
+     * provision, for exactly the reason stated where it is computed.
+     *
+     * The Fiscal Responsibility Act is the shape of it. It strikes ``and'' at
+     * the end of 2 U.S.C. 901(c)(7)(B) and inserts paragraphs (9) and (10)
+     * after paragraph (8); the Code holds both new paragraphs, so the amendment
+     * is demonstrably in force. But the insertion is scoped to (c)(8), and a
+     * reader who clicked "paragraph (7)(B)" is shown (c)(7) — so additionsAt()
+     * was never asked about (c)(8), `applied` was never set, and the one strike
+     * is three characters long and so cannot vouch for anything either (see
+     * `distinctive`). With both sources empty the panel fell through to
+     * "⚠ not found verbatim … usually means the amendment targets a different
+     * subsection than the one shown", about a strike whose subsection is
+     * exactly the one shown, with the proof sitting in `fullText` unread.
+     *
+     * A range addition is excluded for the same reason additionsAt() refuses to
+     * draw one: it belongs at the end of the Act, so whether this section
+     * contains its language is a question about the wrong provision.
+     */
+    appliedAdditions: () => additions.filter((o) => o.inLaw && !o.rangeEnd),
   };
 }
 
@@ -542,10 +590,25 @@ export function createRedline(ops, fullText, knownPaths) {
  * The first 80 folded characters are enough to identify a provision and short
  * enough to survive later amendment of its tail; below 24 there is not enough to
  * be sure, and a false positive here silently hides real new law.
+ *
+ * The block's own paragraph openers come off first, and they are the reason this
+ * test kept failing on blocks the law plainly contained. GPO opens EVERY
+ * paragraph of a multi-paragraph addition with a quote mark and closes only at
+ * the very end — so the bill writes
+ *
+ *   ``(9) for fiscal year 2024--
+ *       ``(A) for the revised security category, $886,349,000,000 …
+ *
+ * where the Code has no quote mark before (A) at all, and `fold` faithfully
+ * turns that opener into a `"` that the law can never match. Those marks are the
+ * convention's structure, not the provision's words. Only an opener at the head
+ * of a line is removed: a quoted term inside the sentence is content, and both
+ * single conventions take two characters, so a lone apostrophe is left alone.
  */
+const BLOCK_OPENERS = /(^|\n)([ \t]*)(?:``|‘‘|["“])/g;
 function alreadyIn(fullText, added) {
   if (typeof fullText !== 'string' || !fullText) return false;
-  const needle = fold(added).norm.trim().slice(0, 80).trim();
+  const needle = fold(String(added).replace(BLOCK_OPENERS, '$1$2')).norm.trim().slice(0, 80).trim();
   if (needle.length < 24) return false;
   return fold(fullText).norm.includes(needle);
 }

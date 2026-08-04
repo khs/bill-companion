@@ -237,6 +237,47 @@ section('relative navigation inside amendments');
   eq('(a)/(1)/(A) outline nests correctly', paths.join(' '), '(b) (b)(2) (b)(2)(C)');
 }
 {
+  // A new provision is longer than a phrase, and the operand budget deleted it.
+  //
+  // Verbatim from the Fiscal Responsibility Act, whose whole substantive change
+  // this is — the discretionary caps for fiscal years 2024 and 2025. The block
+  // is 430 characters; RE_INSERT allowed 400, and the overflow did not truncate
+  // the operand, it failed the match, so the instruction reported ONE operation
+  // (a three-character strike) and said nothing about the caps at all.
+  const head =
+    'Section 251(c) of the Balanced Budget and \nEmergency Deficit Control Act of 1985 (2 U.S.C. 901(c)) is amended--\n' +
+    "        (1) in paragraph (7)(B), by striking ``and'' at the end; and\n" +
+    '        (2) by inserting after paragraph (8) the following:\n';
+  const block =
+    '        ``(9) for fiscal year 2024--\n' +
+    '            ``(A) for the revised security category, $886,349,000,000 \n        in new budget authority; and\n' +
+    '            ``(B) for the revised nonsecurity category; \n        $703,651,000,000 in new budget authority; and\n' +
+    '        ``(10) for fiscal year 2025--\n' +
+    '            ``(A) for the revised security category, $895,212,000,000 \n        in new budget authority; and\n' +
+    "            ``(B) for the revised nonsecurity category; \n        $710,688,000,000 in new budget authority;''.\n";
+  const t = head + block;
+  const ams = extractAmendments(t, extractCitations(t));
+  const ins = (ams[0]?.ops || []).filter((o) => o.type === 'insert');
+  eq('an over-budget anchored insert is read whole', ins.length, 1);
+  ok('  and carries the block, not the first 400 characters of it',
+     ins[0] && ins[0].text.length > 400 && /fiscal year 2025/.test(ins[0].text),
+     String(ins[0] && ins[0].text.length));
+  eq('  anchored to the unit the bill named', ins[0]?.unitAnchor, '(8)');
+  eq('  and placed after it, among its siblings', ins[0]?.scope, '(c)(8)');
+  eq('    structurally, not woven into a sentence', ins[0]?.placement, 'after-unit');
+  // The offset must still round-trip to the text, or the bill pane marks the
+  // wrong run — the badOpOffsets invariant, which a block reader could break.
+  eq('  the span round-trips to the language it adds',
+     t.slice(ins[0].start, ins[0].end), ins[0].text);
+  // A short block is still the generic scan's, and must not be read twice.
+  const short =
+    'Section 251(c) of the Act (2 U.S.C. 901(c)) is amended by inserting after \n' +
+    "paragraph (8) the following: ``(9) for fiscal year 2024, $1.00.''.\n";
+  const sAms = extractAmendments(short, extractCitations(short));
+  eq('a block inside the budget yields exactly one op',
+     (sAms[0]?.ops || []).filter((o) => o.type === 'insert').length, 1);
+}
+{
   // The instruction's own head is an address, and everything below it composes
   // against that address. Verbatim from H.R. 3633, which writes the SAME
   // provision out in full four lines earlier — "Section 2(a)(36) of the
@@ -2245,8 +2286,14 @@ if (existsSync(substitutePath)) {
   // inserting ``; or''", where the strike names the mark instead of quoting it.
   // Both were previously invisible, which left their inserts unplaced — 320 of
   // the corpus's 2,431 unplaced inserts are this one shape.
+  //
+  // 30 inserts, not 28: two "by inserting after <unit> (N) the following:" blocks
+  // run past the 400-character operand budget RE_INSERT used to impose, and that
+  // budget did not truncate them — the closer was unreachable, so the match
+  // failed and no op existed at all. Read by readAddedBlock() now, the same way
+  // "adding at the end the following" has been since 2026-08-01.
   eq('substitute: extracts the operations', JSON.stringify(opCounts(ams)),
-     JSON.stringify({ strike: 16, insert: 28, 'add-at-end': 10, redesignate: 4 }));
+     JSON.stringify({ strike: 16, insert: 30, 'add-at-end': 10, redesignate: 4 }));
 
   // Counted against the source, not asserted at. Every "adding at the end the
   // following" in this bill falls inside a parsed amendment, so the op count is
@@ -2416,9 +2463,14 @@ if (existsSync(clarityPdfPath)) {
   // every one of them followed immediately by "and inserting", and every one a
   // list being re-punctuated so the next subparagraph can be added after it.
   // They were checked individually, not inferred from the delta.
+  //
+  // 64 inserts, not 57: seven "inserting after <unit> (N) the following:" blocks
+  // longer than RE_INSERT's old 400-character operand budget. A PDF bill is where
+  // this hurt most — the typeset measure is narrower, so a block of the same
+  // provisions carries more line breaks and crosses the budget sooner.
   const ops = opCounts(ams);
   eq('house print: extracts ‘‘...’’ operands', JSON.stringify(ops),
-     JSON.stringify({ 'add-at-end': 27, insert: 57, redesignate: 6, strike: 44 }));
+     JSON.stringify({ 'add-at-end': 27, insert: 64, redesignate: 6, strike: 44 }));
 
   // Counted against the source. 31 phrases in the bill, 27 of them inside a
   // parsed amendment — the other four sit in the long tail of amendatory
@@ -2460,7 +2512,11 @@ if (existsSync(clarityPdfPath)) {
   // and so are spans the bill pane can mark. They used to carry none at all.
   // +5 for the position-unsaid punctuation strikes above: one distinct span
   // each, which is the check that none of them landed on top of an existing op.
-  eq('  which collapse to distinct spans', spans.size, 116);
+  // +7 for the over-budget anchored inserts, and this is the assertion that
+  // makes those trustworthy rather than the count: seven new ops producing seven
+  // new DISTINCT spans is what proves none of them was read twice — once by the
+  // block reader and once by the generic scan that used to own this shape.
+  eq('  which collapse to distinct spans', spans.size, 123);
   const quoted = ams.flatMap((a) => a.ops).filter((o) => o.text);
   ok('  and they are real quoted language', quoted.some((o) => /digital commodity/i.test(o.text)),
      JSON.stringify(quoted.slice(0, 3).map((o) => o.text)));

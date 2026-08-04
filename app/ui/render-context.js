@@ -763,7 +763,21 @@ function effect(eff, handlers) {
     c.appendChild(p);
   }
 
-  if (eff.unmatched) {
+  // `unmatched` only asks whether every operand is present in the provision, so
+  // it is true of an ENACTED amendment by definition — the struck words are
+  // gone, which is the amendment having worked. Printing the caveat anyway put
+  // "usually means the amendment targets a different subsection than the one
+  // shown" directly beneath "✓ already struck from the law" and "✓ already in
+  // the law as it stands", contradicting both ticks the reader had just read and
+  // casting doubt on the one thing that went right.
+  //
+  // Suppressed on the same evidence those ticks are drawn from, so the three can
+  // never disagree.
+  const enacted =
+    eff.redline &&
+    ((eff.redline.appliedAdditions && eff.redline.appliedAdditions().length > 0) ||
+      (eff.redline.isStale && eff.redline.isStale()));
+  if (eff.unmatched && !enacted) {
     const p = document.createElement('p');
     p.className = 'dim';
     p.style.marginTop = '8px';

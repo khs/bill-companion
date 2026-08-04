@@ -760,6 +760,11 @@ function placeOps(text, ops) {
     // one phrase. Re-deriving from what follows would find the NEXT
     // instruction's connective and move it.
     if (op.relation && op.anchor) continue;
+    // Likewise for a unit-anchored insert read forwards from its own phrase:
+    // the anchor is already the one this instruction wrote, and the pairing
+    // tests below would look at whatever strike happens to precede it and
+    // report the new provision as that strike's replacement.
+    if (op.unitAnchor) continue;
 
     const prev = spans[i - 1];
     if (prev && prev.type === 'strike' && op.start - prev.end < 100) {
@@ -834,6 +839,31 @@ const RE_STRIKE = new RegExp(
 const RE_INSERT = new RegExp(
   `insert(?:ing)?\\b(?:(?!strik)[\\s\\S]){0,120}?${QO}([\\s\\S]{1,400}?)${QC}`, 'gi');
 const RE_ADD_END = /adding\s+at\s+the\s+end\s+the\s+following/gi;
+
+// "by inserting after paragraph (8) the following:" followed by the new
+// paragraph itself — the sibling of RE_ADD_END, and the one that never got a
+// block reader.
+//
+// RE_INSERT caps its quoted operand at 400 characters, and the cap does not
+// TRUNCATE: the lazy run cannot reach the closer, so the whole match fails and
+// no op is created at all. A new provision is routinely longer than that. Across
+// the corpus, 779 phrases of this shape yield only 307 operations, and 379 of
+// the 428 missing blocks that can be measured run past the cap — 800 to 3,450
+// characters each, every one a whole new subsection or paragraph the reader was
+// never shown. The Fiscal Responsibility Act's own discretionary caps for fiscal
+// years 2024 and 2025 are two of them: 430 characters, thirty over.
+//
+// Read forwards from the phrase with readAddedBlock(), exactly as RE_ADD_END is,
+// and for the same reason — the block is delimited by its quotes and by nothing
+// else, so a character budget is the wrong instrument. This only matches the
+// UNIT-anchored form; "inserting after ``X'' the following" is the quoted-anchor
+// shape and belongs to RE_INSERT_ANCHOR_FIRST.
+const RE_INSERT_AFTER_UNIT = new RegExp(
+  `\\binsert(?:ing)?\\s+(?:immediately\\s+)?after\\s+(?:the\\s+)?` +
+    `(?:subsection|paragraph|subparagraph|clause|subclause|item|subitem)s?\\s+` +
+    `(\\([A-Za-z0-9]{1,8}\\)(?:\\([A-Za-z0-9]{1,8}\\))*)`,
+  'gi'
+);
 
 // "by striking the period at the end and inserting ``; or''"
 //
@@ -2351,6 +2381,32 @@ export function extractAmendments(text, citations, divisions = []) {
         start: h.headEnd + im.index,
         end: h.headEnd + im.index + im[0].length,
         punctuation: true,
+      });
+    }
+
+    // "by inserting after paragraph (8) the following: ``(9) …''", where the
+    // block is longer than RE_INSERT's operand budget and so produced nothing at
+    // all. Claimed before the generic scans for the same reason the anchor-first
+    // form is: otherwise a block short enough to fit the budget would be read
+    // twice, once here and once there.
+    //
+    // The anchor is captured from the phrase rather than looked up backwards by
+    // placeOps(), because this reads forwards and already has it in hand.
+    RE_INSERT_AFTER_UNIT.lastIndex = 0;
+    let um;
+    while ((um = RE_INSERT_AFTER_UNIT.exec(body))) {
+      const block = readAddedBlock(text, h.headEnd + um.index + um[0].length);
+      // No delimited block after the phrase — this is "inserting after paragraph
+      // (8) ``X''" with an ordinary short operand, or a shape whose quotes do not
+      // close. Left entirely to the generic scan, which already handles it.
+      if (!block) continue;
+      claimed.push([um.index, Math.max(um.index + um[0].length, block.end - h.headEnd)]);
+      ops.push({
+        type: 'insert',
+        text: text.slice(block.start, block.end),
+        start: block.start,
+        end: block.end,
+        unitAnchor: um[1],
       });
     }
 
