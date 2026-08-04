@@ -126,12 +126,21 @@ export async function resolveUsc(cite) {
   let focusPath = subsection;
   let focusNode = subsection ? findNode(tree, subsection) : null;
   let runIn = null;
+  let headLevel = null;
   if (subsection && !focusNode) {
     const found = runInLevels(tree, data.lead || '', subsection);
     if (found) {
       focusPath = found.path;
       focusNode = found.node;
       runIn = found.dropped;
+    }
+  }
+  if (subsection && !focusNode) {
+    const found = dropHeadLevel(tree, cite);
+    if (found) {
+      focusPath = found.path;
+      focusNode = found.node;
+      headLevel = found.marker;
     }
   }
   const chain = focusPath ? pathChain(tree, focusPath) : [];
@@ -180,6 +189,9 @@ export async function resolveUsc(cite) {
     // Set when the two differ: the levels that live in the lead rather than in
     // the tree, so the pane can explain the gap instead of hiding it.
     runIn,
+    // …and when the level that had to go was an Act's own subsection, carried
+    // down from an instruction head onto a section that is that subsection.
+    headLevel,
     focusNode,
     focusChain: chain,
     // A subsection was cited but isn't in the text we have — usually means the
@@ -207,6 +219,52 @@ export async function resolveUsc(cite) {
     })),
     links,
   };
+}
+
+/**
+ * Drop an Act's own subsection from an address composed against a Code section
+ * that IS that subsection.
+ *
+ * The head of an instruction states an address in its first six words, and where
+ * the parenthetical carries no codified subsection that head is the only address
+ * there is — see the note on `base` in extractAmendments. Usually it is right.
+ * Sometimes the Act's numbering and the Code's have already been reconciled by
+ * the codifier, and then it is not:
+ *
+ *   Section 311(d) of the Legislative Branch Appropriations Act, 1988
+ *     (2 U.S.C. 4532) is amended— (1) in paragraph (1) …
+ *   2 U.S.C. 4532 credit: "(Pub. L. 100–202, § 101(i) [title III, § 311(d)], …)"
+ *
+ * The codified section IS § 311(d), so 4532's top level is the paragraphs
+ * (1)–(4) and there is no (d) in it, by construction, ever. Every reference in
+ * that instruction composed one level too deep and the pane answered each with
+ * "the current text of this section has no such subsection… the bill is adding
+ * it, or it has been repealed" — both false, about a paragraph sitting a few
+ * lines up in the same pane, which this very bill inserts. Same family as
+ * 12 U.S.C. 375 = Federal Reserve Act § 22(d), already tracked.
+ *
+ * `reScope()` has repaired the OPERATIONS of these instructions since the head
+ * address was first read; the citation the reader clicks had no equivalent
+ * check, so the redline drew in the right place while the address above it named
+ * nothing. 50 across the corpus.
+ *
+ * Two guards, and both are needed. Only an address COMPOSED from the head is
+ * eligible — a bill that writes "12 U.S.C. 5701(b)(1)" out in full has said what
+ * it means, and if that is wrong it is the drafter's error to show, not ours to
+ * paper over. And the dropped marker must be absent from the section's own top
+ * level: "clause (i)" composed onto 26 U.S.C. 168(k) dies because (k) has no
+ * clause (i), not because (k) is wrong — and 168 does have a subsection (i), so
+ * dropping the (k) would answer with a different provision. 15 of the 65
+ * addresses whose tail happens to resolve are that shape.
+ */
+function dropHeadLevel(tree, cite) {
+  if (!cite.subFromHead) return null;
+  const marks = String(cite.subsection || '').match(/\([A-Za-z0-9]{1,8}\)/g) || [];
+  if (marks.length < 2) return null;
+  if (tree.some((n) => n.path === marks[0])) return null;
+  const path = marks.slice(1).join('');
+  const node = findNode(tree, path);
+  return node ? { path, node, marker: marks[0] } : null;
 }
 
 /**

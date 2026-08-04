@@ -185,9 +185,17 @@ function cacheKey(c) {
   // whole difference between a heading that says § 2601 and one that says the
   // Toxic Substances Control Act. Without it the first of the two clicked
   // answers for both, and the failure is silent in either direction.
+  // `subFromHead` for the SIXTH. Two citations can agree on title, section and
+  // subsection and still differ in whether that subsection was written down by
+  // the drafter or carried from the instruction head — and only the second may
+  // have the level dropped when the section turns out to BE that subsection.
+  // Without it, "12 U.S.C. 5701(b)(1)" written out in full and the composed
+  // "paragraph (1)" of the same instruction key alike, and whichever is clicked
+  // first decides for both.
   return [c.kind, c.title, c.part, c.section, c.subsection, c.congress, c.law, c.volume, c.page,
           c.act && c.act.name, c.actSection, c.division, c.where && c.where.join('>'),
-          c.shortTitle, c.actTitle && `t${c.actTitle}`, c.etSeq ? 'etseq' : '']
+          c.shortTitle, c.actTitle && `t${c.actTitle}`, c.etSeq ? 'etseq' : '',
+          c.subFromHead ? 'head' : '']
     .filter(Boolean)
     .join('|');
 }
@@ -437,9 +445,23 @@ async function dispatch(cite) {
             ? `This points at ${cite.section ? `section ${cite.section}` : 'another section'} of this same ` +
               `bill, which isn't in the text loaded here — bills often cite sections of an Act they are ` +
               `only one division of.`
-            : `This points at another part of the provision being amended, but no ${cite.subsection || 'matching'} ` +
-              `appears at the head of a line anywhere in this section of the bill, so there is nothing to show. ` +
-              `That usually means the provision it refers to lives in the U.S. Code rather than in the bill text.`,
+            : // Two different silences, and the old wording told the reader the
+              // wrong one. A reference sitting inside language the bill is
+              // INSERTING is not a dangling pointer: it is new law referring to
+              // the statute it is being written into, and the only reason there
+              // is nothing to show is that the enclosing instruction did not
+              // name a Code section this pane could compose the address against.
+              // Saying "no (d) appears anywhere in this section of the bill" of
+              // a reference that was never about the bill reads as a parser
+              // shrug about a citation the drafter wrote perfectly clearly.
+              cite.inserted
+              ? `This sits inside language the bill is inserting, so ${cite.subsection || 'it'} refers to the ` +
+                `law being amended rather than to anything in the bill — and no ${cite.subsection || 'matching'} ` +
+                `appears inside the new language either. The instruction around it doesn't name a U.S. Code ` +
+                `section this could be read against, so the provision can't be identified from here.`
+              : `This points at another part of the provision being amended, but no ${cite.subsection || 'matching'} ` +
+                `appears at the head of a line anywhere in this section of the bill, so there is nothing to show. ` +
+                `That usually means the provision it refers to lives in the U.S. Code rather than in the bill text.`,
         links: [],
       };
 

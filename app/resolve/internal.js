@@ -72,7 +72,7 @@ const LINE_HEAD = '(?:^|\\n)[ \\t]*(?:``|‘‘|["“])?[ \\t]*';
  * shape from real ones, and leaving them in gives the enclosing provision a
  * phantom sibling that steals every later reference to the real marker.
  */
-function outline(text, from, to) {
+export function outline(text, from, to) {
   // A RUN of markers, not one. A drafter opens a subparagraph and its first
   // clause on the same line — "(B)(i) The President may waive …" — and matching
   // a single marker with a whitespace lookahead found *neither*: `(B)` fails
@@ -218,15 +218,34 @@ export function locateInternal(bill, cite) {
   const marks = markersOf(cite.subsection);
   if (!marks.length) return null;
 
+  // A reference inside quoted inserted law is bounded by that law.
+  //
+  // The bill's own sentences and the statute it is writing are the same
+  // characters in the same file, and the widening below cannot tell them apart:
+  // "the table contained in subsection (d)", sitting inside the new 26 U.S.C.
+  // 1(j) the Tax Cuts and Jobs Act adds, was answered with section 11001(d) OF
+  // THE BILL — a different amendment about tax-preparer diligence — under the
+  // heading "the only (d) inside the enclosing provision". 1,336 of these across
+  // the corpus, every one of them unhedged, and 379 more marked a guess when
+  // they were not even that.
+  //
+  // Bounded, the widening still happens; it just stops at the edge of the new
+  // law, which is the furthest a reference inside it can possibly reach. What
+  // lies past that edge is the drafting instruction, not the statute, and the
+  // right answer there is nothing at all — see resolve()'s note, which now says
+  // the reference points into the law being amended rather than pretending no
+  // such provision exists anywhere.
+  const bounds = cite.inserted || { start: sec.start, end: sec.end };
+
   const depth = UNIT_DEPTH[cite.refType] ?? markerDepth(marks[0]);
-  const scope = parentSpan(text, sec.start, sec.end, cite.start, depth);
+  const scope = parentSpan(text, bounds.start, bounds.end, cite.start, depth);
   let hits = walk(text, scope.start, scope.end, marks).filter((i) => i < cite.start || i > cite.end);
   let scoped = true;
   if (!hits.length) {
     // Nothing at this level — the reference may reach outside its own parent, or
-    // the outline may not have survived extraction. Widen to the bill section
-    // rather than giving up, and say so.
-    hits = walk(text, sec.start, sec.end, marks).filter((i) => i < cite.start || i > cite.end);
+    // the outline may not have survived extraction. Widen to the enclosing
+    // block rather than giving up, and say so.
+    hits = walk(text, bounds.start, bounds.end, marks).filter((i) => i < cite.start || i > cite.end);
     scoped = false;
   }
   if (!hits.length) return null;
@@ -242,7 +261,7 @@ export function locateInternal(bill, cite) {
       ? hits.length > 1
         ? `The nearest ${marks[marks.length - 1]} inside the enclosing provision, which has ${hits.length}.`
         : `The only ${marks[marks.length - 1]} inside the enclosing provision.`
-      : `There is no ${marks[marks.length - 1]} inside the enclosing provision at all, so this is the nearest one anywhere in the section — it may belong to a different provision, or the reference may point out to the U.S. Code rather than into the bill.`,
+      : `There is no ${marks[marks.length - 1]} inside the enclosing provision at all, so this is the nearest one anywhere in ${cite.inserted ? 'the block of new law this sits in' : 'the section'} — it may belong to a different provision, or the reference may point out to the U.S. Code rather than into the bill.`,
     section: sec,
     ambiguous: hits.length > 1 || !scoped,
     // Two different degrees of doubt, and collapsing them into one flag

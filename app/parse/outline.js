@@ -97,6 +97,84 @@ export function isWrappedMarker(text, at) {
 }
 
 // ---------------------------------------------------------------------------
+// Quoted inserted law
+// ---------------------------------------------------------------------------
+
+// The four conventions, as everywhere else here, and as PAIRS rather than an
+// alternation: a block opened with `` is closed by '' and not by a curly double
+// that happens to appear inside it. Same rule readAddedBlock() reads an added
+// block by, and deliberately the same spelling — a second one would put the
+// parser and the resolver out of step about where new law begins and ends.
+const QUOTE_PAIRS = [
+  ['``', "''"],
+  ['‘‘', '’’'],
+  ['“', '”'],
+  ['"', '"'],
+];
+
+/** A line whose first non-blank characters open a block of quoted law. */
+const RE_BLOCK_OPEN = /^[ \t]*(``|‘‘|[“"])/;
+
+// A runaway guard, not a judgement about length: added blocks legitimately run
+// to tens of thousands of characters when a bill adds a whole chapter. The same
+// number readAddedBlock() uses, for the same reason.
+const MAX_QUOTED = 60000;
+
+let cachedText = null;
+let cachedBlocks = null;
+
+/**
+ * Every span of quoted inserted law in the bill, in document order.
+ *
+ * A bill's own sentences and the law it is writing are the same characters in
+ * the same file, and telling them apart is not decoration. A cross-reference
+ * inside quoted new law — "the table contained in subsection (d)" — belongs to
+ * the statute being amended, and answering it with a marker from the bill's own
+ * outline names a provision the drafter was not talking about. That is what was
+ * happening: 1,336 of these across the corpus were answered with a bill marker
+ * outside their own block and reported with no hedge at all, the pane saying
+ * "the only (d) inside the enclosing provision" about section 11001(d) of the
+ * bill when the citation meant 26 U.S.C. 1(d).
+ *
+ * A block opens on a line whose first non-blank characters are a quote opener —
+ * GPO opens every quoted PARAGRAPH that way and closes only once, at the end of
+ * the whole block — and ends at the first matching closer. Where no closer
+ * follows, or none within MAX_QUOTED, nothing is claimed: a block that swallowed
+ * the rest of the bill would suppress every later reference in it.
+ *
+ * Memoised on the text itself. One bill is loaded at a time and this is asked
+ * once per click.
+ */
+export function quotedBlocks(text) {
+  if (cachedText === text) return cachedBlocks;
+  const out = [];
+  let off = 0;
+  let openTo = 0; // first offset not already inside a block
+  for (const line of String(text || '').split('\n')) {
+    const lineStart = off;
+    off += line.length + 1;
+    if (lineStart < openTo) continue;
+    const m = line.match(RE_BLOCK_OPEN);
+    if (!m) continue;
+    const pair = QUOTE_PAIRS.find(([open]) => open === m[1]);
+    const openAt = lineStart + m[0].length - m[1].length;
+    const close = text.indexOf(pair[1], openAt + m[1].length);
+    if (close < 0 || close - openAt > MAX_QUOTED) continue;
+    const end = close + pair[1].length;
+    out.push({ start: openAt, end });
+    openTo = end;
+  }
+  cachedText = text;
+  cachedBlocks = out;
+  return out;
+}
+
+/** The block of quoted inserted law containing `offset`, or null. */
+export function quotedBlockAt(text, offset) {
+  return quotedBlocks(text).find((b) => offset >= b.start && offset < b.end) || null;
+}
+
+// ---------------------------------------------------------------------------
 // Plain statutory text -> the node tree the context pane renders
 // ---------------------------------------------------------------------------
 

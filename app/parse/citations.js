@@ -7,8 +7,10 @@
 import { POPULAR_NAMES } from '../resolve/popular-names.js';
 // Depth-by-marker-style, shared rather than reimplemented: it decides where an
 // addition belongs here and where a cross-reference points there, and the two
-// answers have to agree.
-import { markerDepth } from '../resolve/internal.js';
+// answers have to agree. `outline` is the same argument one level up — the
+// line-head markers a block of new law actually contains.
+import { markerDepth, outline } from '../resolve/internal.js';
+import { quotedBlockAt } from './outline.js';
 
 // A subsection path: the "(s)(2)(B)" trailing a section number. Bounded repeat
 // keeps a runaway "(" in scanned text from eating the rest of the document.
@@ -1508,6 +1510,169 @@ function emit(out, resolved, line, lineStart, phraseStart, phrase, source) {
   });
 }
 
+// A reference whose own address continues past the phrase. "subsection (b) of
+// section 6033" names its section outright, and "paragraph (2) thereof" names
+// the provision just mentioned; neither is relative to the block's parent. The
+// unit chain a phrase legitimately carries ("of subsection (f)") is consumed by
+// UNIT_PHRASE itself, so anything still beginning with "of" is somebody else's
+// address — the same rule RE_UNIT_OF_SECTION applies to internal citations.
+//
+// The gap may carry a quote opener, because GPO opens every quoted PARAGRAPH
+// with one and a phrase that runs past the 72-column measure continues behind
+// it. Reading one physical line at a time is what this file's wrap invariant is
+// about; here the block is scanned whole, so the opener is simply a character in
+// the middle of a sentence and has to be stepped over like the indent beside it.
+const REF_GAP = '[\\s,;]*(?:``|‘‘|["“])?[ \\t]*';
+const RE_REF_CONTINUES = new RegExp(`^${REF_GAP}(?:of\\b|thereof\\b)`, 'i');
+
+// …and the "of" may sit behind a tail MARKER_LIST could not take. Its separator
+// is one of ", " / "and" / "or", so ", or (o)" stops the list dead: the comma
+// matches and then "or" is not a marker, and "or" cannot match because the comma
+// is in the way. "under subsection (b), (c), (m), or (o) of section 414" was
+// therefore read as a bare "subsection (b), (c), (m)" with the section number —
+// the half of the address that says whose subsections these are — sitting just
+// past the end of the match. Step over the tail before asking.
+const RE_REF_TAIL_ITEM = new RegExp(`^${REF_GAP}(?:(?:and|or)\\s+)?(?:\\([A-Za-z0-9]{1,8}\\))+`, 'i');
+
+function refContinues(after) {
+  let s = after;
+  for (let i = 0; i < 8; i++) {
+    if (RE_REF_CONTINUES.test(s)) return true;
+    const m = s.match(RE_REF_TAIL_ITEM);
+    if (!m || !m[0].trim()) return false;
+    s = s.slice(m[0].length);
+  }
+  return false;
+}
+
+// Semantic depth read off the marker's own STYLE, but only where the style is
+// unambiguous. (i), (v) and (x) are a letter and a roman numeral at once, and
+// nothing here can settle which — "subsection (i)" of 26 U.S.C. 1 is real and so
+// is "clause (i)" — so those get no opinion at all.
+//
+// Where the style does have an opinion and the unit word disagrees with it, the
+// drafter has written something the depth model cannot place: "paragraph (h)(5)"
+// composed 7 U.S.C. 2025(h)(h)(5), the same letter twice. 9 of the 2,041
+// composed addresses are this shape and every one of them reaches nothing.
+const STYLE_DEPTH = [
+  [/^\d+$/, UNIT_DEPTH.paragraph],
+  [/^[a-hj-uwyz]$/, UNIT_DEPTH.subsection],
+  [/^[A-HJ-UWYZ]$/, UNIT_DEPTH.subparagraph],
+];
+
+function styleDisagrees(marker, unitDepth) {
+  const s = marker.slice(1, -1);
+  const hit = STYLE_DEPTH.find(([re]) => re.test(s));
+  return Boolean(hit) && hit[1] !== unitDepth;
+}
+
+/**
+ * Cross-references inside quoted new law, composed against the law it is being
+ * written into.
+ *
+ * This is the one place the file's standing rule — nothing inside quoted
+ * inserted law is a Code address — is narrowed rather than kept whole, and the
+ * narrowing is the whole of the correctness argument. New law refers to itself
+ * constantly, and composing those was worth roughly 40% of all composed
+ * addresses being wrong: "For purposes of subparagraph (A)", in a paragraph the
+ * bill is ADDING, became 7 U.S.C. 8101(3)(A), a real provision about something
+ * else. But new law also refers constantly to the section it is joining, and
+ * refusing those left the reader with nothing:
+ *
+ *     Section 1 is amended by adding at the end the following new subsection:
+ *     ``(j) Modifications for Taxable Years 2018 Through 2025.--
+ *         ``(2) Rate tables.--
+ *             ``(D) Married individuals filing separate returns.--The
+ *         following table shall be applied in lieu of the table contained
+ *         in subsection (d):
+ *
+ * "subsection (d)" is 26 U.S.C. 1(d), the table this one replaces, and the pane
+ * said "no (d) appears at the head of a line anywhere in this section of the
+ * bill, so there is nothing to show". Worse elsewhere: sibling references like
+ * "subsection (a)" WERE answered, with section 11001(a) of the bill itself.
+ *
+ * Three tests, each of them positive and each of them refusing rather than
+ * guessing where it cannot answer:
+ *
+ *   · The marker is not in the block. A block adding (D), (E) and (F) at once
+ *     contains its own siblings, and a reference to (E) is internal. Asked
+ *     first, so self-reference never reaches the composition at all.
+ *   · The composed address has no GAP in its levels. The block states its own
+ *     depth through its leading marker, and everything above that comes from the
+ *     path the block joins; a reference deeper than the block has nothing to
+ *     supply the levels in between. This is exactly what rejects the 8101(3)(A)
+ *     shape: (A) at subparagraph depth, in a block rooted at a paragraph, over a
+ *     base that stops above it, leaves depth 1 empty and is refused.
+ *   · The phrase does not continue into an address of its own.
+ *
+ * Across the corpus this composes 2,094 references, of which 1,938 (93%) reach a
+ * provision that exists in the Code — the same standard the Act-relative pass is
+ * held to, and measured the same way.
+ */
+function quotedRefs(text, ops, target) {
+  if (!target || (target.kind !== 'usc' && target.kind !== 'cfr')) return [];
+  if (!target.section || target.etSeq || target.note) return [];
+
+  const out = [];
+  for (const op of ops) {
+    // Only the two shapes that place a whole provision, because only those have
+    // a scope derived from the block's OWN leading marker — which is what says
+    // how deep the new law sits and therefore what the levels above it are.
+    const isBlock =
+      (op.type === 'add-at-end' && !op.rangeEnd) ||
+      (op.type === 'insert' && op.placement === 'after-unit');
+    if (!isBlock || !op.text || op.start == null) continue;
+    const lead = op.text.match(/^\s*(?:``|‘‘|["“])?\s*(\([A-Za-z0-9]{1,8}\))/);
+    if (!lead) continue;
+    const blockDepth = markerDepth(lead[1]);
+
+    // The path the new provision hangs off, with anything at the block's own
+    // depth or deeper dropped: scopeUnitInserts() leaves the anchor sibling on
+    // the end of `scope`, and a sibling is not an ancestor.
+    const base = ((op.scope || '').match(MARKER_RE) || [])
+      .map((mk) => ({ marker: mk, depth: markerDepth(mk) }))
+      .filter((l) => l.depth < blockDepth);
+    const marks = outline(text, op.start, op.end);
+    const body = text.slice(op.start, op.end);
+
+    RE_REF.lastIndex = 0;
+    let rm;
+    while ((rm = RE_REF.exec(body))) {
+      if (refContinues(body.slice(rm.index + rm[0].length, rm.index + rm[0].length + 80))) continue;
+      const resolved = resolvePhrase(unitPairs(rm[1]), base);
+      if (!resolved) continue;
+      const phraseStart = op.start + rm.index + rm[0].indexOf(rm[1]);
+      let cursor = 0;
+      resolved.addresses.forEach((addr, i) => {
+        const idx = rm[1].indexOf(addr.item, cursor);
+        if (idx === -1) return;
+        cursor = idx + addr.item.length;
+        // Inside the block at its own level? Then it is new law talking about
+        // itself, and locateInternal finds it a few lines away.
+        const first = (addr.item.match(MARKER_RE) || [])[0];
+        const d = resolved.subject.depth;
+        if (marks.some((mk) => mk.marker === first && mk.depth === d)) return;
+        if (styleDisagrees(first, d)) return;
+        if (!addr.levels.every((l, n) => l.depth === n)) return;
+        // The first address wears the unit word; later items in a list are just
+        // their own marker, exactly as emit() spans them.
+        const start = i === 0 ? phraseStart : phraseStart + idx;
+        const end = phraseStart + idx + addr.item.length;
+        out.push({
+          start,
+          end,
+          text: text.slice(start, end),
+          unit: resolved.subject.unit,
+          markers: addr.item,
+          path: addr.levels.map((l) => l.marker).join(''),
+          inserted: true,
+        });
+      });
+    }
+  }
+  return out;
+}
+
 /**
  * Turn each amendment's navigation steps into first-class citations that inherit
  * the amendment's target, so they resolve and render like any other chip.
@@ -1520,6 +1685,12 @@ export function expandRelativeRefs(citations, amendments) {
   for (const am of amendments) {
     const t = am.target;
     if (!t || (t.kind !== 'usc' && t.kind !== 'cfr')) continue;
+    // Where the parenthetical carried no codified subsection, every address in
+    // this instruction rests on the one the HEAD stated — and that is an Act's
+    // own numbering, which the codifier may already have folded into the section
+    // number. A claim, not an assertion: carried through so resolveUsc can test
+    // it against the section it names. See dropHeadLevel().
+    const headBase = !t.subsection && am.subsection ? am.subsection : '';
     for (const st of [...(am.steps || []), ...(am.refs || [])]) {
       extra.push({
         ...t,
@@ -1536,6 +1707,12 @@ export function expandRelativeRefs(citations, amendments) {
         relMarkers: st.markers,
         viaAmendment: am.id,
         viaTarget: t.text,
+        ...(headBase && String(st.path).startsWith(headBase) ? { subFromHead: headBase } : {}),
+        // Composed from inside language the bill is INSERTING, not from an
+        // instruction's navigation. The reader is looking at words that are not
+        // law yet, pointing at a provision that is — worth saying, and the pane
+        // says it.
+        ...(st.inserted ? { insertedLaw: true } : {}),
       });
     }
   }
@@ -1882,6 +2059,16 @@ export function extractCitations(text) {
   // flagging nothing at all.
   for (const c of cites) {
     if (c.kind === 'usc') c.note = RE_NOTE_SUFFIX.test(text.slice(c.end, c.end + 8));
+    // Which of these sit inside law the bill is writing rather than inside the
+    // bill's own sentences. Only internal refs need it — a U.S.C. cite states
+    // its own address and does not care where it is written — and what it buys
+    // them is a boundary: `locateInternal` may not answer a reference inside new
+    // law with a marker from outside it. Computed here rather than there so
+    // there is one spelling of where new law begins and ends.
+    if (c.kind === 'internal') {
+      const block = quotedBlockAt(text, c.start);
+      if (block) c.inserted = block;
+    }
   }
   return cites;
 }
@@ -2591,6 +2778,12 @@ export function extractAmendments(text, citations, divisions = []) {
     scopeAdditions(ops);
     scopeUnitInserts(ops);
     markRangeAdditions(ops, target);
+    // After the scoping passes, because the composition rests on the scope each
+    // block ended up with, and after markRangeAdditions so a block bound for the
+    // end of an Act — where nothing knows which section it lands in — is left
+    // alone. Refs rather than steps: these move no cursor and scope no
+    // operation, they are only addresses the reader can open.
+    nav.refs.push(...quotedRefs(text, ops, target));
 
     return [{
       start: h.start,

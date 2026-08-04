@@ -63,11 +63,21 @@ export function renderContext(res, handlers) {
     // The bill never wrote this address out — it said "in clause (iv)" and left
     // the reader to carry down the enclosing instruction's target. Show the
     // derivation so the jump is auditable rather than magic.
+    //
+    // The inserted-law wording is a different claim and has to read as one. The
+    // reader is looking at words that are not law yet, and the reference in them
+    // points at the section they are being written INTO — which is why it can be
+    // composed at all, and why it is not simply "the enclosing instruction's
+    // target carried down".
     root.appendChild(
       card(
         'Read in context',
-        `The bill says “${res.relative.unit} ${res.relative.markers}”, inside an instruction ` +
-          `amending ${res.relative.via}. That resolves to ${res.citation}.`,
+        res.relative.insertedLaw
+          ? `“${res.relative.unit} ${res.relative.markers}” is inside language this bill is adding to ` +
+            `${res.relative.via}. New law refers to the section it joins, so this points at ` +
+            `${res.citation} — not at anything in the bill.`
+          : `The bill says “${res.relative.unit} ${res.relative.markers}”, inside an instruction ` +
+            `amending ${res.relative.via}. That resolves to ${res.citation}.`,
         ''
       )
     );
@@ -192,6 +202,22 @@ export function renderContext(res, handlers) {
           `The bill cites ${escapeText(res.citedPath)}. This section writes ` +
             `${escapeText(res.runIn)} into its opening text rather than as a separate ` +
             `subsection, so the provision below is shown as ${escapeText(res.focusPath)}.`,
+          ''
+        )
+      );
+    }
+    if (res.headLevel) {
+      // A level was dropped to get here, so the pane says which and why. The
+      // reader clicked a chip composed against "Section 311(d) of the …Act" and
+      // is being shown 2 U.S.C. 4532(3); without this the two simply disagree
+      // and the pane looks like it lost a level.
+      root.appendChild(
+        card(
+          'One level dropped — the Act’s own numbering',
+          `The instruction names ${escapeText(res.headLevel)} of the Act it amends, but the Code ` +
+            `section this resolves to IS that ${escapeText(res.headLevel)} — it has no such level ` +
+            `inside it. Shown at ${escapeText(res.focusPath)} instead, which is where the Code ` +
+            `keeps this provision.`,
           ''
         )
       );

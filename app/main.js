@@ -190,6 +190,11 @@ async function onCite(cite, el, opts = {}) {
       markers: cite.relMarkers,
       via: cite.viaTarget,
       path: cite.subsection,
+      // Composed from inside the new language rather than from the
+      // instruction's navigation — a different derivation, and one the reader
+      // cannot see for themselves, so the pane states it rather than implying
+      // the bill wrote this address down somewhere.
+      insertedLaw: cite.insertedLaw,
     };
   }
   const amend = opts.amend || amendmentFor(cite, state.amendments);

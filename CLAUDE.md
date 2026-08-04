@@ -2201,3 +2201,148 @@ LVXXXVI--FEDERAL MARITIME
    - **"The bill says 'section 111 of the Pub. L. 116-93'".** The definite
      article belongs in front of an Act's NAME, and `viaActSection` also serves
      a Public Law cited by number.
+
+41. **A cross-reference inside quoted new law belongs to the statute, not to the
+   bill.** (Fixed 2026-08-04, from Keller's screenshot of the Tax Cuts and Jobs
+   Act: *"I think anywhere a section is mentioned within a quote"*.) The
+   screenshot showed the mild half — a chip reading "subsection (d)" answering
+   with a note that no (d) appears anywhere in that section of the bill. The
+   sentence it sat in was:
+
+   ```
+   Section 1 is amended by adding at the end the following new subsection:
+   ``(j) Modifications for Taxable Years 2018 Through 2025.--
+       ``(2) Rate tables.--
+           ``(D) Married individuals filing separate returns.--The
+       following table shall be applied in lieu of the table contained
+       in subsection (d):
+   ```
+
+   which names 26 U.S.C. 1(d), the very table this one replaces. The severe half
+   was one line up and invisible: the identical "subsection (a)" in subparagraph
+   (A) *was* answered — with **section 11001(a) of the bill itself**, the
+   instruction sentence, under the heading "The only (a) inside the enclosing
+   provision". `locateInternal` searched the whole bill SECTION, and a bill's own
+   sentences and the law it is writing are the same characters in the same file.
+   Across the corpus, on op-delimited blocks alone: **1,336 unhedged wrong
+   answers and 379 more marked a guess**, against 1,331 that answered nothing.
+
+   Three parts, and the first is the one that matters:
+
+   - **The block is the boundary.** `quotedBlocks()` in `app/parse/outline.js`
+     is the one spelling of where new law begins and ends — pairs, not an
+     alternation, so a block opened with two backticks closes on two apostrophes
+     and not on a curly double inside it, the same rule `readAddedBlock()` reads
+     an addition by. `extractCitations` flags each internal citation that sits in
+     one and `locateInternal` may not answer past that edge. It still widens, it
+     just widens to the end of the new law rather than to the end of the bill
+     section.
+   - **Outward references are composed.** `quotedRefs()` reads the block against
+     the section it is being written into. 1,965 addresses across the corpus,
+     **1,878 of 1,957 (96%) reaching a provision that exists in the Code** —
+     measured the way the Act-relative pass is measured. Audited by three
+     independent adversarial reads of 45 sampled cases: 44 right, 1 wrong, and
+     the one wrong was item 42 below rather than this rule.
+   - **The note says which silence it is.** "No (d) appears anywhere in this
+     section of the bill" is a parser shrug at a citation that was never about
+     the bill. Where the instruction names no Code section, the pane now says the
+     reference points into the law being amended and that nothing here can
+     identify it.
+
+   This narrows the standing rule that **nothing inside quoted inserted law is a
+   Code address**, and the narrowing is the whole correctness argument. Three
+   positive tests, each refusing rather than guessing:
+
+   - **The marker is not in the block**, asked first, so new law referring to
+     itself never reaches the composition. A block adding (D), (E) and (F) at
+     once contains its own siblings.
+   - **The composed address has no GAP in its levels.** The block states its own
+     depth through its leading marker and everything above comes from the path it
+     joins; a reference deeper than the block has nothing to supply the levels
+     between. This is exactly what rejects the shape the standing rule was
+     written for — "For purposes of subparagraph (A)", in a paragraph the bill is
+     ADDING, became 7 U.S.C. 8101(3)(A), a real provision about something else,
+     and was ~40% of all composed addresses when last let through. (A) at
+     subparagraph depth over a base that stops above it leaves depth 1 empty, and
+     it is refused. Asserted directly in `selftest.mjs`.
+   - **The phrase does not continue into an address of its own.** "subsection (b)
+     of section 6033" and "paragraph (2) thereof" are somebody else's. Watch the
+     tail: `MARKER_LIST`'s separator is a comma OR the word, never both, so
+     ", or (o)" stops the list dead and "under subsection (b), (c), (m), or (o)
+     of section 414" was read as a bare "subsection (b), (c), (m)" with the
+     section number sitting just past the match. The gap may also carry a quote
+     opener, because GPO opens every quoted paragraph with one and a phrase that
+     runs past the measure continues behind it.
+
+   And one guard that is cheap and free: where the marker's own STYLE has an
+   unambiguous opinion and the unit word disagrees with it, decline. "paragraph
+   (h)(5)" composed 7 U.S.C. 2025(h)(h)(5), the same letter twice. 9 of 2,041,
+   every one reaching nothing, and 0 good addresses lost. (i), (v) and (x) get no
+   opinion — they are a letter and a numeral at once.
+
+   Corpus, accounted to the unit: `refs` +1,965 and `relative` +1,965 on 25 of
+   the 30 runs, **and nothing else moved at all** — not citations, amendments,
+   targeted, opSpans, diffSpans, steps, overlaps or badOffsets. 1,957 in the 26
+   corpus files, 4 in `samples/sample-bill.txt` and 4 in the CLARITY House-passed
+   PDF, which is also the check that this works on the doubled-single quote
+   convention. The two deltas are equal on every bill, which is the signature of
+   pure addition: each new ref becomes one new relative citation and no existing
+   one is displaced. Everything the new addresses displaced is an `internal`
+   citation (1,741) — the point of the exercise. 0 spans failing the round-trip
+   and 0 pairs of citations sharing a start.
+
+   Worth knowing before extending it: only `add-at-end` and after-unit inserts
+   are eligible, because only those carry a scope derived from the block's own
+   leading marker, which is what says how deep the new law sits. A block bound
+   for the end of an Act (`rangeEnd`, item 33's `etSeq`) is left alone, since
+   nothing knows which section it lands in.
+
+42. **The head's address is a claim for CITATIONS too, and only the operations
+   were testing it.** (Fixed 2026-08-04, from the adversarial audit of item 41 —
+   the one case in 45 the judges caught, and it was not item 41's rule.) Item 35
+   established that where the parenthetical carries no codified subsection the
+   instruction head is the only address there is, and that the head's claim is
+   tested rather than asserted. It is tested for op scopes, by `scopeFromHead`
+   and `reScope()`. The citation the reader actually clicks had no equivalent
+   check:
+
+   ```
+   Section 311(d) of the Legislative Branch Appropriations Act, 1988
+     (2 U.S.C. 4532) is amended— (1) in paragraph (1) …
+   2 U.S.C. 4532 credit: "(Pub. L. 100–202, § 101(i) [title III, § 311(d)], …)"
+   ```
+
+   The codified section IS § 311(d), so 4532's top level is the paragraphs
+   (1)–(4) and there is no (d) in it, by construction, ever. Every reference in
+   that instruction composed one level too deep, and the pane answered each with
+   "the current text of this section has no such subsection — the bill is adding
+   it, or it has been renumbered or repealed". Both explanations false, stated
+   confidently, about a paragraph sitting a few lines up in the same pane which
+   this very bill inserts. Same family as 12 U.S.C. 375 = Federal Reserve Act
+   § 22(d), which item 35 already names. 17 across the corpus.
+
+   `dropHeadLevel()` in `app/resolve/usc.js` drops the level, and the pane says
+   which and why rather than silently showing a different one. Two guards, both
+   needed:
+
+   - **Only an address composed from the head.** `subFromHead` carries the
+     head's own subsection through `expandRelativeRefs`. A bill that writes
+     "12 U.S.C. 5701(b)(1)" out in full has said what it means, and if that is
+     wrong it is the drafter's error to show, not ours to paper over.
+   - **The dropped marker must be absent from the section's own top level.**
+     "clause (i)" composed onto 26 U.S.C. 168(k) dies because (k) has no clause
+     (i), not because (k) is wrong — and 168 *does* have a subsection (i), so
+     dropping the (k) answers with a different provision. 15 of the 65 addresses
+     whose tail happens to resolve are that shape, and the narrow test refuses
+     all 15.
+
+   Not repaired, and deliberately: 250 head-derived addresses still miss. Most
+   are a target that is wrong further up — "the State Small Business Credit
+   Initiative Act of 2010 (12 U.S.C. 5701 et seq.) … in section 3003 … in
+   subsection (b)" composes onto 5701 because the range answers with its first
+   section, and dropping the (b) would give 5701(1), a definition. A repair is
+   only safe where the level is the one thing wrong.
+
+   `cacheKey` needed `subFromHead`, for the SIXTH time this pattern has cost
+   something: the written-out and the composed address agree on title, section
+   and subsection and only one of them may be repaired.

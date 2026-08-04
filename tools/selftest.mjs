@@ -2278,7 +2278,14 @@ section('internal cross-references');
     // address the sentence actually states is NEPA § 102(2), and the
     // act-relative matcher has it. 1,460 of these across the corpus, 616 of them
     // answered with no hedge at all.
-    eq('locates the internal refs it can', hits.length, 73);
+    //
+    // 71 once a reference inside quoted inserted law stopped being answered
+    // with a marker from outside that law. Both losses were wrong answers and
+    // both are now composed into the Code addresses they actually name — see
+    // "references inside quoted inserted law" below, which asserts the other
+    // half. Assert both directions or a change that merely broke the locator
+    // would pass this.
+    eq('locates the internal refs it can', hits.length, 71);
     ok('  which is most of them', hits.length >= rc.length * 0.75, `${hits.length}/${rc.length}`);
 
     // Every target must land on an outline marker, or on the head of the bill
@@ -2288,6 +2295,204 @@ section('internal cross-references');
     );
     eq('  every target lands on a marker or a section head', bad.length, 0);
     console.log(`  · sample bill: ${hits.length}/${rc.length} internal refs located`);
+  }
+}
+
+// --------------------------------- references inside quoted inserted law
+// A bill's own sentences and the statute it is writing are the same characters
+// in the same file. Telling them apart decides where a cross-reference points,
+// and getting it wrong produced this project's worst output — a real provision,
+// confidently named, about something else entirely.
+section('references inside quoted inserted law');
+{
+  const { quotedBlocks, quotedBlockAt } = await imp('app/parse/outline.js');
+  const { locateInternal } = await imp('app/resolve/internal.js');
+  const { resolve } = await imp('app/resolve/index.js');
+
+  // The govinfo convention, built rather than spelled inline: `` and '' are
+  // string delimiters in this file too, and a fixture writing them literally
+  // closes the JS literal early. See the note in CLAUDE.md.
+  const OPEN = '``';
+  const CLOSE = "''";
+  const Q = (s) => OPEN + s + CLOSE;
+  /**
+   * A multi-paragraph block, the way GPO actually sets one: every paragraph
+   * opens with a quote mark and the block closes exactly once, at the end.
+   *
+   * Worth building rather than eyeballing — a fixture that closed each line
+   * separately would be four one-line blocks, which is a different document and
+   * quietly stops testing anything about block boundaries at all.
+   */
+  const QB = (indents, lines) =>
+    lines.map((s, i) => `${indents[i]}${OPEN}${s}${i === lines.length - 1 ? `${CLOSE}.` : ''}`).join('\n');
+
+  // --- where a block begins and ends -------------------------------------
+  {
+    const t = normalizeText(
+      'SEC. 2. AMENDMENT.\n' +
+      '    Section 1 is amended by adding at the end the following:\n' +
+      `    ${Q('(j) New subsection.--The rule in subsection (d) applies.')}.\n` +
+      '    (b) Effective Date.--This takes effect today.\n'
+    );
+    const blocks = quotedBlocks(t);
+    eq('one quoted block in a one-block bill', blocks.length, 1);
+    ok('  it opens at the quote mark', t.startsWith('``', blocks[0].start), JSON.stringify(t.slice(blocks[0].start, blocks[0].start + 8)));
+    ok('  and closes at the matching closer', /'{2}$/.test(t.slice(blocks[0].start, blocks[0].end)),
+       JSON.stringify(t.slice(blocks[0].end - 8, blocks[0].end)));
+    ok('  the bill sentence after it is outside', !quotedBlockAt(t, t.indexOf('Effective Date')));
+    ok('  and the instruction before it is outside', !quotedBlockAt(t, t.indexOf('is amended')));
+  }
+  {
+    // A nested single-quoted defined term is not a closer — both single
+    // conventions take two characters to close, which is why a lone apostrophe
+    // in "the Nation's" cannot end a block either.
+    const t = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Section 1 is amended by adding at the end the following:\n' +
+      `    ${Q("(j) Rules.--The term `covered entity' means an entity.")}.\n` +
+      `    ${Q('(k) More.--Applies to paragraph (2).')}.\n`
+    );
+    const blocks = quotedBlocks(t);
+    eq('a single-quoted term does not close a block', blocks.length, 2);
+    ok('  the first block keeps its whole definition',
+       /covered entity/.test(t.slice(blocks[0].start, blocks[0].end)),
+       t.slice(blocks[0].start, blocks[0].end));
+  }
+
+  // --- the boundary is what stops a wrong answer --------------------------
+  //
+  // The shape from the Tax Cuts and Jobs Act, reduced. The bill's own SEC. 2(d)
+  // is a line-head "(d)" and the reference sits in new law being written into
+  // 26 U.S.C. 1, so the only (d) the old search could find was the bill's.
+  {
+    const t = normalizeText(
+      'SEC. 2. MODIFICATION OF RATES.\n' +
+      '    (a) In General.--Section 1 of the Internal Revenue Code of 1986 is\n' +
+      'amended by adding at the end the following new subsection:\n' +
+      QB(
+        ['    ', '        ', '            ', '        ', '        '],
+        [
+          '(j) Modifications.--',
+          '(2) Rate tables.--',
+          '(D) Married individuals filing separate returns.--The',
+          'following table shall be applied in lieu of the table contained',
+          'in subsection (d):',
+        ]
+      ) + '\n' +
+      '    (d) Effective Date.--The amendments made by this section apply now.\n'
+    );
+    const b = parseBill(t);
+    const cites = extractCitations(t);
+    const d = cites.find((c) => c.kind === 'internal' && /subsection \(d\)/.test(c.text));
+    ok('the reference is flagged as sitting in inserted law', d && Boolean(d.inserted),
+       JSON.stringify(d && d.text));
+    eq('  and is no longer answered from the bill', locateInternal(b, d), null);
+    // …and the old behaviour is asserted too, so a change that merely stopped
+    // finding markers at all cannot pass this pair.
+    const oldWay = locateInternal(b, { ...d, inserted: null });
+    ok('  where without the boundary it found the bill\'s own (d)',
+       oldWay && oldWay.start > t.indexOf('Effective Date') - 8,
+       JSON.stringify(oldWay && t.slice(oldWay.start, oldWay.start + 24)));
+
+    // The note has to say which silence this is.
+    const res = await resolve(d);
+    ok('  the pane says it points into the law being amended',
+       /language the bill is inserting/.test(res.note), res.note);
+    ok('  and no longer claims the bill has no such provision',
+       !/anywhere in this section of the bill/.test(res.note), res.note);
+
+    // …and the address itself is composed.
+    const ams = extractAmendments(t, cites);
+    const rel = expandRelativeRefs(cites, ams).filter((c) => c.insertedLaw);
+    const one = rel.find((c) => /subsection \(d\)/.test(c.text));
+    ok('the reference is composed against the section being amended', Boolean(one),
+       rel.map((c) => c.text).join(' | '));
+    eq('  to the right title', one && one.title, '26');
+    eq('  the right section', one && one.section, '1');
+    eq('  and the right subsection', one && one.subsection, '(d)');
+  }
+
+  // --- new law referring to ITSELF is left alone --------------------------
+  //
+  // Asked before the composition, so self-reference never reaches it. This is
+  // the guard the whole exercise rests on: a block adding several siblings at
+  // once contains its own (D), (E) and (F).
+  {
+    const t = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Section 8101 of title 7 is amended by adding at the end the following:\n' +
+      QB(['    ', '    '], ['(D) First.--A thing described in subparagraph (E).', '(E) Second.--Another thing.']) + '\n'
+    );
+    const b = parseBill(t);
+    const cites = extractCitations(t);
+    const e = cites.find((c) => c.kind === 'internal' && /subparagraph \(E\)/.test(c.text));
+    const at = e && locateInternal(b, e);
+    ok('a reference to a sibling inside the block still resolves', Boolean(at),
+       JSON.stringify(e && e.text));
+    ok('  and lands inside that same block',
+       at && at.start > e.inserted.start && at.start < e.inserted.end,
+       JSON.stringify(at && t.slice(at.start, at.start + 20)));
+    const rel = expandRelativeRefs(cites, extractAmendments(t, cites)).filter((c) => c.insertedLaw);
+    eq('  and is not composed into a Code address', rel.length, 0);
+  }
+
+  // --- the shape the standing rule exists to refuse ------------------------
+  //
+  // "For purposes of subparagraph (A)", in a PARAGRAPH the bill is adding, means
+  // subparagraph (A) of that new paragraph. Composed against the target it
+  // became 7 U.S.C. 8101(3)(A) — a real provision about something else, and
+  // roughly 40% of all composed addresses when this was last let through. The
+  // gap test refuses it: (A) sits at subparagraph depth over a base that stops
+  // above the block, so depth 1 is empty and nothing may be assumed for it.
+  {
+    const t = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Section 8101 of title 7 is amended by adding at the end the following:\n' +
+      QB(['    ', '    '], ['(3) Digital commodity.--For purposes of subparagraph (A), the', 'term applies.']) + '\n'
+    );
+    const cites = extractCitations(t);
+    const rel = expandRelativeRefs(cites, extractAmendments(t, cites)).filter((c) => c.insertedLaw);
+    eq('a reference deeper than the block it sits in is refused', rel.length, 0);
+  }
+
+  // --- a phrase that names its own section is not relative to anything -----
+  {
+    const t = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Section 1 of the Internal Revenue Code of 1986 is amended by adding at\n' +
+      'the end the following:\n' +
+      QB(
+        ['    ', '    '],
+        ['(j) Rules.--Treated as a single employer under subsection (b), (c),', '(m), or (o) of section 414 shall apply.']
+      ) + '\n'
+    );
+    const cites = extractCitations(t);
+    const rel = expandRelativeRefs(cites, extractAmendments(t, cites)).filter((c) => c.insertedLaw);
+    // MARKER_LIST cannot take ", or (o)" — its separator is a comma OR the word,
+    // never both — so the list stops at (m) and the "of section 414" that says
+    // whose subsections these are sits just past the end of the match.
+    eq('a list broken by ", or" still sees the section it names', rel.length, 0);
+  }
+
+  // --- against the real bill ----------------------------------------------
+  if (existsSync(samplePath)) {
+    const real = normalizeText(readFileSync(samplePath, 'utf8'));
+    const cites = extractCitations(real);
+    const rel = expandRelativeRefs(cites, extractAmendments(real, cites)).filter((c) => c.insertedLaw);
+    eq('FRA: four references inside inserted law are composed', rel.length, 4);
+    // The two the locator stopped answering, now answered properly. 7 U.S.C.
+    // 2015(o)(4) is "Waiver" and the sentence says "waivers granted under
+    // paragraph (4)"; (o)(6) is "Exemptions", which is what the block joins.
+    const p4 = rel.find((c) => /paragraph \(4\)/.test(c.text));
+    eq('  "paragraph (4)" is 7 U.S.C. 2015(o)(4)',
+       p4 && `${p4.title}:${p4.section}${p4.subsection}`, '7:2015(o)(4)');
+    const sc = rel.find((c) => /subparagraph \(C\)/.test(c.text));
+    eq('  "subparagraph (C)" is 7 U.S.C. 2015(o)(6)(C)',
+       sc && `${sc.title}:${sc.section}${sc.subsection}`, '7:2015(o)(6)(C)');
+    ok('  and every one of them round-trips to its own span',
+       rel.every((c) => real.slice(c.start, c.end) === c.text),
+       rel.map((c) => JSON.stringify(c.text)).join(' '));
+    console.log(`  · sample bill: ${rel.length} references composed out of inserted law`);
   }
 }
 
@@ -2737,6 +2942,42 @@ section('ingested USC data');
         const absent = await resolveUsc({ title: '42', section: '4332', subsection: '(9)(Z)' });
         ok('an absent subsection is still reported absent', absent.focusMissing, JSON.stringify(absent.runIn));
         eq('  with no run-in claimed', absent.runIn, null);
+      }
+
+      // An Act's own subsection carried onto a Code section that IS that
+      // subsection. 2 U.S.C. 4532 is credited "Pub. L. 100-202, § 101(i)
+      // [title III, § 311(d)]", so its top level is the paragraphs (1)-(4) and
+      // there is no (d) in it and never will be. Every reference in the
+      // instruction "Section 311(d) of the Legislative Branch Appropriations
+      // Act, 1988 (2 U.S.C. 4532) is amended" composed one level too deep, and
+      // the pane told the reader the provision had been repealed or was being
+      // added — about a paragraph sitting a few lines up in the same pane.
+      if (existsSync(join(ROOT, 'data/usc/t2/s4532.json'))) {
+        const fixed = await resolveUsc({ title: '2', section: '4532', subsection: '(d)(3)', subFromHead: '(d)' });
+        ok('a head-carried Act subsection is dropped when the section IS it',
+           !fixed.focusMissing, JSON.stringify(fixed.focusPath));
+        eq('  the dropped level is named', fixed.headLevel, '(d)');
+        eq('  and the focus is the paragraph itself', fixed.focusPath, '(3)');
+        ok('  which is the pay-relationship paragraph this bill inserts',
+           /pay relationship described in this paragraph/i.test(fixed.focusNode?.text || ''),
+           JSON.stringify((fixed.focusNode?.text || '').slice(0, 80)));
+
+        // Only for an address COMPOSED from the head. A bill that writes the
+        // subsection out in full has said what it means, and if that is wrong it
+        // is the drafter's error to show rather than ours to paper over.
+        const written = await resolveUsc({ title: '2', section: '4532', subsection: '(d)(3)' });
+        ok('  a written-out address is not repaired', written.focusMissing, JSON.stringify(written.focusPath));
+        eq('  and claims no dropped level', written.headLevel, null);
+      }
+
+      // The guard that keeps this narrow: the dropped marker must be absent from
+      // the section's own top level. "clause (i)" composed onto 26 U.S.C. 168(k)
+      // dies because (k) has no clause (i) — and 168 DOES have a subsection (i),
+      // so dropping the (k) would answer with a different provision entirely.
+      if (existsSync(join(ROOT, 'data/usc/t26/s168.json'))) {
+        const keep = await resolveUsc({ title: '26', section: '168', subsection: '(k)(i)', subFromHead: '(k)' });
+        eq('a leading marker the section really has is kept', keep.headLevel, null);
+        ok('  so the address stays missing rather than moving', keep.focusMissing, JSON.stringify(keep.focusPath));
       }
       globalThis.fetch = realFetch;
     }

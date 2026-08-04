@@ -49,6 +49,23 @@ A path descends: `clause (iii)(I)` finds `(I)` inside clause `(iii)`, not the
 nearest stray `(I)`. Where a provision genuinely repeats an outline, the pane
 says the match is the nearest of several rather than asserting it.
 
+**A reference inside quoted new law points at the statute, not at the bill.**
+When a bill amends a section it quotes the language it is inserting, and that new
+language cross-references the section it is joining:
+
+> Section 1 is amended by adding at the end the following new subsection:
+> `` ``(j) … ``(D) Married individuals filing separate returns.--The following ``
+> `` table shall be applied in lieu of the table contained in subsection (d): ``
+
+`subsection (d)` there is **26 U.S.C. 1(d)** — the table this one replaces — and
+not anything in the bill. The search for a bare marker stops at the edge of the
+quoted block, and a reference that reaches past it is composed into the Code
+address it names and opens the provision. Where the new law refers to *itself*,
+which it does constantly, it stays a jump within the bill: the marker is looked
+for inside the block first, and only a reference that is not there is read
+outward. Across thirty real bills that is 1,965 addresses, 96% of which reach a
+provision the Code actually has.
+
 **Reads amendatory instructions.** The thing bills mostly *are*:
 
 > Section 1861(s)(2) of the Social Security Act (42 U.S.C. 1395x(s)(2)) is amended

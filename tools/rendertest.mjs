@@ -2053,6 +2053,61 @@ section('fallback states');
   ok('  and no longer merely restates the citation',
      !/Points at another part of the provision currently being amended/.test(el.textContent),
      el.textContent);
+
+  // …and the OTHER silence. A reference sitting inside language the bill is
+  // inserting is not a dangling pointer into the bill; it is new law naming the
+  // statute it is being written into, and the instruction around it simply did
+  // not give a Code section to read it against. Telling the reader "no (d)
+  // appears anywhere in this section of the bill" about a citation that was
+  // never about the bill reads as a parser shrug at a perfectly clear sentence.
+  const ins = await resolve({
+    kind: 'internal', text: 'subsection (d)', scope: 'section', subsection: '(d)',
+    inserted: { start: 0, end: 100 },
+  });
+  const insEl = renderContext({ ...ins }, { onScope: () => {} });
+  ok('a reference inside inserted law says which silence this is',
+     /language the bill is inserting/.test(insEl.textContent), insEl.textContent);
+  ok('  and does not blame the bill for having no such provision',
+     !/anywhere in this section of the bill/.test(insEl.textContent), insEl.textContent);
+}
+{
+  // The composed half: the same reference where the instruction DID name a
+  // section. The card has to read as what it is — new language pointing at the
+  // law it joins — and not as the ordinary "carried down from the enclosing
+  // instruction", which is a different derivation and a weaker claim.
+  const el = renderContext(
+    { source: 'U.S. Code', citation: '26 U.S.C. 1(d)', tree: [], focusPath: '(d)',
+      relative: { unit: 'subsection', markers: '(d)', via: 'Section 1', path: '(d)', insertedLaw: true },
+      links: [] },
+    { onScope: () => {} });
+  const t = el.textContent;
+  ok('an address composed out of inserted law says so', /language this bill is adding/.test(t), t.slice(0, 200));
+  ok('  naming the section the new law joins', /Section 1/.test(t), t.slice(0, 200));
+  ok('  and saying it points at the Code, not the bill', /not at anything in the bill/.test(t), t.slice(0, 200));
+
+  const ord = renderContext(
+    { source: 'U.S. Code', citation: '26 U.S.C. 1(d)', tree: [], focusPath: '(d)',
+      relative: { unit: 'clause', markers: '(iv)', via: 'Section 1', path: '(d)' }, links: [] },
+    { onScope: () => {} });
+  ok('  while an ordinary composed address keeps its own wording',
+     /inside an instruction amending/.test(ord.textContent) &&
+       !/language this bill is adding/.test(ord.textContent),
+     ord.textContent.slice(0, 200));
+}
+{
+  // A level dropped because the Code section IS the Act's subsection. The pane
+  // has to say which level went and why, or the address above the provision and
+  // the provision below it simply disagree and it reads as a lost level.
+  const el = renderContext(
+    { source: 'U.S. Code', citation: '2 U.S.C. 4532(d)(3)', tree: [], focusPath: '(3)',
+      headLevel: '(d)', links: [] },
+    { onScope: () => {} });
+  const t = el.textContent;
+  ok('a dropped Act level is stated, not silent', /One level dropped/.test(t), t.slice(0, 200));
+  ok('  naming the level that went', /\(d\)/.test(t), t.slice(0, 200));
+  ok('  and where it is shown instead', /\(3\)/.test(t), t.slice(0, 200));
+  ok('  and it is not dressed as a warning', el.querySelector('.card.warn') === null,
+     'warn card on a successful repair');
 }
 {
   const el = renderContext(
