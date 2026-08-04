@@ -99,15 +99,49 @@ function rangeLabel(act) {
   // "1531 et seq." already ends in a full stop and "title 26 generally" does
   // not, so the sentence closes itself rather than always appending one.
   const stop = (s) => (/[.]$/.test(s) ? s : `${s}.`);
-  // "title 26 generally" — the Act is codified as a whole title.
-  if (/^title\s/i.test(range)) return stop(`The whole Act is codified at ${range}`);
-  // "1531 et seq." — a section range inside the Act's own title, which the
-  // entry records separately and which the phrase is useless without.
-  if (/^[0-9]/.test(range) && act.title) {
-    return stop(`The whole Act is codified at ${act.title} U.S.C. ${range}`);
+
+  // "title 26 generally" — the Act is codified as a whole title. "throughout"
+  // is the word that carries it: "at title 26" invites the same misreading
+  // "runs to title 26" did, because it still sounds like a destination the Act
+  // reaches rather than a body of law it pervades.
+  const whole = /^title\s+([0-9]{1,2}[A-Za-z]?)\b/i.exec(range);
+  if (whole) {
+    return {
+      text: stop(`The Act is codified throughout title ${whole[1]}`),
+      link: {
+        label: `Browse title ${whole[1]}`,
+        href: `https://www.law.cornell.edu/uscode/text/${whole[1]}`,
+      },
+    };
   }
-  // "Pub. L. 116-136" — not a codification range at all. Say what it is.
-  if (/^Pub\. L\./i.test(range)) return stop(`The Act as a whole is ${range}`);
+
+  // "1531 et seq." — a section range inside the Act's own title, which the
+  // entry records separately and which the phrase is useless without. The link
+  // goes to the section the range STARTS at, because that is the only endpoint
+  // the entry actually knows; "et seq." is not an address we can resolve.
+  const from = /^([0-9][A-Za-z0-9\-–—]*)\s/.exec(range);
+  if (from && act.title) {
+    return {
+      text: stop(`The Act is codified throughout ${act.title} U.S.C. ${range}`),
+      link: {
+        label: `Open ${act.title} U.S.C. ${from[1]}`,
+        href: `https://www.law.cornell.edu/uscode/text/${act.title}/${from[1]}`,
+      },
+    };
+  }
+
+  // "Pub. L. 116-136" — not a codification range at all. Say what it is, and
+  // link to the law rather than to the Code, because that is what it names.
+  const pl = /^Pub\. L\.\s*(\d{1,3})[–—-](\d{1,4})/i.exec(range);
+  if (pl) {
+    return {
+      text: stop(`The Act as a whole is ${range}`),
+      link: {
+        label: 'Read the law',
+        href: `https://www.govinfo.gov/link/plaw/${pl[1]}/public/${pl[2]}`,
+      },
+    };
+  }
   return null;
 }
 

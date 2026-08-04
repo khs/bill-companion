@@ -131,8 +131,9 @@ export function renderContext(res, handlers) {
       card(
         'Whole Act',
         `This looks like the entire law, not a single provision. Shown below is its ` +
-          `first section.` + (res.range ? ` ${escapeText(res.range)}` : ''),
-        ''
+          `first section.` + (res.range ? ` ${res.range.text}` : ''),
+        '',
+        res.range ? res.range.link : null
       )
     );
   }

@@ -978,30 +978,51 @@ section('Act-relative derivation');
   const wholeAct = (range) => {
     const root = rc({ ...base, citation: 'Widget Act', isActStart: true, range }, { onScope: () => {} });
     const el = [...root.querySelectorAll('.card')].find((x) => /Whole Act/i.test(x.textContent));
-    return el ? el.textContent.replace(/\s+/g, ' ').trim() : '(no Whole Act card)';
+    if (!el) return { text: '(no Whole Act card)', href: null, rel: null };
+    const a = el.querySelector('a');
+    return {
+      text: el.textContent.replace(/\s+/g, ' ').trim(),
+      href: a ? a.getAttribute('href') : null,
+      rel: a ? a.getAttribute('rel') : null,
+    };
   };
 
-  const seq = wholeAct('The whole Act is codified at 42 U.S.C. 7401 et seq.');
+  const seq = wholeAct({
+    text: 'The Act is codified throughout 42 U.S.C. 7401 et seq.',
+    link: { label: 'Open 42 U.S.C. 7401', href: 'https://www.law.cornell.edu/uscode/text/42/7401' },
+  });
   ok('the Whole Act card names the title, not a bare section number',
-     /codified at 42 U\.S\.C\. 7401 et seq\./.test(seq), seq.slice(0, 200));
+     /throughout 42 U\.S\.C\. 7401 et seq\./.test(seq.text), seq.text.slice(0, 200));
   ok('  and says plainly that this is the entire law',
-     /entire law, not a single provision/.test(seq), seq.slice(0, 200));
-  ok('  with no doubled full stop after "et seq."', !/et seq\.\./.test(seq), seq.slice(0, 200));
+     /entire law, not a single provision/.test(seq.text), seq.text.slice(0, 200));
+  ok('  with no doubled full stop after "et seq."', !/et seq\.\./.test(seq.text), seq.text.slice(0, 200));
+  eq('  and the link opens the section the range starts at',
+     seq.href, 'https://www.law.cornell.edu/uscode/text/42/7401');
 
   // THE one that was misread. "title 26 generally" means the Internal Revenue
-  // Code is classified TO title 26 — not that it HAS 26 titles. "codified at"
-  // is what makes the relationship explicit, and it must not be dropped.
-  const irc = wholeAct('The whole Act is codified at title 26 generally.');
-  ok('an Act codified as a whole title says "codified at"',
-     /codified at title 26 generally/.test(irc), irc.slice(0, 200));
+  // Code is classified TO title 26 — not that it HAS 26 titles. "throughout" is
+  // the word that carries it: a destination the Act reaches reads as a count,
+  // a body of law it pervades does not.
+  const irc = wholeAct({
+    text: 'The Act is codified throughout title 26.',
+    link: { label: 'Browse title 26', href: 'https://www.law.cornell.edu/uscode/text/26' },
+  });
+  ok('an Act codified as a whole title says "throughout"',
+     /codified throughout title 26\./.test(irc.text), irc.text.slice(0, 200));
   ok('  and never claims the Act HAS that many titles',
-     !/\b26 titles\b/.test(irc), irc.slice(0, 200));
+     !/\b26 titles\b/.test(irc.text), irc.text.slice(0, 200));
+  eq('  and the link browses the title itself',
+     irc.href, 'https://www.law.cornell.edu/uscode/text/26');
+  // A link out of this pane opens away from the reading, and must not hand the
+  // opener a live reference back to it.
+  eq('    opening in a new tab, with the opener severed', irc.rel, 'noopener noreferrer');
 
   // A shape with nothing useful to say says nothing, rather than trailing an
-  // orphan phrase off the end of the sentence.
+  // orphan phrase or an empty link off the end of the sentence.
   const bare = wholeAct(null);
   ok('an Act with no usable range adds no dangling phrase',
-     /first section\.$/.test(bare.trim()), JSON.stringify(bare.slice(-90)));
+     /first section\.$/.test(bare.text), JSON.stringify(bare.text.slice(-90)));
+  eq('  and no dangling link', bare.href, null);
 }
 
 section('additions at the end');
