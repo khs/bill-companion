@@ -455,10 +455,19 @@ async function dispatch(cite) {
               // a reference that was never about the bill reads as a parser
               // shrug about a citation the drafter wrote perfectly clearly.
               cite.inserted
-              ? `This sits inside language the bill is inserting, so ${cite.subsection || 'it'} refers to the ` +
-                `law being amended rather than to anything in the bill — and no ${cite.subsection || 'matching'} ` +
-                `appears inside the new language either. The instruction around it doesn't name a U.S. Code ` +
-                `section this could be read against, so the provision can't be identified from here.`
+              ? // A phrase and a block are both quotations from the statute and
+                // both bound the reference the same way, but they are not the
+                // same thing to say: 62 of these sit in language being STRUCK,
+                // where "language the bill is inserting" is the opposite of what
+                // the bill does.
+                cite.inserted.phrase
+                ? `This sits inside a phrase the bill quotes from the statute, so ${cite.subsection || 'it'} refers ` +
+                  `to the law being amended rather than to anything in the bill. The instruction around it doesn't ` +
+                  `name a U.S. Code section this could be read against, so the provision can't be identified from here.`
+                : `This sits inside language the bill is inserting, so ${cite.subsection || 'it'} refers to the ` +
+                  `law being amended rather than to anything in the bill — and no ${cite.subsection || 'matching'} ` +
+                  `appears inside the new language either. The instruction around it doesn't name a U.S. Code ` +
+                  `section this could be read against, so the provision can't be identified from here.`
               : `This points at another part of the provision being amended, but no ${cite.subsection || 'matching'} ` +
                 `appears at the head of a line anywhere in this section of the bill, so there is nothing to show. ` +
                 `That usually means the provision it refers to lives in the U.S. Code rather than in the bill text.`,

@@ -120,6 +120,15 @@ const RE_BLOCK_OPEN = /^[ \t]*(``|‘‘|[“"])/;
 // number readAddedBlock() uses, for the same reason.
 const MAX_QUOTED = 60000;
 
+/** An outline marker at the head of a line INSIDE the quotation. */
+const RE_BLOCK_OUTLINE = new RegExp(`(?:^|\\n)${LEAD}\\([A-Za-z0-9]{1,8}\\)[ \\t]`);
+
+// Above this, call it a block whatever it opens with: a quotation this long is
+// statutory text however it is punctuated, and a flush added sentence has no
+// marker to show for itself. Measured on the corpus, phrase operands run to a
+// few hundred characters and blocks to tens of thousands.
+const PHRASE_MAX = 400;
+
 let cachedText = null;
 let cachedBlocks = null;
 
@@ -159,9 +168,42 @@ export function quotedBlocks(text) {
     const pair = QUOTE_PAIRS.find(([open]) => open === m[1]);
     const openAt = lineStart + m[0].length - m[1].length;
     const close = text.indexOf(pair[1], openAt + m[1].length);
-    if (close < 0 || close - openAt > MAX_QUOTED) continue;
+    // No closer anywhere: a stray opener, and claiming from here to the end of
+    // the bill would suppress every later reference in it. Nothing is claimed
+    // and the scan carries on, so a real block below still opens.
+    if (close < 0) continue;
+    // A closer past the runaway guard. The block is almost certainly real — a
+    // bill that rewrites a whole section of the Code quotes tens of thousands of
+    // characters — but this cannot say where it ends, so it claims nothing.
+    //
+    // The cursor still moves past it, and that is the point. Skipping without
+    // advancing left every quoted PARAGRAPH inside such a rewrite opening a
+    // block of its own, so a reference was bounded to one paragraph of a
+    // 95,000-character provision and the answer sitting 40,000 characters away
+    // in the same block could not be reached. Falling back to the whole bill
+    // section is the behaviour these had before any of this, and it is honest;
+    // a fragment is a boundary this module invented.
+    if (close - openAt > MAX_QUOTED) { openTo = close + pair[1].length; continue; }
     const end = close + pair[1].length;
-    out.push({ start: openAt, end });
+    // A quotation, but not necessarily a BLOCK of new law. A bill hard-wraps at
+    // 72 columns, so the operand of a strike lands at a line head whenever the
+    // instruction happens to break in front of it:
+    //
+    //     (iii) in subparagraph (E), by striking
+    //   ``subparagraph (B) or (D)'' and inserting ``subparagraph (A) or (C)''
+    //
+    // 330 of the corpus's 14,694 quoted-law references sit in one of these, and
+    // 62 of them in language being STRUCK — so a pane that called all of them
+    // "language the bill is inserting" was telling 62 readers the opposite of
+    // what the bill does. Both are quotations from the statute and both bound a
+    // reference the same way; only the sentence describing them differs.
+    //
+    // Real new law carries an outline marker at the head of one of its lines,
+    // which is the same signal scopeAdditions() reads to decide how deep an
+    // addition sits. A phrase lifted out of a sentence carries none.
+    const body = text.slice(openAt, end);
+    const phrase = !RE_BLOCK_OUTLINE.test(body) && body.length <= PHRASE_MAX;
+    out.push(phrase ? { start: openAt, end, phrase: true } : { start: openAt, end });
     openTo = end;
   }
   cachedText = text;

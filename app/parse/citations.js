@@ -1318,15 +1318,6 @@ const RE_QUOTED_LINE = /^\s*(?:``|‘‘|["“])/;
 // terms in single quotes (`applicable material') that must not close anything.
 const RE_QUOTE_CLOSE = /''|’’|[”]/;
 
-/** Inline quoted operands on one line, as [start, end) spans. */
-function quotedSpans(line) {
-  const re = new RegExp(`${QO}[\\s\\S]*?${QC}`, 'g');
-  const out = [];
-  let m;
-  while ((m = re.exec(line))) out.push([m.index, m.index + m[0].length]);
-  return out;
-}
-
 /**
  * Compose the addresses an instruction navigates to and refers to.
  *
@@ -1356,6 +1347,39 @@ function extractSteps(text, from, to, basePath) {
   // Spans a navigation phrase has claimed, in absolute offsets, for the whole
   // instruction rather than one line. See the note at pass 1.
   const claimed = [];
+
+  // Inline quoted operands, read over the WHOLE body and kept in absolute
+  // offsets — a quotation is not a per-line fact.
+  //
+  // "by striking ``paragraph (3)''" quotes the words; it does not refer to the
+  // paragraph. That exclusion existed, computed per line against the two-line
+  // overlay — which silently fails whenever the operand OPENS on an earlier
+  // line than the reference inside it:
+  //
+  //     by striking ``for `1992' in
+  //   subparagraph (B)'' and inserting ``for `2016' in subparagraph (A)(ii)''
+  //
+  // Reaching line 2, the probe carries no opener before "subparagraph (B)" —
+  // the opener is a line behind — so the first quote characters it meets are the
+  // CLOSER, every span it computes is shifted by one quotation, and the
+  // reference falls outside all of them. 422 across the corpus, and **every one
+  // of the 422 spans a line break**; not one single-line operand leaks. Each
+  // became a confident Code address for words the bill is merely quoting:
+  // "Section 59(j)(2)(B) is amended by striking ``for `1992' in subparagraph
+  // (B)''" answered with 59(j)(2)(B), when the subparagraph (B) those struck
+  // words name belongs to section 1(f)(3).
+  //
+  // Scanned whole rather than overlaid, for the same reason quotedRefs() scans a
+  // block whole: the pairing question is about the quotation, and a quotation
+  // does not know where the measure fell.
+  const quotedAbs = [];
+  {
+    const re = new RegExp(`${QO}[\\s\\S]*?${QC}`, 'g');
+    const body = text.slice(from, to);
+    let qm;
+    while ((qm = re.exec(body))) quotedAbs.push([from + qm.index, from + qm.index + qm[0].length]);
+  }
+  const inQuotedOperand = (a, b) => quotedAbs.some(([s, e]) => a < e && b > s);
 
   const lines = text.slice(from, to).split('\n');
   for (let li = 0; li < lines.length; li++) {
@@ -1410,6 +1434,7 @@ function extractSteps(text, from, to, basePath) {
     let nm;
     while ((nm = RE_NAV.exec(probe))) {
       if (!onThisLine(nm.index)) continue;
+      if (inQuotedOperand(rel(nm.index), rel(nm.index + nm[0].length))) continue;
       if (!isInstructionPosition(probe.slice(0, nm.index))) continue;
       const phraseStart = nm.index + nm[0].indexOf(nm[1]);
       const resolved = resolvePhrase(unitPairs(nm[1]), current);
@@ -1435,6 +1460,7 @@ function extractSteps(text, from, to, basePath) {
     let mm;
     while ((mm = RE_NAV_MATTER.exec(probe))) {
       if (!onThisLine(mm.index)) continue;
+      if (inQuotedOperand(rel(mm.index), rel(mm.index + mm[0].length))) continue;
       if (!isMatterPosition(probe.slice(0, mm.index))) continue;
       const resolved = resolvePhrase(unitPairs(mm[1]), current);
       if (!resolved || !resolved.addresses.length) continue;
@@ -1462,15 +1488,15 @@ function extractSteps(text, from, to, basePath) {
 
     // Pass 2: bare references anywhere else on the line, except inside an
     // inline quoted operand — "by striking ``paragraph (3)''" quotes the words,
-    // it does not refer to the paragraph.
-    const quoted = quotedSpans(probe);
+    // it does not refer to the paragraph. See `quotedAbs` above for why the
+    // question is asked of the whole body rather than of this line's overlay.
     RE_REF.lastIndex = 0;
     let rm;
     while ((rm = RE_REF.exec(probe))) {
       const s = rm.index;
       if (!onThisLine(s)) continue;
       if (claimed.some(([a, b]) => rel(s) < b && rel(s) + rm[0].length > a)) continue;
-      if (quoted.some(([a, b]) => s < b && s + rm[0].length > a)) continue;
+      if (inQuotedOperand(rel(s), rel(s) + rm[0].length)) continue;
       const resolved = resolvePhrase(unitPairs(rm[1]), current);
       if (!resolved) continue;
       emit(refs, resolved, probe, lineStart, s, rm[1], text);
@@ -1618,6 +1644,15 @@ function quotedRefs(text, ops, target) {
     // Only the two shapes that place a whole provision, because only those have
     // a scope derived from the block's OWN leading marker — which is what says
     // how deep the new law sits and therefore what the levels above it are.
+    //
+    // The operand of a strike or an insert is deliberately NOT one of them, even
+    // though it is quoted statutory language and a cross-reference inside it is
+    // just as real. extractSteps already reaches those through `refs`, and
+    // adding a second path over the same text produced 301 citations sharing a
+    // start with one the first path had already composed — the same address
+    // twice, differing only in which derivation the pane described. Measured
+    // before reverting: 3,258 addresses at 91% reaching a real provision against
+    // 1,957 at 96%, with six times the dead sections. One spelling.
     const isBlock =
       (op.type === 'add-at-end' && !op.rangeEnd) ||
       (op.type === 'insert' && op.placement === 'after-unit');

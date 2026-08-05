@@ -2346,3 +2346,112 @@ LVXXXVI--FEDERAL MARITIME
    `cacheKey` needed `subFromHead`, for the SIXTH time this pattern has cost
    something: the written-out and the composed address agree on title, section
    and subsection and only one of them may be repaired.
+
+43. **Three faults found by spot-checking item 41, two of them mine.** (2026-08-05.
+   Keller asked for spot-checks; the answer was 19 right and 11 wrong out of 30
+   sampled declines, agreed independently by two lenses, and the 11 were not
+   judgement calls.) The lesson is item 41's own: **the population a change
+   creates has to be audited as hard as the population it fixes.** Item 41 was
+   audited on the addresses it *composed* — 44 of 45 right — and not on the
+   answers it *withdrew*, which is where its own regressions were.
+
+   - **A quoted block's own opening marker was invisible.** `outline()` scans
+     from `re.lastIndex = from` with a pattern anchored `(?:^|\n)` and no `m`
+     flag, so past offset 0 only a literal newline can begin a match. That was
+     harmless while every caller passed a section boundary, which is a line
+     start. A quoted block is not: it begins mid-line at its quote opener, and
+     its first marker sits two characters later —
+
+     ```
+     ``(A) In general.--The Secretary shall …
+     ``(B) Exception.--Subparagraph (A) shall not apply …
+     ```
+
+     — so setting `lastIndex` to the block start put the engine PAST the only
+     newline that could match, and (A) could never be found. **185 of H.R. 1892's
+     185 marker-opening blocks**: all of them. This is the commonest reference
+     there is in inserted law, a provision referring back to the one that opens
+     the block it sits in, and item 41 broke every one of them in the same breath
+     as it fixed the outward ones. Worse, `quotedRefs` reads the same outline to
+     ask "is this marker in the block?", so the same blindness composed 127
+     self-references OUT to the Code — the exact failure the standing rule
+     exists to prevent, reintroduced by the fix for it.
+     The scan starts at the newline ITSELF (not the character after it, which
+     cannot match either) and markers beginning before `from` are dropped. That
+     second half is what keeps the bounding honest: the bill's own
+     sub-instruction marker at the head of the same line — "(3) by adding at the
+     end ``(B) …" — stays outside. Checked: 0 blocks leak a marker from before
+     themselves.
+   - **A block over the runaway guard fragmented into its own paragraphs.**
+     `quotedBlocks` skipped a block whose closer is past `MAX_QUOTED` *without
+     advancing the cursor*, so every quoted paragraph inside a 95,000-character
+     rewrite opened a block of its own and a reference was bounded to one
+     paragraph of it — with the answer 40,000 characters away in the same
+     provision, unreachable. The cursor moves past it now and nothing is
+     claimed, so those fall back to the whole bill section, which is what they
+     had before any of this and is honest. A fragment is a boundary this module
+     invented. 424 references.
+   - **A reference inside a quoted OPERAND was still being composed.** Not mine —
+     it predates item 41 — but it is the same sentence Keller reported, seen from
+     the composition side. `extractSteps` excludes references inside inline
+     quoted operands, and computed that exclusion per line against the two-line
+     overlay. It fails whenever the operand OPENS on an earlier line than the
+     reference in it: the probe carries no opener, so the first quote characters
+     it meets are the CLOSER, every span it computes is shifted by one quotation,
+     and the reference falls outside all of them.
+
+     ```
+     Section 59(j)(2)(B) is amended by striking ``for `1992' in
+     subparagraph (B)'' and inserting ``for `2016' in subparagraph (A)(ii)''
+     ```
+
+     "subparagraph (B)" there belongs to section 1(f)(3); the pane answered
+     59(j)(2)(B). **635 across the corpus, and every one of the 635 spans a line
+     break** — not one single-line operand leaked, which is the signature that
+     names the cause. Scanned whole and kept in absolute offsets now, for the
+     same reason `quotedRefs` scans a block whole: the pairing question is about
+     the quotation, and a quotation does not know where the measure fell.
+
+   And one wording fault, small and flatly false: `quotedBlocks` calls a
+   quotation a **phrase** when it carries no line-head marker and is under 400
+   characters, because a bill hard-wraps at 72 columns and the operand of a
+   strike lands at a line head whenever the instruction breaks in front of it.
+   366 of the corpus's quoted-law references sit in one, 62 of them in language
+   being STRUCK — where "This sits inside language the bill is inserting" said
+   the opposite of what the bill does. Both bound a reference the same way; only
+   the sentence differs.
+
+   Corpus: `refs` -751, `relative` -668, `steps` -13, and nothing else. Accounted
+   exactly: -624 refs / -541 relative from the operand fix (635 removed, 2
+   re-composed at a different path, 633 of 635 provably inside a quotation and
+   the other 2 on an amendment with no target at all, so invisible to the
+   reader), and a further -127 of each from self-references correctly staying
+   internal. Composed inserted-law addresses 1,957 -> 1,830, of which **1,753
+   (96%) reach a provision that exists in the Code**, 0 sharing a start and 0
+   failing the round-trip. The redline does not move by a single operation:
+   `tools/coverage.mjs` reports 3,495 of 15,237 before and after.
+
+   **Left deliberately, with the evidence.** The audit named four more, and each
+   is a real gap rather than a bug:
+
+   - **A sibling quoted block of the same bill section.** 6 of the 30 sampled
+     declines point at a provision the same bill creates a few instructions
+     away — SEC. 602(a) adds IRC 403(b)(17) and SEC. 602(b) cites it. Widening
+     to those is right in principle and must be keyed on the amendment's
+     resolved TARGET, never on proximity: TCJA 14401 quotes both 59A(a) and
+     6038A(a), and proximity alone would answer a 6038A reference with 59A(a).
+   - **The decline could name the address it already knows.** Every correct
+     decline has a computable statutory answer — the enclosing instruction's
+     target plus the reference's own marker path — and says "the provision can't
+     be identified from here" instead. What stops it today is the gap rule, which
+     is right to refuse a composed ADDRESS; naming the section and letting the
+     reader open it is a weaker claim than composing, and probably allowed.
+   - **A reference to a level the same instruction is renumbering** cannot be
+     matched against pre-amendment text at all. The redesignate op is parsed
+     (item 39); nothing asks it.
+   - **The counters cannot see any of this.** "1,677 lost" is one number covering
+     honest declines, the block-head bug, the fragmentation and the sibling gap.
+     All three faults above would have been visible on the first run of a counter
+     split four ways, and none of them is visible to selftest, rendertest or the
+     corpus baseline — they are resolution, which the corpus is deliberately
+     blind to. That is the strongest single suggestion the audit produced.

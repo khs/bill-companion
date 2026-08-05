@@ -2359,6 +2359,88 @@ section('references inside quoted inserted law');
        t.slice(blocks[0].start, blocks[0].end));
   }
 
+  // --- a quotation is not always a BLOCK of new law -----------------------
+  //
+  // A bill hard-wraps at 72 columns, so the operand of a strike lands at a line
+  // head whenever the instruction breaks in front of it. Both are quotations
+  // from the statute and both bound a reference the same way, but calling a
+  // struck phrase "language the bill is inserting" says the opposite of what the
+  // bill does. 366 of the corpus's quoted-law references sit in a phrase.
+  {
+    const t = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Section 1 of the Internal Revenue Code of 1986 is amended in\n' +
+      'subsection (a)(3) by striking\n' +
+      `    ${Q('subparagraph (B) or (D)')} and inserting ${Q('subparagraph (A) or (C)')}.\n`
+    );
+    const blocks = quotedBlocks(t);
+    ok('a wrapped strike operand is read as a phrase, not a block',
+       blocks.length >= 1 && blocks[0].phrase === true,
+       JSON.stringify(blocks.slice(0, 2)));
+    const b = extractCitations(t).find((c) => c.kind === 'internal' && /subparagraph \(B\)/.test(c.text));
+    ok('  and a reference in it is still bounded by it', b && b.inserted && b.inserted.phrase === true,
+       JSON.stringify(b && b.inserted));
+    const res = await resolve(b);
+    ok('  with the pane calling it a phrase the bill quotes',
+       /phrase the bill quotes from the statute/.test(res.note), res.note);
+    ok('  and never "language the bill is inserting"',
+       !/language the bill is inserting/.test(res.note), res.note);
+  }
+  {
+    // …and the block form keeps its own wording. Same shape, an outline marker
+    // at the head of a line inside the quotation, which is the whole difference.
+    const t = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Section 9999 of title 7 is amended by adding at the end the following:\n' +
+      QB(['    ', '    '], ['(z) Rules.--As provided in paragraph (44), the term applies.', 'It does.']) + '\n'
+    );
+    const blocks = quotedBlocks(t);
+    ok('a block of new law is not a phrase', blocks.length === 1 && !blocks[0].phrase,
+       JSON.stringify(blocks));
+    const p = extractCitations(t).find((c) => c.kind === 'internal' && /paragraph \(44\)/.test(c.text));
+    const res = await resolve(p);
+    ok('  and the pane says the bill is inserting it',
+       /language the bill is inserting/.test(res.note), res.note);
+  }
+
+  // --- a reference inside a quoted OPERAND is not an address --------------
+  //
+  // "by striking ``paragraph (3)''" quotes the words; it does not refer to the
+  // paragraph. That exclusion was computed per line against a two-line overlay,
+  // which fails whenever the operand OPENS on an earlier line than the reference
+  // inside it — the probe carries no opener, so the first quote characters it
+  // meets are the closer and every span it computes is shifted by one quotation.
+  //
+  // 635 across the corpus, and every one of them spans a line break; not one
+  // single-line operand leaked. Each became a confident Code address for words
+  // the bill is merely quoting.
+  {
+    const t = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Section 59(j)(2)(B) of the Internal Revenue Code of 1986 is amended by\n' +
+      // The operand OPENS here and closes on the next line — the whole point.
+      // Q() would close it on this line and test nothing.
+      `striking ${OPEN}for \`1992' in\n` +
+      `    subparagraph (B)${CLOSE} and inserting ${Q("for `2016' in subparagraph (A)(ii)")}.\n`
+    );
+    const cites = extractCitations(t);
+    const ams = extractAmendments(t, cites);
+    const rel = expandRelativeRefs(cites, ams).filter((c) => c.relative);
+    ok('a reference inside a wrapped quoted operand is not composed',
+       !rel.some((c) => /subparagraph \(B\)/.test(c.text)),
+       rel.map((c) => `${c.text.replace(/\s+/g, ' ')} -> ${c.title}:${c.section}${c.subsection}`).join(' | '));
+    ok('  nor is the one in the replacement operand',
+       !rel.some((c) => /subparagraph \(A\)\(ii\)/.test(c.text)),
+       rel.map((c) => c.text.replace(/\s+/g, ' ')).join(' | '));
+    // …and the instruction is still read: the target and the strike survive.
+    const am = ams.find((a) => a.target && a.target.section === '59');
+    ok('  while the instruction itself is still parsed', Boolean(am),
+       ams.map((a) => a.target && a.target.section).join(','));
+    ok('  with its strike operand intact',
+       am && (am.ops || []).some((o) => o.type === 'strike' && /1992/.test(o.text || '')),
+       JSON.stringify(am && (am.ops || []).map((o) => [o.type, (o.text || '').slice(0, 20)])));
+  }
+
   // --- the boundary is what stops a wrong answer --------------------------
   //
   // The shape from the Tax Cuts and Jobs Act, reduced. The bill's own SEC. 2(d)
@@ -2434,6 +2516,50 @@ section('references inside quoted inserted law');
        JSON.stringify(at && t.slice(at.start, at.start + 20)));
     const rel = expandRelativeRefs(cites, extractAmendments(t, cites)).filter((c) => c.insertedLaw);
     eq('  and is not composed into a Code address', rel.length, 0);
+  }
+
+  // --- a block's OWN opening marker is inside it ---------------------------
+  //
+  // The commonest reference there is in inserted law: a provision referring back
+  // to the one that opens the block it sits in. A block begins mid-line, at its
+  // quote opener, and its first marker is two characters later — while the
+  // line-head pattern is anchored `(?:^|\n)` with no `m` flag, so starting the
+  // scan AT the block start put the engine past the only newline that could
+  // begin a match. Every marker-opening block in H.R. 1892 — 185 of 185 — had
+  // its own first marker invisible, so these references declined, and the
+  // composition pass read the same self-reference as pointing OUT to the Code.
+  {
+    const t = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Section 1395x of title 42 is amended by adding at the end the following:\n' +
+      QB(['    ', '    '],
+         ['(A) In general.--The Secretary shall act.',
+          '(B) Exception.--Subparagraph (A) shall not apply to a hospital.']) + '\n'
+    );
+    const b = parseBill(t);
+    const cites = extractCitations(t);
+    const a = cites.find((c) => c.kind === 'internal' && /Subparagraph \(A\)/i.test(c.text));
+    const at = a && locateInternal(b, a);
+    ok('a reference to the marker that OPENS the block resolves', Boolean(at),
+       JSON.stringify(a && a.text));
+    ok('  landing on that opening marker', at && /^\(A\) In general/.test(t.slice(at.start, at.start + 16)),
+       JSON.stringify(at && t.slice(at.start, at.start + 24)));
+    const rel = expandRelativeRefs(cites, extractAmendments(t, cites)).filter((c) => c.insertedLaw);
+    eq('  and it is NOT composed out to the Code', rel.length, 0);
+  }
+  {
+    // …and the boundary still holds: the bill's own sub-instruction marker at
+    // the head of the line the block opens on stays outside it.
+    const t = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Section 1395x of title 42 is amended--\n' +
+      `        (3) by adding at the end ${OPEN}(B) Exception.--Subparagraph (A)\n` +
+      `    shall not apply.${CLOSE}.\n`
+    );
+    const b = parseBill(t);
+    const a = extractCitations(t).find((c) => c.kind === 'internal' && /Subparagraph \(A\)/i.test(c.text));
+    eq('the bill\'s own marker on the opening line stays outside the block',
+       locateInternal(b, a), null);
   }
 
   // --- the shape the standing rule exists to refuse ------------------------

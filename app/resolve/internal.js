@@ -89,11 +89,36 @@ export function outline(text, from, to) {
   // scope to search and still cannot find the thing in it.
   const re = new RegExp(`${LINE_HEAD}((?:\\([A-Za-z0-9]{1,8}\\))+)(?=[ \\t\\n]|$)`, 'g');
   const out = [];
-  re.lastIndex = from;
+  // Start at the head of the line `from` sits on, not at `from` itself.
+  //
+  // LINE_HEAD is anchored `(?:^|\n)` with no `m` flag, so past offset 0 only a
+  // literal newline can begin a match — and setting lastIndex to `from` puts the
+  // engine PAST the newline that introduces `from`'s own line. That was harmless
+  // while every caller passed a section boundary, which is a line start. It stops
+  // being harmless the moment a caller passes a quoted block, because a block
+  // begins mid-line at its quote opener and its own first marker sits two
+  // characters later:
+  //
+  //     ``(A) In general.--The Secretary shall …
+  //     ``(B) Exception.--Subparagraph (A) shall not apply …
+  //
+  // (A) was unreachable, so "subparagraph (A)" — the commonest reference there
+  // is in inserted law, a provision referring to the one that opens the block it
+  // sits in — found nothing and declined. 185 of hr1892's 185 marker-opening
+  // blocks were affected: all of them.
+  //
+  // Markers that begin before `from` are then dropped, which is what keeps the
+  // bounding honest: the bill's own sub-instruction marker at the head of that
+  // same line ("(3) in paragraph (2), by striking ``(A) …") is outside the block
+  // and must stay outside it.
+  // The newline ITSELF, not the character after it: the pattern has to consume
+  // it to match at all. -1 (no newline above) becomes 0, where `^` does the job.
+  re.lastIndex = Math.max(0, text.lastIndexOf('\n', from));
   let m;
   while ((m = re.exec(text)) && m.index < to) {
     const at = m.index + m[0].lastIndexOf(m[1]);
     const end = at + m[1].length;
+    if (end <= from) { re.lastIndex = Math.max(re.lastIndex, end); continue; }
     // The wrap test asks about the line head, so it is the run's first marker
     // that answers it — the rest are not at a line head at all and cannot be
     // there because a reference broke across the measure.
@@ -103,7 +128,9 @@ export function outline(text, from, to) {
     }
     let off = at;
     for (const marker of m[1].match(/\([A-Za-z0-9]{1,8}\)/g) || []) {
-      out.push({ at: off, marker, depth: markerDepth(marker) });
+      // A run may straddle the boundary — "(3) in paragraph (2)" is the bill's,
+      // but a quoted "``(l)(1)" opening a block is the block's own pair.
+      if (off >= from) out.push({ at: off, marker, depth: markerDepth(marker) });
       off += marker.length;
     }
     // Overlapping line starts are impossible, but a zero-width step is not.
