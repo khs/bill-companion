@@ -3039,3 +3039,79 @@ LVXXXVI--FEDERAL MARITIME
    **Check reScope before calling a deeper scope a loss** — it shortens from the
    inside out first, which is why the 6 op scopes that "only existed at the old
    level" under item 52 were not lost either.
+
+55. **The Oxford comma, and the two guards that make extending a list safe.**
+   (2026-08-06, the second half of item 53, built after the first half's warning
+   turned out to name the guard exactly.) `MARKER_LIST`'s separator was a comma OR
+   the word, never both, so ", and (3)" stopped a list dead — and took the rest of
+   the address with it:
+
+   ```
+   ``…the aggregate amount of taxes taken into account under paragraphs (1),
+      (2), and (3) of subsection (a) …''
+     read as a bare "paragraphs (1), (2)" — the third member AND the
+     "of subsection (a)" that says whose paragraphs these are, both lost
+   ```
+
+   Item 41 documents this for ", or (o)" and treats it as one shape; it is
+   general. **465 references gained, 71 withdrawn, +398 net.**
+
+   The accounting for the 71 is the interesting half, because none of it is a
+   loss: **30 are stolen sub-instruction markers** (below) and **41 are references
+   that now carry their true parent** — `paragraphs (1), (2), and (3) of
+   subsection (d)` used to yield a bare `(1)`, `(2)`, or worse a `(i)(1)` composed
+   against whatever the running path happened to be, and now yields `(d)(1)`,
+   `(d)(2)`, `(d)(3)`. The old chip is gone because a better one replaced it.
+
+   **Extending a list is not free, and the cost is that the thing after ", and"
+   may be the next SUB-INSTRUCTION.** Two guards, and neither alone is enough:
+
+   - **`sameStyle()` — siblings share a numbering style**, because they sit at the
+     same level of the same parent. `subparagraph (B), and (2) in the flush
+     sentence at the end` mixes an uppercase letter with a digit and cannot be a
+     list. The classes INTERSECT rather than being compared against the first, so
+     the ambiguous markers do not over-constrain: "clauses (i) and (ii)" keeps
+     both, (i) contributing {letter, roman} and (ii) narrowing to {roman}.
+     **A doubled letter is the SAME style as a single one** — an alphabet that runs
+     past (z) continues (aa), (bb) — so 42 U.S.C. 1396d really does say
+     "subsection (y), (z), (aa), or (ii) of section 1905", four subsections, and
+     separating them truncated that list at (z). Found in the withdrawal audit,
+     not in the addition audit.
+   - **`stealsMarker()` — a list member is followed by more list.** The style
+     guard cannot see a theft where both markers are uppercase letters:
+
+     ```
+         (A) by striking subparagraph (B), and
+         (B) by redesignating subparagraph (C) as subparagraph (B); and
+     ```
+
+     and no character class can either, because `extractSteps` matches against the
+     **two-line overlay probe** (item 24), which replaces the newline with a
+     single space — so the next line's marker is genuinely adjacent by the time
+     any pattern sees it. This is item 24's own warning ("the join must not steal
+     a real outline marker") failing in the one direction it was checked and found
+     safe in.
+     `isWrappedMarkerLine` is the wrong test here and it is worth knowing why: it
+     asks whether the line above ends a thought, and a line ending in "and" ends a
+     thought AND continues a list, so it calls both shapes real markers. The
+     question that separates them is what FOLLOWS. A member is followed by more
+     list or by the phrase's own tail — `(iv) as clauses (i), (ii), and (iii)`,
+     `(19), and exempt from tax`, `(13); and`, `(p).` — and a sub-instruction by
+     what it instructs: `(B) by inserting`, `(C) in paragraph (3)`, `(3) in the
+     case of a partnership`. 16 of 495 new members across the corpus, every one a
+     theft, with every genuine wrapped member kept.
+
+   **Only a list MEMBER is eligible.** Applying the guard to the phrase's own
+   subject withdrew 181 perfectly good references in one go — the subject is
+   regularly a wrapped single reference ("the credit determined under
+   subsection\n(a) (after the application of…)"), which sits at a line head and is
+   followed by no list at all, and is exactly what the overlay probe exists to
+   read. Caught by diffing before believing the total.
+
+   Corpus: `refs +398`, `relative +336`, `steps +11` across 21 bills, and nothing
+   else — no citations, amendments, targeted, opSpans, diffSpans, overlaps or
+   badOffsets. `refs` and `relative` move by different amounts on purpose: 83 of
+   the new references sit on an amendment with no resolved target, so they never
+   become relative citations. Redline barely moves and moves the right way: drawn
+   1,946 → 1,947, additions drawn 1,760 → 1,761, provision not on screen 519 →
+   518, `no such level at all` unchanged at 262.

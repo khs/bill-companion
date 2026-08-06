@@ -2863,6 +2863,62 @@ section('references inside quoted inserted law');
     eq('"thereof" still names the provision just mentioned', rel.length, 0);
   }
 
+  // --- the Oxford comma, and the two guards extending a list needs -----------
+  //
+  // MARKER_LIST's separator was a comma OR the word, never both, so ", and (3)"
+  // stopped a list dead and took the "of subsection (a)" after it — both the
+  // third member and the half of the address that says whose paragraphs these
+  // are. 464 references across the corpus.
+  const blk = (l1, l2) => normalizeText(
+    'SEC. 2. X.\n' +
+    '    Section 1396d of the Social Security Act (42 U.S.C. 1396d) is amended by\n' +
+    'adding at the end the following:\n' +
+    `    ${'``'}(kk) Rules.--${l1}\n    ${l2}''.\n`
+  );
+  const paths = (t) => {
+    const cites = extractCitations(t);
+    const ams = extractAmendments(t, cites);
+    return ams.flatMap((a) => [...(a.steps || []), ...(a.refs || [])]).map((s) => s.path);
+  };
+  eq('a list closed with an Oxford comma keeps its last member and its parent',
+     JSON.stringify(paths(blk('An amount described in paragraphs (1), (2), and (3) of',
+                              'subsection (a) shall apply.'))),
+     JSON.stringify(['(a)(1)', '(a)(2)', '(a)(3)']));
+
+  // Guard 1: siblings share a numbering style, so an uppercase letter cannot
+  // follow two digits in one list. This is what catches the mixed-style thefts
+  // the wider separator lets in — "subparagraph (B), and (2) in the flush
+  // sentence at the end".
+  eq('  a member drawn from another numbering style is dropped',
+     JSON.stringify(paths(blk('An amount described in paragraphs (1), (2), and (B) of',
+                              'subsection (a) shall apply.'))),
+     JSON.stringify(['(a)(1)', '(a)(2)']));
+
+  // …but a DOUBLED letter is the same style as a single one: an alphabet that
+  // runs past (z) continues (aa), (bb). 42 U.S.C. 1396d really does have
+  // "subsection (y), (z), (aa), or (ii) of section 1905", and separating the two
+  // truncated that list at (z).
+  eq('  a doubled letter is a sibling of a single one, not a style break',
+     JSON.stringify(paths(blk('An amount increased under subsections (y), (z), (aa),',
+                              'and (ii) shall apply.'))),
+     JSON.stringify(['(y)', '(z)', '(aa)', '(ii)']));
+
+  // Guard 2: the thing after ", and" may be the next SUB-INSTRUCTION rather than
+  // the next member, and the two-line overlay probe presents it as adjacent, so
+  // no character class can see it. Both markers here are uppercase letters, so
+  // the style guard cannot either — what separates them is that a list member is
+  // followed by more list and a sub-instruction by what it instructs.
+  {
+    const t = normalizeText(
+      'Section 1234 of title 42, United States Code, is amended--\n' +
+      "        (A) by striking subparagraph (B), and\n" +
+      '        (C) by redesignating subparagraph (D) as subparagraph (E).\n'
+    );
+    const got = paths(t);
+    eq('  a sub-instruction marker after ", and" is not absorbed as a member',
+       JSON.stringify(got), JSON.stringify(['(B)', '(D)', '(E)']));
+  }
+
   // --- against the real bill ----------------------------------------------
   if (existsSync(samplePath)) {
     const real = normalizeText(readFileSync(samplePath, 'utf8'));

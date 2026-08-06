@@ -1201,7 +1201,21 @@ const MARKER = '\\([A-Za-z0-9]{1,8}\\)';
 // The group is load-bearing: `${MARKER}+` would apply the + to the trailing
 // escaped paren, matching "(a)))" rather than "(a)(2)(C)".
 const MARKER_PATH = `(?:${MARKER})+`;
-const MARKER_LIST = `${MARKER_PATH}(?:\\s*(?:,\\s*|\\band\\b|\\bor\\b|\\bthrough\\b|\\bto\\b)\\s*${MARKER_PATH})*`;
+// The separator between members of a list. The Oxford comma needs its own
+// alternative, tried first: the rest of this is a comma OR the word, never both,
+// so ", and (3)" stopped a list dead — the comma matched and then "and" is not a
+// marker, and "and" could not match because the comma was in the way. "paragraphs
+// (1), (2), and (3) of subsection (a)" was therefore read as a bare "paragraphs
+// (1), (2)" with BOTH the third member and the "of subsection (a)" that says
+// whose paragraphs these are sitting just past the end of the match. Item 41
+// documents this for ", or (o)" without noticing it is general; worth 464
+// references across the corpus.
+//
+// Extending a list is not free, and the cost is that the thing after ", and" may
+// be the next SUB-INSTRUCTION rather than the next member — see sameStyle() and
+// stealsMarker() for the two tests that separate them.
+const LIST_SEP = '(?:,\\s*(?:and|or)\\s+|,\\s*|\\band\\b|\\bor\\b|\\bthrough\\b|\\bto\\b)';
+const MARKER_LIST = `${MARKER_PATH}(?:\\s*${LIST_SEP}\\s*${MARKER_PATH})*`;
 const UNIT_PHRASE = `${UNIT_WORDS}\\s+${MARKER_LIST}(?:\\s+of\\s+${UNIT_WORDS}\\s+${MARKER_LIST})*`;
 
 const RE_NAV = new RegExp(`\\bin\\s+(${UNIT_PHRASE})`, 'gi');
@@ -1225,7 +1239,7 @@ const RE_NAV_MATTER = new RegExp(
 );
 const RE_REF = new RegExp(`\\b(${UNIT_PHRASE})`, 'gi');
 const RE_PAIR = new RegExp(`(${UNIT_WORDS})\\s+(${MARKER_LIST})`, 'gi');
-const RE_LIST_SEP = /\s*(?:,\s*|\band\b|\bor\b|\bthrough\b|\bto\b)\s*/;
+const RE_LIST_SEP = new RegExp(`\\s*${LIST_SEP}\\s*`);
 
 /**
  * Is this reference an *instruction* to descend, or just a mention?
@@ -1331,6 +1345,63 @@ function pathLevels(path) {
  * @param {number} to        end of the body
  * @param {string} basePath  the target's own subsection path, e.g. "(a)"
  */
+/**
+ * The numbering styles a marker could be drawn from. Several, where the marker
+ * cannot tell: "(i)" is both the ninth lowercase letter and roman one, and "(V)"
+ * is both a letter and roman five.
+ *
+ * A doubled letter is the SAME style as a single one, not a different one: an
+ * alphabet that runs past (z) continues (aa), (bb) …, so 42 U.S.C. 1396d really
+ * does have "subsection (y), (z), (aa), or (ii) of section 1905" — four
+ * subsections, the last two of them doubled. Separating them truncated that list
+ * at (z) and lost two real provisions.
+ */
+function markerClasses(marker) {
+  const t = String(marker).replace(/[()]/g, '');
+  const out = new Set();
+  if (/^\d+$/.test(t)) out.add('digit');
+  if (/^[a-z]+$/.test(t)) out.add('lalpha');
+  if (/^[A-Z]+$/.test(t)) out.add('ualpha');
+  if (/^[ivxlcdm]+$/.test(t)) out.add('lroman');
+  if (/^[IVXLCDM]+$/.test(t)) out.add('uroman');
+  return out;
+}
+
+/**
+ * Truncate a list at the first member drawn from a different numbering style.
+ *
+ * A list names siblings, and siblings share a style because they sit at the same
+ * level of the same parent. So "subparagraph (B), and (ii) by adding at the end"
+ * is not a list of two: the Oxford-comma separator reached across the line break
+ * onto the next sub-instruction's own marker, and an uppercase letter and a roman
+ * numeral cannot be siblings.
+ *
+ * The classes INTERSECT rather than being compared to the first, because the
+ * ambiguous markers must not over-constrain: "clauses (i) and (ii)" keeps both,
+ * (i) contributing {letter, roman} and (ii) narrowing it to {roman}, while
+ * "subsections (d), (e), (h), and (i), and (ii)" narrows to {letter} on the first
+ * three and so drops the (ii) that follows.
+ *
+ * Never empty: a single member is a list of one, whatever its style.
+ */
+function sameStyle(items) {
+  let acc = null;
+  const out = [];
+  for (const item of items) {
+    const first = (String(item).match(MARKER_RE) || [])[0];
+    if (!first) break;
+    const cls = markerClasses(first);
+    // A marker no style claims — "(a1)", "(iii)(A)" scanned oddly — is not
+    // evidence either way, so it neither narrows nor breaks the run.
+    if (!cls.size) { out.push(item); continue; }
+    const next = acc == null ? cls : new Set([...acc].filter((c) => cls.has(c)));
+    if (acc != null && !next.size) break;
+    acc = next;
+    out.push(item);
+  }
+  return out.length ? out : items.slice(0, 1);
+}
+
 /** Split a unit phrase into its (unit, markers) pairs, in text order. */
 function unitPairs(phrase) {
   const pairs = [];
@@ -1340,7 +1411,7 @@ function unitPairs(phrase) {
     const unit = m[1].toLowerCase().replace(/s$/, '');
     const depth = UNIT_DEPTH[unit];
     if (depth === undefined) continue;
-    const items = m[2].split(RE_LIST_SEP).map((s) => s.trim()).filter(Boolean);
+    const items = sameStyle(m[2].split(RE_LIST_SEP).map((s) => s.trim()).filter(Boolean));
     pairs.push({
       unit,
       depth,
@@ -1615,6 +1686,39 @@ function extractSteps(text, from, to, basePath) {
   return { steps, refs };
 }
 
+// A list that reaches across a line break may be reaching onto the next
+// SUB-INSTRUCTION's own marker rather than onto its next member:
+//
+//     (A) by striking subparagraph (B), and
+//     (B) by redesignating subparagraph (C) as subparagraph (B); and
+//
+// which the two-line overlay probe (see extractSteps) presents as one line, so no
+// character-class change can see it — this is item 24's own warning ("the join
+// must not steal a real outline marker") failing in the one direction it was
+// checked and found safe in. sameStyle() catches the mixed-style thefts and
+// cannot see this one, where both markers are uppercase letters.
+//
+// The test is positive and about what FOLLOWS, because that is the only thing
+// that differs: a list member is followed by more list, or by the phrase's own
+// tail ("(iv) as clauses (i), (ii), and (iii)", "(19), and exempt from tax",
+// "(13); and", "(p)."), while a sub-instruction is followed by what it instructs
+// ("(B) by inserting", "(C) in paragraph (3)", "(3) in the case of a
+// partnership"). Only asked of a marker at a line head: inside a line there is no
+// outline marker to steal. 16 of 495 across the corpus, every one a theft, with
+// every genuine wrapped member kept.
+const RE_LIST_CONTINUES = new RegExp(
+  `^[ \\t]*(?:[,;.]|\\)|\\band\\b|\\bor\\b|\\bthrough\\b|\\bto\\b|\\bof\\b|\\bas\\b|\\brespectively\\b|${MARKER})`,
+  'i'
+);
+const RE_AT_LINE_HEAD = /^[ \t]*(?:``|‘‘|["“])?[ \t]*$/;
+
+function stealsMarker(text, at, end) {
+  const nl = String(text).lastIndexOf('\n', at - 1);
+  if (nl < 0) return false;
+  if (!RE_AT_LINE_HEAD.test(text.slice(nl + 1, at))) return false;
+  return !RE_LIST_CONTINUES.test(text.slice(end, end + 40));
+}
+
 /**
  * Turn a resolved phrase into one entry per address, with exact offsets.
  *
@@ -1635,6 +1739,11 @@ function emit(out, resolved, line, lineStart, phraseStart, phrase, source) {
     // list are just their own marker, so the chips never overlap.
     const start = i === 0 ? phraseStart : phraseStart + idx;
     const end = phraseStart + idx + addr.item.length;
+    // Only a list MEMBER can be stolen. The phrase's own subject is regularly a
+    // wrapped single reference — "the credit determined under subsection\n(a)
+    // (after the application of…)" — which sits at a line head and is followed by
+    // no list at all, and is exactly what the overlay probe exists to read.
+    if (i > 0 && stealsMarker(source || line, lineStart + phraseStart + idx, lineStart + end)) return;
     out.push({
       start: lineStart + start,
       end: lineStart + end,
@@ -1836,6 +1945,7 @@ function blockRefs(text, blockStart, blockEnd, blockText, walked, out) {
       // their own marker, exactly as emit() spans them.
       const start = i === 0 ? phraseStart : phraseStart + idx;
       const end = phraseStart + idx + addr.item.length;
+      if (i > 0 && stealsMarker(text, phraseStart + idx, end)) return;
       out.push({
         start,
         end,
