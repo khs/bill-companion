@@ -2455,3 +2455,57 @@ LVXXXVI--FEDERAL MARITIME
      split four ways, and none of them is visible to selftest, rendertest or the
      corpus baseline — they are resolution, which the corpus is deliberately
      blind to. That is the strongest single suggestion the audit produced.
+
+44. **The counter that would have caught item 43 exists now, and it names the
+   next piece of work.** (2026-08-05.) Item 43's own strongest finding was that
+   "1,677 lost" was one number covering four different things, which is how three
+   separate faults shipped inside one change. `tools/impact.mjs` prints the split:
+
+   ```
+   internal refs by fate  composed 27 · in bill 24 · in its own block 28 ·
+                          points out of the block 1 · declined 2 · unresolved 2
+   ```
+
+   Corpus-wide, over **40,955** bare internal cross-references:
+
+   ```
+     composed    11,530   superseded by a real Code address — the best outcome
+     inBill      14,470   not in quoted law, found in the bill
+     inBlock     10,280   in quoted law, found inside that block
+     headAbove      628   in quoted law, NOT found, and the reference names a
+                          level SHALLOWER than the block's own root marker
+     declined     1,737   in quoted law, not found, nothing more to say
+     unresolved   2,310   not in quoted law, not found
+   ```
+
+   36,280 of 40,955 (89%) get an answer. `headAbove` is the interesting column
+   and the reason it exists: those references **provably** point out of the block
+   they sit in — the block cannot contain a level above its own root — so unlike
+   `declined` they are not a judgement call. Classified:
+
+   ```
+     447  no op delimits the block at all
+      82  the block IS eligible and the target IS a Code section
+      40  the op is an insert that is not after-unit
+      59  the amendment's target is a Public Law, an Act, or absent
+   ```
+
+   The 447 are **one shape**, and it is TODO 12's open item seen from the citation
+   side: `Section 1(f)(2)(A) is amended to read as follows: ``(A) except as
+   provided in paragraph (8) …''`. A whole-provision replacement emits no op that
+   carries the block, so `quotedRefs()` never sees it — while the block's address
+   is the one thing this shape states with certainty, because the block IS the
+   provision the target names. Base path = the target's own path with its last
+   marker dropped, no depth inference needed. That is the next piece of work here
+   and it is bigger than it looks: capturing these as ops moves the redline too.
+
+   Of the 82, a sample of four was read by hand and three were **correct**
+   refusals the classifier is too coarse to see — "subsection (a) or (d) of
+   section 437 of the Higher Education Act" continues into its own address, and
+   "subparagraph (C) thereof" names the provision just mentioned. Do not treat
+   that column as 82 bugs; refine the classifier before believing it.
+
+   `refDepth()` is exported from `app/resolve/internal.js` rather than
+   reimplemented in the report, for the reason `measure.mjs` exists: a metric that
+   means something slightly different from the code it measures is worse than no
+   metric.

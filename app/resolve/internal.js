@@ -58,6 +58,21 @@ function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * How deep does this reference sit, by its own words?
+ *
+ * The unit word states the depth outright, which is what makes a bare "(ii)"
+ * locatable at all; the marker's style is the fallback for a reference that
+ * names no unit. Exported so a report can classify a decline the same way
+ * locateInternal decides where to look — a metric that means something slightly
+ * different from the code it measures is worse than no metric.
+ */
+export function refDepth(cite) {
+  const marks = markersOf(cite && cite.subsection);
+  if (!marks.length) return null;
+  return UNIT_DEPTH[cite.refType] ?? markerDepth(marks[0]);
+}
+
 // A marker at the head of a line. The quote openers are load-bearing: inserted
 // statutory text is quoted, so its outline markers sit behind one —
 // ``(C) The term …'' — and a pattern anchored on whitespace alone finds none of
@@ -264,7 +279,7 @@ export function locateInternal(bill, cite) {
   // such provision exists anywhere.
   const bounds = cite.inserted || { start: sec.start, end: sec.end };
 
-  const depth = UNIT_DEPTH[cite.refType] ?? markerDepth(marks[0]);
+  const depth = refDepth(cite);
   const scope = parentSpan(text, bounds.start, bounds.end, cite.start, depth);
   let hits = walk(text, scope.start, scope.end, marks).filter((i) => i < cite.start || i > cite.end);
   let scoped = true;

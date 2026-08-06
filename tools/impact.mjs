@@ -43,6 +43,47 @@ const { extractCitations, extractAmendments, expandRelativeRefs } =
 const { parseBill, normalizeText } = await imp('app/parse/bill.js');
 const { resolveUsc } = await imp('app/resolve/usc.js');
 const { resolveActSection } = await imp('app/resolve/act-sections.js');
+const { locateInternal, markerDepth, refDepth } = await imp('app/resolve/internal.js');
+
+/**
+ * Where every internal cross-reference ends up, split by WHY.
+ *
+ * "1,677 lost" was one number covering four different things, and that is how
+ * three separate faults shipped inside one change: honest declines, a block whose
+ * own opening marker was unreachable, a long block fragmenting into its own
+ * paragraphs, and a referent quoted in a sibling block. Each would have stood out
+ * immediately here. None of them is visible to selftest, rendertest or the corpus
+ * baseline — the corpus is deliberately parse-only, and all of this is resolution.
+ *
+ *   composed    superseded by a real Code address (the best outcome)
+ *   inBill      not in quoted law, and found in the bill
+ *   inBlock     in quoted law, and found inside that block
+ *   headAbove   in quoted law, not found, and the reference names a level
+ *               SHALLOWER than the block's own root marker — so the block cannot
+ *               contain it and we know it points out to the statute. These are
+ *               the ones a composition pass ought to reach and does not.
+ *   declined    in quoted law, not found, nothing more to say
+ *   unresolved  not in quoted law, and not found
+ */
+function internalSplit(bill, text, cites, expanded) {
+  const n = { composed: 0, inBill: 0, inBlock: 0, headAbove: 0, declined: 0, unresolved: 0 };
+  const bare = (c) => c.kind === 'internal' && c.scope !== 'act' && c.refType !== 'section';
+  const kept = new Set(expanded.filter(bare).map((c) => c.id));
+  for (const c of cites.filter(bare)) {
+    if (!kept.has(c.id)) { n.composed++; continue; }
+    const at = locateInternal(bill, c);
+    if (!c.inserted) { if (at) n.inBill++; else n.unresolved++; continue; }
+    if (at && at.start >= c.inserted.start && at.start < c.inserted.end) { n.inBlock++; continue; }
+    // The block's own root marker states how deep the new law sits.
+    const lead = text
+      .slice(c.inserted.start, c.inserted.start + 40)
+      .match(/^(?:``|‘‘|["“])?\s*(\([A-Za-z0-9]{1,8}\))/);
+    const d = refDepth(c);
+    if (lead && d != null && d < markerDepth(lead[1])) n.headAbove++;
+    else n.declined++;
+  }
+  return n;
+}
 
 async function textOf(path) {
   if (!path.toLowerCase().endsWith('.pdf')) return readFileSync(path, 'utf8');
@@ -127,6 +168,13 @@ export async function report(path) {
   console.log(`  in-place refs       ${refs}`);
   console.log(`  relative addresses  ${relative_.length}  ${dim('composed from context')}`);
   console.log(`  inert refs          ${inertAfter}  ${dim(`of ${inertBefore} internal refs; ${inertBefore - inertAfter} resolved`)}`);
+  const split = internalSplit(bill, text, cites, expanded);
+  console.log(
+    `  internal refs by fate  ${dim(
+      `composed ${split.composed} · in bill ${split.inBill} · in its own block ${split.inBlock} · ` +
+        `points out of the block ${split.headAbove} · declined ${split.declined} · unresolved ${split.unresolved}`
+    )}`
+  );
   console.log(`  USC lookups         ${hit} hit, ${missSection} missing section, ${missSubsection} missing subsection  ${dim(`(${seen.size} distinct)`)}`);
   if (plRel.length) {
     console.log(`  Pub. L. section     ${plHit}/${plRel.length} mapped to the Code  ${dim(`(${plSeen.size} distinct provisions)`)}`);
@@ -145,7 +193,7 @@ export async function report(path) {
     amendments: ams.length, targeted: ams.filter((a) => a.target).length,
     steps, refs, relative: relative_.length, inertBefore, inertAfter,
     uscHit: hit, uscMissSection: missSection, uscMissSubsection: missSubsection,
-    badOffsets: badOffsets.length,
+    badOffsets: badOffsets.length, internal: split,
   };
 }
 
