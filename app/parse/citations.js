@@ -659,8 +659,8 @@ function scopeAdditions(ops) {
     const lead = op.text.match(/^\s*(\([A-Za-z0-9]{1,8}\))/);
     if (!lead) continue;
     const depth = markerDepth(lead[1]);
-    const kept = (op.scope.match(MARKER_RE) || []).filter((mk) => markerDepth(mk) < depth);
-    op.scope = kept.join('');
+    const kept = pathLevels(op.scope).filter((l) => l.depth < depth);
+    op.scope = kept.map((l) => l.marker).join('');
   }
 }
 
@@ -707,8 +707,8 @@ function scopeUnitInserts(ops) {
     const anchorPath = chain.filter((mk) => markerDepth(mk) <= addedDepth);
     if (!anchorPath.length) continue;
     const depth = markerDepth(anchorPath[0]);
-    const kept = ((op.scope || '').match(MARKER_RE) || []).filter((mk) => markerDepth(mk) < depth);
-    op.scope = kept.join('') + anchorPath.join('');
+    const kept = pathLevels(op.scope).filter((l) => l.depth < depth);
+    op.scope = kept.map((l) => l.marker).join('') + anchorPath.join('');
     // Routed to the structural placer in redline.js rather than to apply(),
     // which weaves text into one passage and cannot see where a subtree ends.
     op.placement = 'after-unit';
@@ -1257,6 +1257,34 @@ const UNIT_DEPTH = {
 
 const MARKER_RE = /\([A-Za-z0-9]{1,8}\)/g;
 
+// (i), (v) and (x) are a letter and a roman numeral at once, and markerDepth()
+// reads them as roman — the commoner case at the depths a bare cross-reference
+// appears. Inside a PATH the question is already answered: a path is contiguous
+// from the top, so its Nth marker is at depth N whatever it looks like.
+const RE_AMBIG_MARKER = /^\((?:i|v|x|I|V|X)\)$/;
+
+/**
+ * The levels of a path string, taking an ambiguous marker's depth from its
+ * POSITION rather than its style.
+ *
+ * "Subsection (i) of section 7448 is amended … by adding at the end ``(2) …''"
+ * gives a path of "(i)", which markerDepth() calls a clause. So the filter that
+ * keeps the levels ABOVE the added paragraph — depth < 1 — threw the subsection
+ * away, `scope` became empty, and the new paragraph was drawn at the end of the
+ * whole section instead of inside subsection (i). 20 additions across the corpus
+ * had their scope emptied this way and 12 more truncated.
+ *
+ * Narrow on purpose: only the six markers whose style genuinely cannot be read.
+ * Everything else keeps its style depth, which is what handles the paths where
+ * the Code has flattened a level away and position would be wrong.
+ */
+function pathLevels(path) {
+  return (String(path || '').match(MARKER_RE) || []).map((marker, i) => ({
+    marker,
+    depth: RE_AMBIG_MARKER.test(marker) ? i : markerDepth(marker),
+  }));
+}
+
 /**
  * Walk an amendment body and compose each navigation step into a full path.
  *
@@ -1701,9 +1729,7 @@ function blockRefs(text, blockStart, blockEnd, blockText, walked, out) {
   const lead = blockText.match(/^\s*(?:``|‘‘|["“])?\s*(\([A-Za-z0-9]{1,8}\))/);
   if (!lead) return;
   const blockDepth = markerDepth(lead[1]);
-  const base = ((walked || '').match(MARKER_RE) || [])
-    .map((mk) => ({ marker: mk, depth: markerDepth(mk) }))
-    .filter((l) => l.depth < blockDepth);
+  const base = pathLevels(walked).filter((l) => l.depth < blockDepth);
   const marks = outline(text, blockStart, blockEnd);
   const body = text.slice(blockStart, blockEnd);
 
@@ -1711,8 +1737,15 @@ function blockRefs(text, blockStart, blockEnd, blockText, walked, out) {
   let rm;
   while ((rm = RE_REF.exec(body))) {
     if (refContinues(body.slice(rm.index + rm[0].length, rm.index + rm[0].length + 80))) continue;
-    const resolved = resolvePhrase(unitPairs(rm[1]), base);
+    const pairs = unitPairs(rm[1]);
+    const resolved = resolvePhrase(pairs, base);
     if (!resolved) continue;
+    // Did the phrase name its own ancestors? "subparagraph (B) or (C) of
+    // subsection (c)(3)" is a complete address, not something read relative to
+    // the block, so the self-reference test below must not fire on it: the block
+    // adding 26 U.S.C. 25C(h) happens to contain a (B) and a (C) of its own, and
+    // comparing bare markers refused an address the phrase had spelled out.
+    const ownAncestors = pairs.length > 1;
     const phraseStart = blockStart + rm.index + rm[0].indexOf(rm[1]);
     let cursor = 0;
     resolved.addresses.forEach((addr, i) => {
@@ -1723,7 +1756,7 @@ function blockRefs(text, blockStart, blockEnd, blockText, walked, out) {
       // itself, and locateInternal finds it a few lines away.
       const first = (addr.item.match(MARKER_RE) || [])[0];
       const d = resolved.subject.depth;
-      if (marks.some((mk) => mk.marker === first && mk.depth === d)) return;
+      if (!ownAncestors && marks.some((mk) => mk.marker === first && mk.depth === d)) return;
       if (styleDisagrees(first, d)) return;
       if (!addr.levels.every((l, n) => l.depth === n)) return;
       // The first address wears the unit word; later items in a list are just

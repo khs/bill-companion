@@ -2712,3 +2712,77 @@ LVXXXVI--FEDERAL MARITIME
    the case where the block is a whole section, which is the one that was visibly
    wrong; a block that is merely a subsection of the wrong provision would still
    be drawn. Bounding the read at the next instruction head is the real fix.
+
+49. **The refusals were audited, and that is where the errors were.** (2026-08-05.)
+   Item 45's audit said it in its own words: "28 cases drawn from the population
+   the guards ACCEPT tells you the accepts are good and nothing about whether the
+   refusals are." Sampling the accepts had found 0 wrong in 73 cases across two
+   rounds. A stratified sample of 46 REFUSALS, two lenses, found **21**. The split
+   falls almost exactly along guard lines, which is the useful part:
+
+   ```
+     inBlock         22 right   2 wrong     reasons about MEANING
+     continues       17 right   7 wrong     reasons about MEANING
+     gap              4 right  20 wrong     reasons about SHAPE
+     styleDisagrees   2 right  18 wrong     reasons about SHAPE
+   ```
+
+   **The two guards that reason about meaning are sound — do not weaken them.**
+   Every one of those 22 is a case where composing on the walked path would have
+   named a real but unrelated provision. The two that reason about shape are
+   mostly refusing addresses that were **broken before they arrived**, so the bug
+   is upstream and relaxing the guard would be exactly the wrong move.
+
+   Fixed here, both measured first:
+
+   - **An ambiguous marker in a PATH took its depth from its style.** `(i)`, `(v)`
+     and `(x)` are a letter and a roman numeral at once, and `markerDepth()` reads
+     them as roman — right for a bare cross-reference, wrong inside a path, which
+     is contiguous from the top and so answers the question by position. "Subsection
+     (i) of section 7448 is amended … by adding at the end ``(2) …''" filtered its
+     own subsection away as a clause, `scope` became empty, and the new paragraph
+     was drawn at the end of the whole section instead of inside (i). **20 additions
+     had their scope emptied and 12 more truncated.** `pathLevels()` takes the
+     depth from the position for those six markers only; everything else keeps its
+     style, which is what still handles a path the Code has flattened a level out
+     of. Redline: additions drawn 1,749 -> 1,759, already in the law 767 -> 782,
+     "provision not on screen" 545 -> 520.
+   - **A phrase that names its own ancestors is not relative to the block.**
+     "subparagraph (B) or (C) of subsection (c)(3)" is a complete address, and the
+     self-reference test compared its bare `(B)` against the block's markers — the
+     block adding 26 U.S.C. 25C(h) has a (B) and a (C) of its own, so an address
+     the phrase had spelled out was refused as new law talking about itself. The
+     test is skipped where `unitPairs()` found more than one pair. `refs +172`.
+
+   Corpus: `refs +172` and `relative +172` on 16 bills, nothing else. Composed
+   inserted-law addresses 2,070 -> 2,242, of which 2,128 (95%) reach a provision
+   that exists, 0 sharing a start and 0 failing the round-trip.
+
+   **A claim in item 41 is wrong and is corrected here.** It says the
+   styleDisagrees family is "9 of 2,041, every one of them reaching nothing". The
+   audit checked, and 7 U.S.C. 2025(h)(5), 21 U.S.C. 352(f), 343(q)(1)(C),
+   343(q)(1)(D), 10 U.S.C. 222a(b)(3) and 12 U.S.C. 5612(c)(2) all exist and are
+   what the drafter meant. What reaches nothing is the address the composition
+   builds by APPENDING a marker; the drafter wrote a path. And two of them are not
+   drafting errors at all but Act nomenclature — FFDCA § 502 calls its lettered
+   subdivisions "paragraphs", and § 403(q) calls its paragraphs "subparagraphs",
+   the Code's own (q)(1) reading "Except as provided in subparagraphs (3), (4),
+   and (5)". Measuring whether an address resolves is not the same as measuring
+   whether it is right, and that is how the false claim got written down.
+
+   **Left open, with the evidence.** Two upstream faults the audit named, both
+   larger than what is fixed here:
+
+   - **The base path drops a level the instruction head states.** "Paragraph (2)
+     of section 72(p) is amended" gives base `(p)`, not `(p)(2)`, because the
+     head is consulted only where the parenthetical carries no subsection at all.
+     Measured: **222 heads state a path that EXTENDS the parenthetical's, against
+     22 that genuinely diverge** — so preferring the longer path where one is a
+     prefix of the other is right roughly ten times out of eleven, and item 35's
+     divergence rule still protects the 22. This moves op scopes, so it moves the
+     redline, and wants its own measured pass.
+   - **The tail the `continues` guard detects is discarded.** In 9 of 12 sampled
+     cases the tail IS the address — "of section 402(g)(3)", "of section 1111(d)
+     of the ESEA (20 U.S.C. 6311(d))" — and refusing to compose is right while
+     reaching nothing is not. Resolving against the section the tail names is the
+     audit's highest-value suggestion.
