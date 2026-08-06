@@ -2095,6 +2095,46 @@ section('fallback states');
      ord.textContent.slice(0, 200));
 }
 {
+  // A section that is no longer there. 910 citations across the corpus land on
+  // one; the pane used to show a one-word heading over a blank body, and where a
+  // subsection had been cited it added "which usually means the bill is adding
+  // it" — false twice over about a provision that has simply moved.
+  const moved = renderContext(
+    { source: 'U.S. Code', citation: '42 U.S.C. 10601(d)(3)', tree: [], focusPath: '(d)(3)',
+      focusMissing: true, stub: 'Transferred',
+      moved: { title: '34', section: '20101', citation: '34 U.S.C. 20101',
+               href: 'https://www.law.cornell.edu/uscode/text/34/20101' },
+      links: [] },
+    { onScope: () => {} });
+  const mt = moved.textContent;
+  ok('a moved section says it moved', /Moved/.test(mt), mt.slice(0, 200));
+  ok('  naming the successor', /34 U\.S\.C\. 20101/.test(mt), mt.slice(0, 260));
+  ok('  and offering a way to it',
+     [...moved.querySelectorAll('a')].some((a) => /uscode\/text\/34\/20101/.test(a.href)),
+     [...moved.querySelectorAll('a')].map((a) => a.href).join(' '));
+  ok('  while suppressing the "bill is adding it" caveat',
+     !/usually means the bill is adding it/.test(mt), mt.slice(0, 400));
+
+  const repealed = renderContext(
+    { source: 'U.S. Code', citation: '26 U.S.C. 71', tree: [], focusPath: '',
+      stub: 'Repealed. Pub. L. 115–97, § 11051(b)(1)(B)', moved: null, links: [] },
+    { onScope: () => {} });
+  ok('a repealed section says there is no text', /No text here/.test(repealed.textContent),
+     repealed.textContent.slice(0, 200));
+  ok('  quoting the reason the Code gives', /Repealed\. Pub\. L\. 115/.test(repealed.textContent),
+     repealed.textContent.slice(0, 240));
+  ok('  and inventing no successor', !/renumbered into/.test(repealed.textContent),
+     repealed.textContent.slice(0, 240));
+
+  // A live section keeps the ordinary caveat.
+  const live = renderContext(
+    { source: 'U.S. Code', citation: '26 U.S.C. 168(k)(9)', tree: [{ path: '(k)', heading: 'x', children: [] }],
+      focusPath: '(k)(9)', focusMissing: true, stub: null, moved: null, links: [] },
+    { onScope: () => {} });
+  ok('a live section still gets the ordinary missing-subsection caveat',
+     /usually means the bill is adding it/.test(live.textContent), live.textContent.slice(0, 300));
+}
+{
   // A range is not a list. "Notwithstanding subsections (b) through (i)" names
   // eight subsections, and the pane used to answer with (b) under a heading
   // saying (b) alone — the `et seq.` fault one level down. 913 citations across

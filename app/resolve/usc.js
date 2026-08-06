@@ -192,6 +192,11 @@ export async function resolveUsc(cite) {
     // …and when the level that had to go was an Act's own subsection, carried
     // down from an instruction head onto a section that is that subsection.
     headLevel,
+    // The section is a stub — repealed, omitted or moved — so there is no text
+    // to show and the reason is the answer. `moved` carries the successor where
+    // the Code states one; see movedTo().
+    stub: !(tree || []).length && !(data.lead || '').trim() ? data.heading || 'No text' : null,
+    moved: movedTo(data),
     focusNode,
     focusChain: chain,
     // A subsection was cited but isn't in the text we have — usually means the
@@ -219,6 +224,64 @@ export async function resolveUsc(cite) {
     })),
     links,
   };
+}
+
+// Where a section went, in the three forms the OLRC prints it. Measured over
+// the 60,436 shipped shards rather than guessed at: 833 "editorially
+// reclassified", 268 "transferred to", 84 "renumbered".
+//
+// The destination title is optional because "renumbered section 422 of this
+// title" is the commonest intra-title form; the caller supplies its own title
+// then.
+const MOVED_FORMS = [
+  /\beditorially\s+reclassified\s+as\s+(?:section|chapter)\s+([0-9]+[A-Za-z0-9–\-]*)\s+of\s+Title\s+([0-9]+[A-Z]?)/i,
+  /\btransferred\s+to\s+section\s+([0-9]+[A-Za-z0-9–\-]*)\s+of\s+(?:this\s+title|Title\s+([0-9]+[A-Z]?))/i,
+  /\brenumbered\s+section\s+([0-9]+[A-Za-z0-9–\-]*)\s+of\s+(?:this\s+title|Title\s+([0-9]+[A-Z]?))/i,
+];
+
+/**
+ * A section that is no longer here, and where the Code says it went.
+ *
+ * 9,547 of the shipped shards are empty: no tree, no lead, a heading reading
+ * "Transferred", "Omitted" or "Repealed. Pub. L. …". The pane rendered those as
+ * a citation, a one-word heading and a blank body — and where a subsection had
+ * been cited it added "the current text of this section has no such subsection,
+ * which usually means the bill is adding it", which is false twice over about a
+ * provision that has simply moved.
+ *
+ * 910 citations across the corpus land on one of these, and for 170 the Code
+ * states the successor outright:
+ *
+ *   42 U.S.C. 10601  heading "Transferred"
+ *     Codification note: "Section 10601 was editorially reclassified as section
+ *     20101 of Title 34, Crime Control and Law Enforcement."
+ *
+ * 34 U.S.C. 20101(d)(3) is on disk, subparagraphs and all, and is the provision
+ * the 2001 bill meant. Following that note is a lookup in what the Code says
+ * about itself — the same claim the Act index rests on — not a guess.
+ *
+ * Two guards, both by analogy to the ones already here. Only an EMPTY section
+ * qualifies: one with text has not moved, whatever its notes say about a
+ * renumbering long ago. And the successor is NAMED, never silently substituted —
+ * the bill cited the old number, and swapping the text under the reader would
+ * hide the one fact they most need.
+ */
+function movedTo(data) {
+  if ((data.tree || []).length || (data.lead || '').trim()) return null;
+  const hay = [data.heading || '', ...(data.notes || []).map((n) => n.text || '')].join(' \n ');
+  for (const re of MOVED_FORMS) {
+    const m = hay.match(re);
+    if (!m) continue;
+    const title = m[2] || String(data.title);
+    const section = m[1].replace(/–/g, '-');
+    return {
+      title,
+      section,
+      citation: `${title} U.S.C. ${section}`,
+      href: `https://www.law.cornell.edu/uscode/text/${title}/${section}`,
+    };
+  }
+  return null;
 }
 
 /**

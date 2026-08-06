@@ -2611,3 +2611,52 @@ LVXXXVI--FEDERAL MARITIME
    Corpus does not move: this is a field on a citation and a card in the pane.
    selftest 628 -> 633, rendertest 381 -> 387, and the render test asserts both
    ends and the negative — a plain composed address must not grow the caveat.
+
+47. **A section that is no longer there says where it went.** (2026-08-05, from
+   the item 45 audit.) 9,547 of the 60,436 shipped shards are empty — no tree, no
+   lead, a heading reading "Transferred", "Omitted" or "Repealed. Pub. L. …" — and
+   **910 citations across the corpus land on one**. The pane rendered those as a
+   citation, a one-word heading and a blank body; where a subsection had been cited
+   it added "the current text of this section has no such subsection, which usually
+   means the bill is adding it", which is false twice over about a provision that
+   has simply moved.
+
+   For 170 of the 910 the Code states the successor outright, in its own notes:
+
+   ```
+   42 U.S.C. 10601   heading "Transferred"
+     Codification: "Section 10601 was editorially reclassified as section 20101
+     of Title 34, Crime Control and Law Enforcement."
+   ```
+
+   34 U.S.C. 20101 is "Crime Victims Fund" and its (d)(3) is on disk with its
+   subparagraphs intact — the provision the USA PATRIOT Act cited in 2001. Reading
+   that note is a lookup in what the Code says about itself, the same claim the Act
+   index rests on, not a guess.
+
+   The three forms were measured over the shards rather than guessed at: 833
+   "editorially reclassified as", 268 "transferred to section", 84 "renumbered
+   section". Of the 1,185 stubs that state one, **1,074 destinations have text**,
+   63 are themselves a stub (a second hop, not chased), 48 are in a title we have
+   not ingested, and **0 parse to a malformed address**.
+
+   Two guards, both by analogy to the ones already here:
+
+   - **Only an EMPTY section qualifies.** One with text has not moved, whatever its
+     notes say about a renumbering long ago. This is the whole safety of the rule:
+     a live section's notes are full of historical renumberings.
+   - **The successor is NAMED, never silently substituted.** The bill cited the old
+     number, and swapping the text under the reader would hide the one fact they
+     most need. The card says "renumbered into 34 U.S.C. 20101" and offers the
+     link; the heading above still reads what the bill wrote.
+
+   And the ordinary "the bill is adding it" caveat is suppressed on a stub, because
+   for a repealed or moved section it is not one of the two things it offers.
+
+   Corpus does not move — this is resolution. selftest 633 -> 641, rendertest
+   387 -> 395, and the render test asserts the negative too: a live section with a
+   genuinely absent subsection must keep the ordinary caveat.
+
+   Worth knowing before extending it: a chain (A moved to B, B moved to C) is
+   followed one hop only. 63 of the 1,185 are that shape, and the reader can take
+   the second hop themselves from the card.

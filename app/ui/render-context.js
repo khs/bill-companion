@@ -242,7 +242,42 @@ export function renderContext(res, handlers) {
         )
       );
     }
-    if (res.focusMissing) {
+    if (res.stub) {
+      // No text at all: the section has been repealed, omitted, or moved. The
+      // reason IS the answer, and where the Code names the successor it is the
+      // most useful thing on the page — 42 U.S.C. 10601 is a bare "Transferred"
+      // whose own note says it is now 34 U.S.C. 20101, where the provision the
+      // bill cited is alive with its subparagraphs intact.
+      const c = document.createElement('div');
+      c.className = 'card warn';
+      const h = document.createElement('h4');
+      h.textContent = res.moved ? 'Moved — this section is now somewhere else' : 'No text here';
+      c.appendChild(h);
+      const p = document.createElement('p');
+      p.textContent = res.moved
+        ? `The Code prints nothing at ${res.citation} but “${res.stub}”, and says the provision was ` +
+          `renumbered into ${res.moved.citation}. The bill cited the old number, so that is what is ` +
+          `shown above; the text is under the new one.`
+        : `The Code prints nothing at ${res.citation} but “${res.stub}”. A bill that amends it was ` +
+          `written against law that has since been repealed or omitted, so there is no current text ` +
+          `to show against.`;
+      c.appendChild(p);
+      if (res.moved) {
+        const row = document.createElement('div');
+        row.className = 'links';
+        const a = document.createElement('a');
+        a.href = res.moved.href;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = `${res.moved.citation} on Cornell LII`;
+        row.appendChild(a);
+        c.appendChild(row);
+      }
+      root.appendChild(c);
+    }
+    // …and not the ordinary "the bill is adding it" caveat, which is false twice
+    // over about a section that has simply moved.
+    if (res.focusMissing && !res.stub) {
       root.appendChild(
         card(
           'Subsection not present',

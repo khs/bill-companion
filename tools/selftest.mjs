@@ -3175,6 +3175,37 @@ section('ingested USC data');
         eq('  and claims no dropped level', written.headLevel, null);
       }
 
+      // A section that is no longer there, and where the Code says it went.
+      // 9,547 of the shipped shards are empty — "Transferred", "Omitted",
+      // "Repealed. Pub. L. …" — and 910 citations across the corpus land on one.
+      // The pane used to render a one-word heading over a blank body.
+      if (existsSync(join(ROOT, 'data/usc/t42/s10601.json'))) {
+        const moved = await resolveUsc({ title: '42', section: '10601', subsection: '(d)(3)' });
+        eq('a transferred section is reported as a stub', moved.stub, 'Transferred');
+        ok('  with the successor the Code names', moved.moved && moved.moved.citation === '34 U.S.C. 20101',
+           JSON.stringify(moved.moved));
+        // And the successor really does hold the provision that was cited: the
+        // PATRIOT Act's 42 U.S.C. 10601(d)(3) is alive at 34 U.S.C. 20101(d)(3).
+        const succ = await resolveUsc({ title: '34', section: '20101', subsection: '(d)(3)' });
+        ok('  which really holds the cited provision', !succ.focusMissing && !succ.stub,
+           JSON.stringify([succ.stub, succ.focusMissing]));
+        ok('  and is not itself a stub', /Crime Victims Fund/.test(succ.heading || ''), succ.heading);
+      }
+      if (existsSync(join(ROOT, 'data/usc/t26/s71.json'))) {
+        // Repealed with nowhere to go — the reason is the whole answer, and
+        // claiming a successor would be inventing one.
+        const rep = await resolveUsc({ title: '26', section: '71', subsection: '' });
+        ok('a repealed section is a stub too', /^Repealed\./.test(rep.stub || ''), rep.stub);
+        eq('  and names no successor', rep.moved, null);
+      }
+      // The guard: a section WITH text has not moved, whatever its notes say
+      // about some renumbering long ago.
+      {
+        const live = await resolveUsc({ title: '26', section: '1', subsection: '(d)' });
+        eq('a section with text is never a stub', live.stub, null);
+        eq('  and never claims to have moved', live.moved, null);
+      }
+
       // The guard that keeps this narrow: the dropped marker must be absent from
       // the section's own top level. "clause (i)" composed onto 26 U.S.C. 168(k)
       // dies because (k) has no clause (i) — and 168 DOES have a subsection (i),
