@@ -2095,6 +2095,36 @@ section('fallback states');
      ord.textContent.slice(0, 200));
 }
 {
+  // A range is not a list. "Notwithstanding subsections (b) through (i)" names
+  // eight subsections, and the pane used to answer with (b) under a heading
+  // saying (b) alone — the `et seq.` fault one level down. 913 citations across
+  // the corpus carry a range. Unlike `et seq.` the end is written in the bill, so
+  // the card states where the range stops rather than refusing to say.
+  const at = (markers) =>
+    renderContext(
+      { source: 'U.S. Code', citation: `26 U.S.C. 1${markers}`, tree: [], focusPath: markers,
+        relative: { unit: 'subsection', markers, via: 'Section 1', path: markers,
+                    range: { from: '(b)', to: '(i)' } }, links: [] },
+      { onScope: () => {} }
+    );
+  const first = at('(b)').textContent;
+  ok('a range says it is a range', /named a range/.test(first), first.slice(0, 200));
+  ok('  naming both ends', /\(b\) through \(i\)/.test(first), first.slice(0, 220));
+  ok('  and saying this is where it begins', /range begins/.test(first), first.slice(0, 260));
+  ok('  flagged as a caveat, not a statement', at('(b)').querySelector('.card.warn') !== null,
+     'no warn card on a range');
+  ok('  while the other end says it ends there', /range ends/.test(at('(i)').textContent),
+     at('(i)').textContent.slice(0, 260));
+
+  // A plain composed address must not grow the caveat.
+  const plain = renderContext(
+    { source: 'U.S. Code', citation: '26 U.S.C. 1(b)', tree: [], focusPath: '(b)',
+      relative: { unit: 'subsection', markers: '(b)', via: 'Section 1', path: '(b)' }, links: [] },
+    { onScope: () => {} });
+  ok('  and a single address says nothing about ranges',
+     !/named a range/.test(plain.textContent), plain.textContent.slice(0, 160));
+}
+{
   // A level dropped because the Code section IS the Act's subsection. The pane
   // has to say which level went and why, or the address above the provision and
   // the provision below it simply disagree and it reads as a lost level.

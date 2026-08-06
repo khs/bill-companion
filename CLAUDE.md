@@ -2586,3 +2586,28 @@ LVXXXVI--FEDERAL MARITIME
    reference deeper than the block, a marker the block itself contains, a unit word
    disagreeing with its style — because none of those appeared in 28 cases drawn at
    random from the accepts.
+
+46. **A range is not a list, and the pane now says which it has.** (2026-08-05,
+   from the item 45 audit — both lenses raised it independently.) "Notwithstanding
+   subsections (b) through (i)" names eight subsections. `MARKER_LIST` takes
+   `through` and `to` as separators, so the two ends are already parsed and the
+   reader already gets a chip for each — the audit's claim that only the first is
+   chipped is **wrong**, measured: of 1,072 range phrases across the corpus, 433
+   chip both ends, 10 the first alone and 2 the last.
+
+   What was true is the claim each chip made. A reader clicking "subsections (b)"
+   was shown 26 U.S.C. 1(b) under a heading naming (b) alone, with nothing saying
+   the sentence reaches (c) through (h) as well — the `et seq.` fault of item 38,
+   one level down, and this app's worst category: a confident answer to a question
+   the citation did not ask.
+
+   Unlike `et seq.`, **the end is written down**, so this says more rather than
+   refusing. `unitPairs()` records a `range` where the separator was `through` or
+   `to` and not `and`/`or`/a comma — a list names exactly what it writes and needs
+   no caveat — and the card states both ends, which end the reader is looking at,
+   and that the provisions between are named only by implication. 913 citations
+   across 22 bills carry it, 35 of them inside inserted law.
+
+   Corpus does not move: this is a field on a citation and a card in the pane.
+   selftest 628 -> 633, rendertest 381 -> 387, and the render test asserts both
+   ends and the negative — a plain composed address must not grow the caveat.

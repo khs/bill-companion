@@ -1244,11 +1244,25 @@ function unitPairs(phrase) {
     const unit = m[1].toLowerCase().replace(/s$/, '');
     const depth = UNIT_DEPTH[unit];
     if (depth === undefined) continue;
+    const items = m[2].split(RE_LIST_SEP).map((s) => s.trim()).filter(Boolean);
     pairs.push({
       unit,
       depth,
       // "(A) and (B)" is two addresses; "(a)(2)(C)" is one, three levels deep.
-      items: m[2].split(RE_LIST_SEP).map((s) => s.trim()).filter(Boolean),
+      items,
+      // …and "(A) through (E)" is FIVE, of which the text names two.
+      //
+      // A range and a list are spelled almost alike and mean different things.
+      // "Notwithstanding subsections (b) through (i)" overrides eight
+      // subsections; answering with (b) under a heading that names (b) alone is
+      // a confident answer to a question the citation did not ask — the same
+      // family as `et seq.` (item 38), one level down. 1,072 range phrases across
+      // the corpus, 433 of which chip both ends and say nothing about the middle.
+      //
+      // Unlike `et seq.`, the end is written down, so this can say MORE rather
+      // than refuse: where the range begins, where it ends, and that the
+      // provisions between are named only by implication.
+      range: items.length > 1 && /\b(?:through|to)\b/i.test(m[2]) ? { from: items[0], to: items[items.length - 1] } : null,
       offset: m.index,
       raw: m[0],
     });
@@ -1532,6 +1546,7 @@ function emit(out, resolved, line, lineStart, phraseStart, phrase, source) {
       unit: subject.unit,
       markers: addr.item,
       path: addr.levels.map((l) => l.marker).join(''),
+      ...(subject.range ? { range: subject.range } : {}),
     });
   });
 }
@@ -1686,6 +1701,7 @@ function blockRefs(text, blockStart, blockEnd, blockText, walked, out) {
         markers: addr.item,
         path: addr.levels.map((l) => l.marker).join(''),
         inserted: true,
+        ...(resolved.subject.range ? { range: resolved.subject.range } : {}),
       });
     });
   }
@@ -1793,6 +1809,10 @@ export function expandRelativeRefs(citations, amendments) {
         // law yet, pointing at a provision that is — worth saying, and the pane
         // says it.
         ...(st.inserted ? { insertedLaw: true } : {}),
+        // The bill named a RANGE and this address is one end of it. See the note
+        // on `range` in unitPairs(): stating it is the difference between showing
+        // a provision and claiming the citation named only that one.
+        ...(st.range ? { relRange: st.range } : {}),
       });
     }
   }

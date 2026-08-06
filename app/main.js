@@ -195,6 +195,8 @@ async function onCite(cite, el, opts = {}) {
       // cannot see for themselves, so the pane states it rather than implying
       // the bill wrote this address down somewhere.
       insertedLaw: cite.insertedLaw,
+      // The bill named a range of provisions and this is one end of it.
+      range: cite.relRange,
     };
   }
   const amend = opts.amend || amendmentFor(cite, state.amendments);

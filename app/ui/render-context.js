@@ -82,6 +82,26 @@ export function renderContext(res, handlers) {
       )
     );
   }
+  if (res.relative && res.relative.range) {
+    // A range is not a list. "Notwithstanding subsections (b) through (i)" names
+    // eight subsections, and answering with (b) under a heading that says (b)
+    // alone is the `et seq.` fault one level down — a confident answer to a
+    // question the citation did not ask. Unlike `et seq.`, the end is written in
+    // the bill, so this says where the range stops instead of refusing.
+    const r = res.relative.range;
+    const unit = res.relative.unit || 'provision';
+    const here = res.relative.markers === r.to ? 'ends' : 'begins';
+    root.appendChild(
+      card(
+        'The bill named a range',
+        `The bill says “${escapeText(unit)}s ${escapeText(r.from)} through ${escapeText(r.to)}” — every ` +
+          `${escapeText(unit)} from one to the other, not just the two it writes down. This is where the ` +
+          `range ${here}; the ${escapeText(unit)}s between are named only by implication, so they are not ` +
+          `shown here.`,
+        'warn'
+      )
+    );
+  }
   if (res.viaActSection) {
     // The bill wrote an Act-relative number and the pane is showing a Code
     // section with a different one. That is the correct answer and it looks

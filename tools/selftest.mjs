@@ -2449,6 +2449,39 @@ section('references inside quoted inserted law');
     ok('  and not the head-derived (c)(D)', !d || d.subsection !== '(c)(D)', d && d.subsection);
   }
 
+  // --- a range is not a list ----------------------------------------------
+  {
+    const t = normalizeText(
+      'SEC. 4. RANGE.\n' +
+      '    Section 1 of the Internal Revenue Code of 1986 is amended by adding at\n' +
+      'the end the following:\n' +
+      QB(['    ', '    '],
+         ['(k) Override.--Notwithstanding subsections (b) through (i), the rate',
+          'shall be 10 percent.']) + '\n'
+    );
+    const cites = extractCitations(t);
+    const rel = expandRelativeRefs(cites, extractAmendments(t, cites)).filter((c) => c.insertedLaw);
+    eq('a range gives an address for each end it names', rel.length, 2);
+    const from = rel.find((c) => c.subsection === '(b)');
+    ok('  the first carrying the range', from && from.relRange &&
+       from.relRange.from === '(b)' && from.relRange.to === '(i)',
+       JSON.stringify(from && from.relRange));
+    ok('  and so does the last', rel.every((c) => c.relRange && c.relRange.to === '(i)'),
+       JSON.stringify(rel.map((c) => [c.subsection, c.relRange])));
+    // A LIST is not a range: "and" names exactly what it writes down.
+    const t2 = normalizeText(
+      'SEC. 5. LIST.\n' +
+      '    Section 1 of the Internal Revenue Code of 1986 is amended by adding at\n' +
+      'the end the following:\n' +
+      QB(['    '], ['(k) Override.--Notwithstanding subsections (b) and (i), it applies.']) + '\n'
+    );
+    const c2 = extractCitations(t2);
+    const rel2 = expandRelativeRefs(c2, extractAmendments(t2, c2)).filter((c) => c.insertedLaw);
+    eq('  a list still gives one address per member', rel2.length, 2);
+    ok('  and claims no range', rel2.every((c) => !c.relRange),
+       JSON.stringify(rel2.map((c) => [c.subsection, c.relRange])));
+  }
+
   // --- a reference inside a quoted OPERAND is not an address --------------
   //
   // "by striking ``paragraph (3)''" quotes the words; it does not refer to the
