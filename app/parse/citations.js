@@ -742,6 +742,43 @@ function markRangeAdditions(ops, target) {
   for (const op of ops) if (op.type === 'add-at-end') op.rangeEnd = true;
 }
 
+// A block that opens with a SECTION head is a whole new section of the law.
+const RE_SECTION_BLOCK = /^\s*(?:``|‘‘|["“])?\s*SEC(?:TION)?\.?\s+[0-9]+[A-Za-z0-9\-–]*\./;
+
+/**
+ * A new SECTION is never part of another section, at any depth.
+ *
+ * The same refusal markRangeAdditions() makes, arriving through a different
+ * door. There the target was an `et seq.` range and nothing knew where it ended.
+ * Here the target is a specific section and the block still does not belong
+ * inside it:
+ *
+ *   Paragraph (4) of section 145(d) is amended--
+ *       (A) by striking ``of section 47(c)(1)(C)'' …
+ *   … [2,500 characters later, a different instruction] …
+ *   ``SEC. 45S. EMPLOYER CREDIT FOR PAID FAMILY AND MEDICAL LEAVE.
+ *
+ * The body is capped at MAX_AMEND_BODY so one instruction cannot swallow the
+ * next, but readAddedBlock() reads forward from a phrase INSIDE that window and
+ * the phrase it found belonged to the later instruction. So a whole new Code
+ * section — thousands of characters of it — was scoped to `(d)` and drawn inside
+ * 26 U.S.C. 145(d), a bond rule about residential rental projects, in the
+ * insertion colour, as though this bill put it there. 17 across the corpus,
+ * every one of them a real provision in a place the bill never mentions.
+ *
+ * Marked rather than repaired, because the mis-attribution is not the thing that
+ * can be checked here — the block's own first line is. "SEC. 45S." is a section
+ * head and a section is not a child of a subsection, whatever instruction the
+ * block came from. 125 more of these are already declined as range ends, which is
+ * the same conclusion reached from the other side.
+ */
+function markSectionAdditions(ops) {
+  for (const op of ops) {
+    if (op.type !== 'add-at-end' && !(op.type === 'insert' && op.placement === 'after-unit')) continue;
+    if (op.text && RE_SECTION_BLOCK.test(op.text)) op.newSection = true;
+  }
+}
+
 function placeOps(text, ops) {
   const spans = ops.filter((o) => o.start != null).sort((a, b) => a.start - b.start);
   for (let i = 0; i < spans.length; i++) {
@@ -2878,6 +2915,7 @@ export function extractAmendments(text, citations, divisions = []) {
     scopeAdditions(ops);
     scopeUnitInserts(ops);
     markRangeAdditions(ops, target);
+    markSectionAdditions(ops);
     // After the scoping passes, because the composition rests on the scope each
     // block ended up with, and after markRangeAdditions so a block bound for the
     // end of an Act — where nothing knows which section it lands in — is left

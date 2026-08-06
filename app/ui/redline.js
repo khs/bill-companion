@@ -467,7 +467,13 @@ export function createRedline(ops, fullText, knownPaths) {
       // range ("42 U.S.C. 4321 et seq.") and adds at the end of THAT, so testing
       // whether the language is already in the first section, or drawing it
       // there, both answer a question nobody asked. The panel says where it goes.
-      if (op.rangeEnd) { op.rangeSkip = true; continue; }
+      // …and the same for a block that IS a whole new section: it is not about
+      // the provision on screen at all, so testing whether its language is
+      // already there, or drawing it, both answer a question nobody asked.
+      // `rangeSkip` is reused deliberately rather than adding a fourth flag —
+      // placed() has to know every "dealt with but not drawn" marker, and each
+      // one added separately has broken that the same way.
+      if (op.rangeEnd || op.newSection) { op.rangeSkip = true; continue; }
       // `inLaw` is asked FIRST. Both flags say "this has already happened", but
       // one is evidence about this very language and the other is an inference
       // from the amendment's strikes. Where they agree the order is immaterial;
@@ -574,7 +580,7 @@ export function createRedline(ops, fullText, knownPaths) {
      * draw one: it belongs at the end of the Act, so whether this section
      * contains its language is a question about the wrong provision.
      */
-    appliedAdditions: () => additions.filter((o) => o.inLaw && !o.rangeEnd),
+    appliedAdditions: () => additions.filter((o) => o.inLaw && !o.rangeEnd && !o.newSection),
   };
 }
 

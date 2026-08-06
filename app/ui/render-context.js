@@ -850,6 +850,17 @@ function effect(eff, handlers) {
         c.appendChild(row);
         continue;
       }
+      if (op.newSection) {
+        // The same refusal, reached from the block's own first line rather than
+        // from the target: "SEC. 45S." is a whole new section of the law, and a
+        // section is never part of another section. It used to be drawn inside
+        // whatever subsection the instruction had walked to.
+        f.className = 'notfound';
+        f.textContent = '⚠ adds a whole new section, not part of this one';
+        row.appendChild(f);
+        c.appendChild(row);
+        continue;
+      }
       if (applied.some((p) => p.start === op.start)) {
         f.className = 'found';
         f.textContent = '✓ already in the law as it stands';

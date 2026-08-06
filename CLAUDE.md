@@ -2660,3 +2660,55 @@ LVXXXVI--FEDERAL MARITIME
    Worth knowing before extending it: a chain (A moved to B, B moved to C) is
    followed one hop only. 63 of the 1,185 are that shape, and the reader can take
    the second hop themselves from the card.
+
+48. **A new SECTION is never part of another section.** (2026-08-05, found while
+   measuring whether the composition pass should extend to blocks with no leading
+   marker — the answer was no, and the reason turned out to be a redline bug.)
+
+   ```
+   Paragraph (4) of section 145(d) is amended--
+       (A) by striking ``of section 47(c)(1)(C)'' each place it appears …
+   … [2,500 characters later, a DIFFERENT instruction] …
+   ``SEC. 45S. EMPLOYER CREDIT FOR PAID FAMILY AND MEDICAL LEAVE.
+   ```
+
+   The body is capped at `MAX_AMEND_BODY` so one instruction cannot swallow the
+   next — but `readAddedBlock()` reads FORWARD from a phrase inside that window,
+   and the phrase it found belonged to the later instruction. So a whole new Code
+   section, thousands of characters of it, was scoped to `(d)` and drawn inside
+   26 U.S.C. 145(d) — a bond rule about residential rental projects — in the
+   insertion colour, as though this bill put it there. **17 across the corpus**,
+   every one a real provision in a place the bill never mentions.
+
+   Marked rather than repaired, because the mis-attribution is not what can be
+   checked here: **the block's own first line is.** "SEC. 45S." is a section head,
+   and a section is not a child of a subsection whatever instruction the block
+   came from. That is the same refusal `markRangeAdditions()` already makes for an
+   `et seq.` target, reached from the other side — 125 of the corpus's 186
+   section-headed blocks were already declining that way, which is what suggested
+   the shape.
+
+   Two things earned their place:
+
+   - **`rangeSkip` is reused rather than a fourth flag added.** The tracked
+     invariant says `placed()` must know every "dealt with but deliberately not
+     drawn" marker, and each of the three was added separately and broke it the
+     same way. The parse-side flag `newSection` carries the *reason* so the panel
+     can say something different; the drawing side sees the same skip it already
+     knew.
+   - **The matcher is case-SENSITIVE, and that is load-bearing.** A bill amends a
+     table of sections by adding an ITEM, written "Sec. 45S. Employer credit." —
+     a line of text inside a table, not a new section. 223 of those across the
+     corpus, and none is flagged. Asserted directly, because a blanket `/i` would
+     silently stop drawing all 223.
+
+   Redline: additions drawn 1,773 -> 1,749, the 24 moving to "the provision it
+   follows is not shown". Corpus does not move — `opSpans` keys on
+   `type:start-end` and no span changed. selftest 641 -> 644, rendertest 395 -> 402.
+
+   Left open, and measured: the mis-attribution itself. `readAddedBlock()` will
+   still read a block belonging to a later instruction whenever an "adding at the
+   end" phrase falls inside this one's 2,500-character window. This guard catches
+   the case where the block is a whole section, which is the one that was visibly
+   wrong; a block that is merely a subsection of the wrong provision would still
+   be drawn. Bounding the read at the next instruction head is the real fix.

@@ -1200,6 +1200,35 @@ section('operand placement');
      rangeStrike.filter((o) => o.rangeEnd).length === 0,
      JSON.stringify(rangeStrike.map((o) => `${o.type}:${o.rangeEnd}`)));
 
+  // A new SECTION is never part of another section, at any depth. The same
+  // refusal as the range end, reached from the block's own first line instead of
+  // from the target — and needed because the two arrive separately: 17 of these
+  // across the corpus had a specific section as their target and were drawn
+  // inside whatever subsection the instruction had walked to. "SEC. 45S. …"
+  // scoped to (d) put a whole new Code section inside 26 U.S.C. 145(d).
+  const secAdd = p(
+    'Paragraph (4) of section 145(d) of title 26, United States Code, is amended ' +
+    'by adding at the end the following:\n``SEC. 45S. EMPLOYER CREDIT.\n' +
+    '``(a) In general.\'\'.\n'
+  );
+  const sa = secAdd.find((o) => o.type === 'add-at-end');
+  ok('an addition that IS a whole new section is marked', sa && sa.newSection === true,
+     JSON.stringify(secAdd.map((o) => `${o.type}:${o.newSection}`)));
+  // The negative that keeps it narrow, and it is load-bearing: a bill amends a
+  // table of sections by adding an ITEM, written in mixed case — "Sec. 45S." —
+  // and that is a line of text inside the table, not a new section. 223 of these
+  // across the corpus, and the matcher is case-sensitive so none is flagged.
+  const itemAdd = p(
+    'The table of sections for subchapter A is amended by adding at the end the ' +
+    'following:\n``Sec. 45S. Employer credit.\'\'.\n'
+  );
+  ok('  while a table-of-sections item is not',
+     itemAdd.filter((o) => o.newSection).length === 0,
+     JSON.stringify(itemAdd.map((o) => `${o.type}:${o.newSection}`)));
+  // And an ordinary subsection addition keeps being placed.
+  ok('  nor is an ordinary added subsection', pa && !pa.newSection,
+     JSON.stringify(plainAdd.map((o) => `${o.type}:${o.newSection}`)));
+
   const each = p('Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking ``fee\'\' each place it appears and inserting ``charge\'\'.\n');
   ok('"each place it appears" marks the strike', each.find((o) => o.type === 'strike').all === true);
   ok('  and still pairs the replacement', each.find((o) => o.type === 'insert').replaces != null);

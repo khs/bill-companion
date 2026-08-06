@@ -109,13 +109,17 @@
 <div class="modal" id="about-modal" hidden>
   <div class="modal-box about-box">
     <h3><span class="mark">§</span> Bill Companion</h3>
-    <p>Most bills change existing law. Bill Companion shows you the existing law,
-       and ideally the changes to it.</p>
+    <p>Most bills change existing law. Bill Companion automatically shows you the
+       existing law.</p>
     <p class="dim">Bills are parsed entirely in your browser. Nothing is uploaded,
        and there is no server-side application — the U.S. Code is served as static
        files and the CFR is fetched from eCFR directly.</p>
     <!-- target=_blank is not decoration here: framed, a bare link would
-         navigate the host page's iframe away from the app. -->
+         navigate the host page's iframe away from the app. The mailto is left
+         without it on purpose: a mail client does not navigate the frame. -->
+    <p>Bug? Request? Please email
+      <a href="mailto:keller.scholl@gmail.com">keller.scholl@gmail.com</a>. This
+      website is completely private, so this is the only way I know I have users.</p>
     <p class="credit">Built by
       <a href="https://kellerscholl.com" target="_blank" rel="noopener noreferrer">Keller Scholl</a>.</p>
 

@@ -1271,6 +1271,32 @@ section('additions at the end');
     );
     eq('  and without the flag it is drawn as before',
        drawn.querySelectorAll('.node.added').length, 1);
+
+    // Same refusal, different reason: the target is a specific section and the
+    // block is still a whole new one. 17 of these across the corpus were drawn
+    // inside whatever subsection the instruction had walked to — "SEC. 45S.
+    // EMPLOYER CREDIT" inside 26 U.S.C. 145(d), a bond rule, in the insertion
+    // colour. `rangeSkip` is reused rather than a fourth flag added, because
+    // placed() must know every "dealt with but not drawn" marker.
+    const secRes = {
+      ...rangeRes,
+      effect: {
+        ops: [{ ...rangeRes.effect.ops[0], rangeEnd: false, newSection: true, scope: '' }],
+        unmatched: false,
+      },
+    };
+    const secEl = rc(secRes, { onScope: () => {} });
+    eq('a new-section addition is not drawn into the section it names',
+       secEl.querySelectorAll('.node.added').length, 0);
+    const stxt = secEl.textContent.replace(/\s+/g, ' ');
+    ok('  and the panel says it is a whole new section',
+       /adds a whole new section, not part of this one/.test(stxt), stxt.slice(0, 300));
+    ok('  and not the range-end reason, which is a different fact',
+       !/at the end of the Act/.test(stxt), stxt.slice(0, 300));
+    ok('  while still naming the language being added',
+       /SEC\. 106\./.test(stxt), stxt.slice(0, 300));
+    ok('  and it is not reported as shown above',
+       !/shown above/.test(stxt), stxt.slice(0, 300));
   }
 
   // ---- "by inserting after subparagraph (B) the following" ---------------
@@ -1976,6 +2002,12 @@ section('embedding & about');
      credit?.getAttribute('rel'));
   ok('  and says the bill never leaves the browser',
      /Nothing is uploaded/i.test(aboutModal.textContent), aboutModal.textContent.slice(0, 200));
+  // The site has no analytics and no backend by design, so a reader who hits a
+  // bug has exactly one way to report it and Keller has exactly one way to learn
+  // he has users. Pinned so a later edit of this dialog cannot quietly drop it.
+  const mail = aboutModal.querySelector('a[href^="mailto:"]');
+  ok('  and offers a way to report a bug', Boolean(mail), aboutModal.innerHTML.slice(0, 300));
+  eq('  to a working address', mail && mail.getAttribute('href'), 'mailto:keller.scholl@gmail.com');
   document.getElementById('about-ok').dispatchEvent(new window.Event('click'));
   eq('the close button closes it', aboutModal.hidden, true);
 
