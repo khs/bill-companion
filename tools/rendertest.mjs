@@ -13,6 +13,30 @@ import { dirname, join } from 'node:path';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const imp = (p) => import(pathToFileURL(join(ROOT, p)).href);
 
+/**
+ * Is this shard present? Asked of the BUNDLES, not of a per-file path.
+ *
+ * These guards used to be existsSync on "data/usc/t42/s4332.json". Bundling the
+ * shards deleted those paths, so every guard went false and 192 selftest checks
+ * plus 31 render checks stopped running — silently, reported as a pass. A suite
+ * that can skip a third of itself without saying so is worse than one that fails,
+ * which is why the totals are asserted below.
+ */
+/** One shard, read out of the bundles the way the app reads it. */
+function readShard(group, stem) {
+  const idx = JSON.parse(readFileSync(join(ROOT, `${group}.idx.json`), 'utf8'));
+  const [part, off, len] = idx.at[stem];
+  const buf = readFileSync(join(ROOT, group.replace(/[^/]*$/, ''), idx.parts[part]));
+  return JSON.parse(buf.subarray(off, off + len).toString('utf8'));
+}
+
+function haveShard(group, stem) {
+  const idx = join(ROOT, `${group}.idx.json`);
+  if (!existsSync(idx)) return false;
+  const at = JSON.parse(readFileSync(idx, 'utf8')).at || {};
+  return Boolean(at[stem]);
+}
+
 let parseHTML;
 try {
   ({ parseHTML } = await import('linkedom'));
@@ -1551,9 +1575,8 @@ section('context renderer');
 const { renderContext } = await imp('app/ui/render-context.js');
 const { findNode, pathChain } = await imp('app/resolve/provision-tree.js');
 
-const secPath = join(ROOT, 'data/usc/t42/s7401.json');
-if (existsSync(secPath)) {
-  const d = JSON.parse(readFileSync(secPath, 'utf8'));
+if (haveShard('data/usc/t42', 's7401')) {
+  const d = readShard('data/usc/t42', 's7401');
   const focusPath = '(a)(1)';
   const res = {
     source: 'U.S. Code', citation: '42 U.S.C. 7401(a)(1)', heading: d.heading, asOf: d.releasePoint,
@@ -1594,8 +1617,10 @@ section('resolvers');
     if (typeof url === 'string' && !/^https?:/.test(url)) {
       const f = join(ROOT, url);
       if (!existsSync(f)) return { ok: false, status: 404, json: async () => null, text: async () => '' };
-      const body = readFileSync(f, 'utf8');
-      return { ok: true, status: 200, json: async () => JSON.parse(body), text: async () => body };
+      const buf = readFileSync(f);
+      const body = buf.toString('utf8');
+      return { ok: true, status: 200, json: async () => JSON.parse(body), text: async () => body,
+               arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) };
     }
     return realFetch(url, init);
   };
@@ -1637,7 +1662,7 @@ section('resolvers');
   ok('  and the other sources are still listed', (pl.links || []).length === 3, `${(pl.links || []).length}`);
 
   // ---- and the laws we hold locally --------------------------------------
-  if (existsSync(join(ROOT, 'data/plaw/116-6/manifest.json'))) {
+  if (haveShard('data/plaw/116-6', 'manifest')) {
     const enacted = await resolve({ kind: 'publaw', congress: '116', law: '6', actSection: '4', text: 'section 4 of Public Law 116-6' });
     const el = renderContext(enacted, {});
     ok('an uncodified section renders its enacted text',
@@ -1655,7 +1680,7 @@ section('resolvers');
     // characters of Pub. L. 117-2 § 2001 with no visible structure. The Code's
     // sections arrive from USLM already nested and have always had a tree to
     // draw; parseProvision gives a Public Law the same one.
-    if (existsSync(join(ROOT, 'data/plaw/117-2/manifest.json'))) {
+    if (haveShard('data/plaw/117-2', 'manifest')) {
       const arp = await resolve({ kind: 'publaw', congress: '117', law: '2', actSection: '2001',
                                   text: 'section 2001 of Public Law 117-2' });
       const el2 = renderContext(arp, {});
@@ -1684,7 +1709,7 @@ section('resolvers');
     // "title IV of division M of Public Law 116-260" was answered with a row of
     // chips reading "Sec. 401. …", which is the table of contents of something
     // the reader still cannot see.
-    if (existsSync(join(ROOT, 'data/plaw/116-260/manifest.json'))) {
+    if (haveShard('data/plaw/116-260', 'manifest')) {
       const div = await resolve({ kind: 'publaw', congress: '116', law: '260',
                                   division: 'M', where: ['DIVISION M', 'TITLE IV'],
                                   text: 'title IV of division M of Public Law 116-260' });
@@ -2232,6 +2257,14 @@ section('fallback states');
 }
 
 console.log(`\n${'─'.repeat(52)}`);
+
+// A skipped block is reported as a pass, so the absence of the data is asserted
+// rather than left to whoever notices the total moved. Bundling the shards turned
+// eleven guards false at once and quietly stopped 192 selftest checks and 31
+// render checks from running; nothing failed, and the suite said so.
+ok('the ingested Code is present, so the data-dependent checks above really ran',
+   haveShard('data/usc/t42', 's7401') && haveShard('data/usc/acts', 'aug_14_1935_ch_531'),
+   'data/usc/*.idx.json missing — run: python tools/ingest_usc.py --titles all && node tools/bundle.mjs --prune');
 if (fail) {
   console.log(`\x1b[31m${fail} failed\x1b[0m, ${pass} passed\n`);
   for (const f of failures) console.log(`  ✗ ${f}`);

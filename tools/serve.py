@@ -14,6 +14,8 @@ from __future__ import annotations
 import argparse
 import functools
 import http.server
+import io
+import re
 import socketserver
 import sys
 import webbrowser
@@ -51,7 +53,52 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if any(self.path.startswith(p) for p in self.BLOCKED):
             self.send_error(404, "Not part of the site (see tools/corpus.mjs)")
             return None
+        rng = self.headers.get("Range")
+        if rng:
+            head = self.send_range(rng)
+            if head is not None:
+                return head
         return super().send_head()
+
+    def send_range(self, rng: str):
+        """Answer a single-range request with 206, or fall through to the whole file.
+
+        SimpleHTTPRequestHandler does not implement Range at all: it ignores the
+        header and returns 200 with the entire file. That is *correct* — the client
+        here slices by byte offset either way, precisely so nothing depends on the
+        server — but it is unusable, because a section lookup would pull down the
+        whole 40 MB part it lives in. The deployed site is on GitHub Pages, which
+        does honour Range; this is what stops local development being the one place
+        the app is slow.
+
+        Only the simple `bytes=start-end` form, which is the only form the app
+        sends. Anything else returns None and gets the whole file, which still
+        works.
+        """
+        m = re.fullmatch(r"bytes=(\d+)-(\d+)", rng.strip())
+        if not m:
+            return None
+        path = self.translate_path(self.path)
+        p = Path(path)
+        if not p.is_file():
+            return None
+        start, end = int(m.group(1)), int(m.group(2))
+        size = p.stat().st_size
+        if start >= size:
+            self.send_error(416, "Requested range not satisfiable")
+            return None
+        end = min(end, size - 1)
+        f = open(path, "rb")
+        f.seek(start)
+        self.send_response(206)
+        self.send_header("Content-Type", self.guess_type(path))
+        self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.send_header("Content-Length", str(end - start + 1))
+        self.send_header("Accept-Ranges", "bytes")
+        self.end_headers()
+        # copyfile() would stream to EOF, so hand back exactly the slice. The
+        # ranges here are a single shard — kilobytes — so reading it is fine.
+        return io.BytesIO(f.read(end - start + 1))
 
     def end_headers(self) -> None:
         # Data shards change whenever you re-run the ingester; caching them

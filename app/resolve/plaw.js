@@ -17,6 +17,7 @@
 // updated — it is a snapshot of the day it was enacted — and the pane says so.
 
 import { PLAW } from './data-base.js';
+import { loadBundled } from './bundle.js';
 
 // How many sections of a named subdivision are rendered in full before the pane
 // falls back to listing them. Each is a separate static GET, and past this the
@@ -61,8 +62,7 @@ export async function havePlaw(congress, law) {
 export function loadPlawIndex(congress, law) {
   const key = `i:${lawId(congress, law)}`;
   if (sectionCache.has(key)) return sectionCache.get(key);
-  const p = fetch(`${PLAW}/${lawId(congress, law)}/manifest.json`)
-    .then((r) => (r.ok ? r.json() : null))
+  const p = loadBundled(`${PLAW}/${lawId(congress, law)}`, 'manifest')
     .catch(() => {
       sectionCache.delete(key);
       return null;
@@ -85,8 +85,7 @@ export function loadPlawIndex(congress, law) {
 export function loadPlawSection(congress, law, section) {
   const key = `s:${lawId(congress, law)}/${slug(section)}`;
   if (sectionCache.has(key)) return sectionCache.get(key);
-  const p = fetch(`${PLAW}/${lawId(congress, law)}/s${slug(section)}.json`)
-    .then((r) => (r.ok ? r.json() : null))
+  const p = loadBundled(`${PLAW}/${lawId(congress, law)}`, `s${slug(section)}`)
     .catch(() => {
       sectionCache.delete(key);
       return null;

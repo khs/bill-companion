@@ -25,6 +25,7 @@
 // to resolve through it.
 
 import { DATA } from './data-base.js';
+import { loadBundled } from './bundle.js';
 
 const ACTS = `${DATA}/acts`;
 
@@ -55,8 +56,7 @@ export function loadActIndex(enactedAs) {
   const key = actSlug(enactedAs);
   if (!key) return Promise.resolve(null);
   if (cache.has(key)) return cache.get(key);
-  const p = fetch(`${ACTS}/${key}.json`)
-    .then((r) => (r.ok ? r.json() : null))
+  const p = loadBundled(ACTS, key)
     .catch(() => {
       cache.delete(key);
       return null;

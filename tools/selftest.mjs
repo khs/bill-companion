@@ -32,6 +32,37 @@ function ok(name, cond, detail) {
 function eq(name, actual, expected) {
   ok(name, actual === expected, `got ${JSON.stringify(actual)}, want ${JSON.stringify(expected)}`);
 }
+/**
+ * Is this shard present? Asked of the BUNDLES, not of a per-file path.
+ *
+ * These guards used to be existsSync on "data/usc/t42/s4332.json". Bundling the
+ * shards deleted those paths, so every guard went false and 192 selftest checks
+ * plus 31 render checks stopped running — silently, reported as a pass. A suite
+ * that can skip a third of itself without saying so is worse than one that fails,
+ * which is why the totals are asserted below.
+ */
+/**
+ * One shard, read out of the bundles the way the app reads it.
+ *
+ * A test that opened "data/plaw/116-6/manifest.json" directly broke the moment
+ * the shards were bundled — and would keep breaking every time the layout moves.
+ * Read it the way the app does.
+ */
+function readShard(group, stem) {
+  const idx = JSON.parse(readFileSync(join(ROOT, `${group}.idx.json`), 'utf8'));
+  const [part, off, len] = idx.at[stem];
+  const dir = group.replace(/[^/]*$/, '');
+  const buf = readFileSync(join(ROOT, dir, idx.parts[part]));
+  return JSON.parse(buf.subarray(off, off + len).toString('utf8'));
+}
+
+function haveShard(group, stem) {
+  const idx = join(ROOT, `${group}.idx.json`);
+  if (!existsSync(idx)) return false;
+  const at = JSON.parse(readFileSync(idx, 'utf8')).at || {};
+  return Boolean(at[stem]);
+}
+
 function section(t) { console.log(`\n\x1b[1m${t}\x1b[0m`); }
 
 // ---------------------------------------------------------------- citations
@@ -1582,7 +1613,7 @@ section('internal cross-references');
   // name — "Pub. L. 113–79, title XII, § 12306" is 7 U.S.C. 1632c — and the
   // ingester already wrote 1,737 of them into data/usc/acts/. Nothing had to be
   // downloaded; the index was on disk the whole time.
-  if (existsSync(join(ROOT, 'data/usc/acts/pub_l_113_79.json'))) {
+  if (haveShard('data/usc/acts', 'pub_l_113_79')) {
     // The shards are static files on disk here, not behind a server; the
     // resolver fetches them by relative URL. Same shim as the USC block below.
     const realFetch = globalThis.fetch;
@@ -1591,7 +1622,10 @@ section('internal cross-references');
       if (/^https?:/i.test(u)) return realFetch(u, opts);
       const p = join(ROOT, u);
       if (!existsSync(p)) return { ok: false, status: 404, json: async () => null };
-      return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')) };
+      return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')),
+           // Whole-file bytes: loadBundled() slices the range itself, which is
+           // also what happens against a server that ignores Range.
+           arrayBuffer: async () => { const b = readFileSync(p); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); } };
     };
     const { resolve } = await imp('app/resolve/index.js');
     const t = normalizeText(
@@ -1620,7 +1654,7 @@ section('internal cross-references');
     // name a section and only 174 are in the Code. The other 333 are
     // appropriations lines, effective dates and savings clauses that exist
     // nowhere but the law itself, which is what data/plaw holds.
-    if (existsSync(join(ROOT, 'data/plaw/116-6/manifest.json'))) {
+    if (haveShard('data/plaw/116-6', 'manifest')) {
       // Section 4 of the Consolidated Appropriations Act, 2019 is a statement
       // of appropriations. There is no Code section and never will be.
       const enacted = await resolve(pubs[1]);
@@ -1662,7 +1696,7 @@ section('internal cross-references');
       // The editorial apparatus govinfo wraps around a Public Law must not
       // survive into the text: "SEC. 3. <<NOTE: 1 USC 1 note.>>  REFERENCES TO
       // ACT." is a heading with a citation wedged through it.
-      const idx = JSON.parse(readFileSync(join(ROOT, 'data/plaw/116-6/manifest.json'), 'utf8'));
+      const idx = readShard('data/plaw/116-6', 'manifest');
       ok('no <<NOTE:>> marker survives ingest', !JSON.stringify(idx).includes('<<NOTE'));
       eq('  and the heading it was inside is clean',
          idx.toc.find((t) => t.num === '3').heading, 'REFERENCES TO ACT');
@@ -3101,9 +3135,8 @@ section('ingested USC data');
     const titles = Object.keys(m.titles || {});
     ok('manifest lists titles', titles.length > 0, JSON.stringify(titles));
     console.log(`  · ingested titles: ${titles.sort((a, b) => a - b).join(', ')}`);
-    const probe = join(ROOT, 'data/usc/t1/s112b.json');
-    if (existsSync(probe)) {
-      const d = JSON.parse(readFileSync(probe, 'utf8'));
+    if (haveShard('data/usc/t1', 's112b')) {
+      const d = readShard('data/usc/t1', 's112b');
       ok('section has a tree', d.tree.length > 0);
       ok('tree nests deeply', findNode(d.tree, '(k)(5)(A)(ii)(I)') !== null, 'deep path missing');
       ok('section has ancestors', d.ancestors.length > 0);
@@ -3114,14 +3147,17 @@ section('ingested USC data');
     // shard is written s77z_3.json, while a bill cites the ASCII "77z-3"; and a
     // section with no subsections keeps all its text in `lead`, which the
     // resolver used to drop on the floor.
-    if (existsSync(join(ROOT, 'data/usc/t15/s77z_3.json'))) {
+    if (haveShard('data/usc/t15', 's77z_3')) {
       const realFetch = globalThis.fetch;
       globalThis.fetch = async (url, opts) => {
         const u = String(url);
         if (/^https?:/i.test(u)) return realFetch(u, opts);
         const p = join(ROOT, u);
         if (!existsSync(p)) return { ok: false, status: 404, json: async () => null };
-        return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')) };
+        return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')),
+           // Whole-file bytes: loadBundled() slices the range itself, which is
+           // also what happens against a server that ignores Range.
+           arrayBuffer: async () => { const b = readFileSync(p); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); } };
       };
       const { resolveUsc } = await imp('app/resolve/usc.js');
 
@@ -3158,7 +3194,7 @@ section('ingested USC data');
       // shall—" followed by an (A)–(L) list, so the tree has no "(2)" node and
       // the citation was answered with "this section has no such subsection".
       // Being told a provision is absent is worse than being told nothing.
-      if (existsSync(join(ROOT, 'data/usc/t42/s4332.json'))) {
+      if (haveShard('data/usc/t42', 's4332')) {
         const eis = await resolveUsc({ title: '42', section: '4332', subsection: '(2)(C)' });
         ok('a run-in level does not defeat the lookup', !eis.focusMissing, eis.reason || 'focusMissing');
         eq('  the dropped level is named', eis.runIn, '(2)');
@@ -3186,7 +3222,7 @@ section('ingested USC data');
       // Act, 1988 (2 U.S.C. 4532) is amended" composed one level too deep, and
       // the pane told the reader the provision had been repealed or was being
       // added — about a paragraph sitting a few lines up in the same pane.
-      if (existsSync(join(ROOT, 'data/usc/t2/s4532.json'))) {
+      if (haveShard('data/usc/t2', 's4532')) {
         const fixed = await resolveUsc({ title: '2', section: '4532', subsection: '(d)(3)', subFromHead: '(d)' });
         ok('a head-carried Act subsection is dropped when the section IS it',
            !fixed.focusMissing, JSON.stringify(fixed.focusPath));
@@ -3208,7 +3244,7 @@ section('ingested USC data');
       // 9,547 of the shipped shards are empty — "Transferred", "Omitted",
       // "Repealed. Pub. L. …" — and 910 citations across the corpus land on one.
       // The pane used to render a one-word heading over a blank body.
-      if (existsSync(join(ROOT, 'data/usc/t42/s10601.json'))) {
+      if (haveShard('data/usc/t42', 's10601')) {
         const moved = await resolveUsc({ title: '42', section: '10601', subsection: '(d)(3)' });
         eq('a transferred section is reported as a stub', moved.stub, 'Transferred');
         ok('  with the successor the Code names', moved.moved && moved.moved.citation === '34 U.S.C. 20101',
@@ -3220,7 +3256,7 @@ section('ingested USC data');
            JSON.stringify([succ.stub, succ.focusMissing]));
         ok('  and is not itself a stub', /Crime Victims Fund/.test(succ.heading || ''), succ.heading);
       }
-      if (existsSync(join(ROOT, 'data/usc/t26/s71.json'))) {
+      if (haveShard('data/usc/t26', 's71')) {
         // Repealed with nowhere to go — the reason is the whole answer, and
         // claiming a successor would be inventing one.
         const rep = await resolveUsc({ title: '26', section: '71', subsection: '' });
@@ -3239,7 +3275,7 @@ section('ingested USC data');
       // the section's own top level. "clause (i)" composed onto 26 U.S.C. 168(k)
       // dies because (k) has no clause (i) — and 168 DOES have a subsection (i),
       // so dropping the (k) would answer with a different provision entirely.
-      if (existsSync(join(ROOT, 'data/usc/t26/s168.json'))) {
+      if (haveShard('data/usc/t26', 's168')) {
         const keep = await resolveUsc({ title: '26', section: '168', subsection: '(k)(i)', subFromHead: '(k)' });
         eq('a leading marker the section really has is kept', keep.headLevel, null);
         ok('  so the address stays missing rather than moving', keep.focusMissing, JSON.stringify(keep.focusPath));
@@ -3354,7 +3390,10 @@ section('deployment shape');
     if (/^https?:/i.test(u)) return realFetch(u, opts);
     const p = join(ROOT, u);
     if (!existsSync(p)) return { ok: false, status: 404, json: async () => null };
-    return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')) };
+    return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')),
+           // Whole-file bytes: loadBundled() slices the range itself, which is
+           // also what happens against a server that ignores Range.
+           arrayBuffer: async () => { const b = readFileSync(p); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); } };
   };
   const { resolveUsc } = await imp('app/resolve/usc.js');
   const away = await resolveUsc({ title: '99', section: '1', subsection: '' });
@@ -3397,14 +3436,17 @@ section('Act section → Code section');
   const whole = extractCitations('The Social Security Act is amended.');
   eq('a bare Act name is still the whole Act', whole[0] && whole[0].actSection, undefined);
 
-  if (existsSync(acts)) {
+  if (haveShard('data/usc/acts', 'aug_14_1935_ch_531')) {
     const realFetch = globalThis.fetch;
     globalThis.fetch = async (url, opts) => {
       const u = String(url);
       if (/^https?:/i.test(u)) return realFetch(u, opts);
       const p = join(ROOT, u);
       if (!existsSync(p)) return { ok: false, status: 404, json: async () => null };
-      return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')) };
+      return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')),
+           // Whole-file bytes: loadBundled() slices the range itself, which is
+           // also what happens against a server that ignores Range.
+           arrayBuffer: async () => { const b = readFileSync(p); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); } };
     };
     const { resolveActSection, actSlug } = await imp('app/resolve/act-sections.js');
     const { findAct } = await imp('app/resolve/popular-names.js');
@@ -3465,16 +3507,29 @@ section('Act section → Code section');
     // the "formerly § N" fix left ten Act files behind from the older parser,
     // and a stale mapping is indistinguishable from a current one at lookup time.
     const mf = JSON.parse(readFileSync(join(ROOT, 'data/usc/manifest.json'), 'utf8'));
-    const onDisk = readdirSync(acts).filter((f) => f.endsWith('.json') && !f.startsWith('_'));
-    eq('manifest.acts equals the number of Act files', mf.acts, onDisk.length);
+    // The manifest is now checked against the BUNDLE's index rather than a
+    // directory listing, which is the same invariant read off what the app
+    // actually loads. `_conflicts` is apparatus, not an Act.
+    const bundled = Object.keys(
+      JSON.parse(readFileSync(join(ROOT, 'data/usc/acts.idx.json'), 'utf8')).at
+    ).filter((k) => !k.startsWith('_'));
+    eq('manifest.acts equals the number of Act entries', mf.acts, bundled.length);
 
-    const idx = JSON.parse(readFileSync(join(acts, 'aug_14_1935_ch_531.json'), 'utf8'));
-    console.log(`  · ${onDisk.length} Acts indexed; Social Security Act: ${Object.keys(idx.sections).length} sections mapped`);
+    const idx = readShard('data/usc/acts', 'aug_14_1935_ch_531');
+    console.log(`  · ${bundled.length} Acts indexed; Social Security Act: ${Object.keys(idx.sections).length} sections mapped`);
     globalThis.fetch = realFetch;
   } else {
-    console.log('  (no data/usc/acts — run tools/ingest_usc.py --acts-only)');
+    console.log('  (no data/usc/acts.idx.json — run tools/ingest_usc.py --acts-only && node tools/bundle.mjs)');
   }
 }
+
+// A skipped block is reported as a pass, so the absence of the data is asserted
+// rather than left to whoever notices the total moved. Bundling the shards turned
+// eleven guards false at once and quietly stopped 192 selftest checks and 31
+// render checks from running; nothing failed, and the suite said so.
+ok('the ingested Code is present, so the data-dependent checks above really ran',
+   haveShard('data/usc/t42', 's7401') && haveShard('data/usc/acts', 'aug_14_1935_ch_531'),
+   'data/usc/*.idx.json missing — run: python tools/ingest_usc.py --titles all && node tools/bundle.mjs --prune');
 
 // ------------------------------------------------------------------- report
 console.log(`\n${'─'.repeat(52)}`);

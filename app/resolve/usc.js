@@ -10,6 +10,7 @@
 
 import { buildTree, findNode, pathChain } from './provision-tree.js';
 import { DATA, isLocalCheckout } from './data-base.js';
+import { loadBundled } from './bundle.js';
 
 let manifestPromise = null;
 const sectionCache = new Map();
@@ -57,8 +58,7 @@ function slug(section) {
 async function loadSection(title, section) {
   const key = `${title}/${slug(section)}`;
   if (sectionCache.has(key)) return sectionCache.get(key);
-  const p = fetch(`${DATA}/t${title}/s${slug(section)}.json`)
-    .then((r) => (r.ok ? r.json() : null))
+  const p = loadBundled(`${DATA}/t${title}`, `s${slug(section)}`)
     .catch(() => {
       // Same reasoning as manifest(): a 404 is an answer worth remembering, a
       // transport failure is not, and caching it makes the section permanently

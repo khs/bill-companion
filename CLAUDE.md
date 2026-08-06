@@ -9,13 +9,14 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 534 checks, no dependencies
-node tools/rendertest.mjs                 # 284 checks, needs `npm i -D linkedom`
+node tools/selftest.mjs                   # 645 checks, no dependencies
+node tools/rendertest.mjs                 # 405 checks, needs `npm i -D linkedom`
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 node tools/coverage.mjs                   # not a test — what the redline actually draws
-python tools/ingest_usc.py --titles all   # ~5 min; skips titles already present
-node tools/ingest_plaw.mjs                # 25 Public Laws, 106 MB; skips those present
+python tools/ingest_usc.py --titles all   # ~5 min; writes per-section shards
+node tools/ingest_plaw.mjs                # 26 Public Laws; skips those present
+node tools/bundle.mjs --prune             # shards -> 159 bundles, verified, then deleted
 ```
 
 `bun` should be interchangeable with `node` for all four `.mjs` tools — but only
@@ -112,7 +113,7 @@ If you are reading this on a fresh machine, start here.
 ### What a fresh clone still needs
 
 Almost nothing, now that the Code and the corpus are tracked — a clone arrives
-with all 63,168 shard files and all 26 corpus bills. Two steps remain:
+with all 159 data bundles and all 26 corpus bills. Two steps remain:
 
 ```bash
 npm i -D linkedom                        # dev-only; rendertest.mjs needs a DOM
@@ -1903,12 +1904,13 @@ app/resolve/          cfr.js (live eCFR) · usc.js (local shards) ·
                       internal.js (refs within the bill) · provision-tree.js ·
                       popular-names.js · data-base.js · index.js (dispatch)
 app/ui/               render-bill.js · render-context.js · redline.js · style.css
-tools/                ingest_usc.py · ingest_plaw.mjs · make-library.mjs · serve.py ·
-                      selftest.mjs · rendertest.mjs ·
+app/resolve/bundle.js one shard out of a bundle, by HTTP Range
+tools/                ingest_usc.py · ingest_plaw.mjs · bundle.mjs · make-library.mjs ·
+                      serve.py · selftest.mjs · rendertest.mjs ·
                       measure.mjs (shared metrics) · impact.mjs · corpus.mjs
 corpus/               corpus.json + baseline.json · files/ — all tracked
-data/usc/             generated shards, one JSON per section; tracked — it IS the site
-data/plaw/            25 Public Laws, one JSON per section NUMBER; tracked, 106 MB
+data/usc/             tN.idx.json + tN.N.jsonl — 60,436 sections in 54 parts
+data/plaw/            26 Public Laws, same shape; both tracked — the data IS the site
 ```
 
 Citation kinds: `usc` `cfr` `publaw` `stat` `act` `internal`. Relative addresses
@@ -2786,3 +2788,55 @@ LVXXXVI--FEDERAL MARITIME
      of the ESEA (20 U.S.C. 6311(d))" — and refusing to compose is right while
      reaching nothing is not. Resolving against the section the tail names is the
      audit's highest-value suggestion.
+
+50. **The deploy packages the tree, so the tree stopped being 77,744 files.**
+   (2026-08-06, from Keller: the Pages deploy timed out.) His instinct was to move
+   work off the deploy step and gate it with a checksum. Measured, the premise did
+   not hold: `.nojekyll` is set and there are no workflows, so **there is no build
+   step of ours at all** — the deploy's entire cost is packaging and uploading 410
+   MB across 77,744 files, and a checksum cannot make a transfer smaller.
+
+   What the numbers did say:
+
+   ```
+     data/ …………… 77,667 of 77,744 files, changed in  9 of 68 commits
+     app/  …………………… 20 files,          changed in 58 of 68 commits
+   ```
+
+   So ~85% of pushes re-uploaded tens of thousands of unchanged 5 KB files, which
+   is the pathological case for artifact packaging. The lever was file count.
+
+   `tools/bundle.mjs` collapses each directory of shards into a few parts plus a
+   byte-offset index; `app/resolve/bundle.js` reads one shard back with an HTTP
+   Range request. **77,665 shards → 159 files. The deploy tree is 77,744 → 240.**
+
+   The lookup contract is unchanged, which is the whole point: still one small GET
+   per section, still no index of the Code loaded up front, still the same bytes on
+   the wire. Verified on the live site BEFORE building any of it — GitHub Pages
+   answers `206 Partial Content` and advertises `Accept-Ranges: bytes`. Also
+   verified: jsDelivr serves the repo with CORS (the alternative, rejected for
+   making a third party load-bearing), Cloudflare Pages caps a deployment at
+   20,000 files (worse), and trimming `data/plaw` is only 19% of the count.
+
+   Four things worth knowing before touching it:
+
+   - **Parts split at 40 MB.** Not a performance guess: GitHub warns at 50 MB per
+     file and refuses at 100, and title 42's sections come to 54 MB. It is the only
+     title that needs two parts. Splitting is free because the index names the part.
+   - **The client slices by byte offset even on a 206.** A server that ignores
+     Range answers 200 with the whole part, and correctness must not depend on it.
+     Bytes, not characters — a part is full of EN DASHes and section signs.
+   - **`serve.py` had to learn Range.** `SimpleHTTPRequestHandler` does not
+     implement it, so local development would have pulled a 40 MB part per lookup.
+     The deployed site was never the slow one.
+   - **Verification is part of building, not a later step.** `--prune` deletes
+     77,665 files and only runs after every entry has been compared byte-for-byte
+     with the shard it came from. Once pruned there is nothing left to compare to.
+
+   **And the fault this nearly shipped with, which is the real lesson.** With the
+   shards deleted, selftest went 644 → 452 checks and rendertest 404 → 373. Nothing
+   failed. Eleven guards of the form `existsSync('data/usc/t42/s4332.json')` all
+   went false at once, so 192 selftest checks and 31 render checks stopped running
+   and the suite reported a pass. A suite that can skip a third of itself silently
+   is worse than one that fails. The guards read the bundles now, and both tools
+   assert the data was present, so the skip can never again be reported as a pass.

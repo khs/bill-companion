@@ -35,7 +35,10 @@ globalThis.fetch = async (url, opts) => {
   if (/^https?:/i.test(u)) return realFetch(u, opts);
   const p = join(ROOT, u);
   if (!existsSync(p)) return { ok: false, status: 404, json: async () => null };
-  return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')) };
+  return { ok: true, status: 200, json: async () => JSON.parse(readFileSync(p, 'utf8')),
+           // Whole-file bytes: loadBundled() slices the range itself, which is
+           // also what happens against a server that ignores Range.
+           arrayBuffer: async () => { const b = readFileSync(p); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength); } };
 };
 
 const { extractCitations, extractAmendments, expandRelativeRefs } =
