@@ -2509,3 +2509,80 @@ LVXXXVI--FEDERAL MARITIME
    reimplemented in the report, for the reason `measure.mjs` exists: a metric that
    means something slightly different from the code it measures is worse than no
    metric.
+
+45. **"Amended to read as follows" replaces a whole provision, and its
+   cross-references now compose.** (2026-08-05, the job item 44's counter named.)
+   447 of the 628 references that provably point out of the block they sit in
+   were in one shape:
+
+   ```
+   Section 1(f)(2)(A) is amended to read as follows:
+   ``(A) except as provided in paragraph (8), by increasing the minimum
+   and maximum dollar amounts, and''.
+   ```
+
+   A whole-provision replacement emits **no operation**, so nothing carried the
+   quoted text and `quotedRefs()` could not see it. "paragraph (8)" there is
+   26 U.S.C. 1(f)(8), and the Code's own 1(f)(2)(A) reads that sentence back
+   verbatim.
+
+   The block is read for its cross-references only. TODO 12 still wants these
+   captured as operations so the redline can draw the replacement; that is a
+   bigger change and it moves what is on screen. This adds citations and cannot
+   move a single mark — `tools/coverage.mjs` reports 3,495 of 15,237 before and
+   after, unchanged.
+
+   **The base is the provision the instruction WALKED to, not the head's own
+   address**, and that distinction is the whole of it:
+
+   ```
+   Section 47(c) is amended--
+       (1) in paragraph (1)--
+           (A) in subparagraph (B), by amending clause (iii) to read as follows:
+   ``(iii) as described in subparagraph (D) …''
+   ```
+
+   is a clause of (c)(1)(B), so "subparagraph (D)" is 47(c)(1)(D); reading the
+   head would give 47(c)(D). Measured before building: **102 of 445** of these
+   blocks open with a marker that does not match the head's last one, and every
+   one sampled was a walk. The last step written before the phrase is the answer —
+   the same test `scopeOps()` applies to an operation, and for the same reason.
+   Nothing new guards this: the three tests item 41 already applies (marker not in
+   the block, no gap in the composed levels, the phrase does not continue into an
+   address of its own) do the work, which is the sign the rule was the right shape
+   to begin with.
+
+   Corpus: `refs +240` and `relative +240` on 15 bills, **nothing else** — and
+   **0 removed**, the signature of pure addition. Composed inserted-law addresses
+   1,830 -> 2,070, of which 1,968 reach a provision that exists in the Code, 0
+   sharing a start and 0 failing the round-trip. The split counter accounts for it
+   exactly: `composed +201`, `headAbove -84`, `declined -115`, `inBlock -2` —
+   201 references moved from no answer to a real address, and the other 39 new
+   citations displaced nothing because `RE_INTERNAL` never made a citation for
+   them (plurals and list members).
+
+   Audited by two independent adversarial lenses over 28 sampled cases: **28 right,
+   0 wrong, 0 unsure**, verified against the shipped shards rather than from
+   memory. In 14 of the 28 the Code text of the referring provision and of the
+   referent cite each other verbatim (1(f)(2)(A)↔1(f)(8), 666(a)(1)↔(b),
+   45R(d)(3)(B)↔(c)(2)), so the address is confirmed against the statute and not
+   merely plausible. Three traps were passed rather than dodged: a block opening
+   with a marker RUN ("(5)(A)") took its depth from the run's FIRST marker, giving
+   (d)(3) and not (d)(5)(3); a genuine two-step walk composed from the walk where
+   the head alone would have produced 24905(B); and every one of the 18 references
+   at subsection depth reset to section depth per the unit-word rule, so a deep
+   walk never leaked into the path.
+
+   The five new addresses that reach no section at all are 20 U.S.C. 9007 and
+   10 U.S.C. 2320 — both **repealed since those bills passed** (the Education
+   Sciences Reform Act of 2002 and the title 10 reorganisation of 2021). The
+   address is right and the law moved.
+
+   **What the audit says to do next, in its own words:** "28 cases drawn from the
+   population the guards ACCEPT tells you the accepts are good and nothing about
+   whether the refusals are." That is this file's own withdrawal rule pointed back
+   at the person applying it. The next sampler over this family must be stratified
+   by the shapes the guards REFUSE — a reference running on into "of section N", a
+   reference deeper than the block, a marker the block itself contains, a unit word
+   disagreeing with its style — because none of those appeared in 28 cases drawn at
+   random from the accepts.

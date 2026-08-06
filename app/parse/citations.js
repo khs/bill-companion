@@ -1635,11 +1635,102 @@ function styleDisagrees(marker, unitDepth) {
  * provision that exists in the Code — the same standard the Act-relative pass is
  * held to, and measured the same way.
  */
-function quotedRefs(text, ops, target) {
+/**
+ * One block of new law, read against the path it occupies.
+ *
+ * `walked` is the provision the instruction had reached when it wrote the block:
+ * the target's own path for a head-level replacement, the last navigation step
+ * for one written inside a walk. The block's leading marker states its depth, so
+ * the levels ABOVE it are that path with everything at its own depth or deeper
+ * dropped — the same rule scopeAdditions() reads, and the reason a sibling on the
+ * end of the path ("after subparagraph (C)") is not mistaken for an ancestor.
+ */
+function blockRefs(text, blockStart, blockEnd, blockText, walked, out) {
+  const lead = blockText.match(/^\s*(?:``|‘‘|["“])?\s*(\([A-Za-z0-9]{1,8}\))/);
+  if (!lead) return;
+  const blockDepth = markerDepth(lead[1]);
+  const base = ((walked || '').match(MARKER_RE) || [])
+    .map((mk) => ({ marker: mk, depth: markerDepth(mk) }))
+    .filter((l) => l.depth < blockDepth);
+  const marks = outline(text, blockStart, blockEnd);
+  const body = text.slice(blockStart, blockEnd);
+
+  RE_REF.lastIndex = 0;
+  let rm;
+  while ((rm = RE_REF.exec(body))) {
+    if (refContinues(body.slice(rm.index + rm[0].length, rm.index + rm[0].length + 80))) continue;
+    const resolved = resolvePhrase(unitPairs(rm[1]), base);
+    if (!resolved) continue;
+    const phraseStart = blockStart + rm.index + rm[0].indexOf(rm[1]);
+    let cursor = 0;
+    resolved.addresses.forEach((addr, i) => {
+      const idx = rm[1].indexOf(addr.item, cursor);
+      if (idx === -1) return;
+      cursor = idx + addr.item.length;
+      // Inside the block at its own level? Then it is new law talking about
+      // itself, and locateInternal finds it a few lines away.
+      const first = (addr.item.match(MARKER_RE) || [])[0];
+      const d = resolved.subject.depth;
+      if (marks.some((mk) => mk.marker === first && mk.depth === d)) return;
+      if (styleDisagrees(first, d)) return;
+      if (!addr.levels.every((l, n) => l.depth === n)) return;
+      // The first address wears the unit word; later items in a list are just
+      // their own marker, exactly as emit() spans them.
+      const start = i === 0 ? phraseStart : phraseStart + idx;
+      const end = phraseStart + idx + addr.item.length;
+      out.push({
+        start,
+        end,
+        text: text.slice(start, end),
+        unit: resolved.subject.unit,
+        markers: addr.item,
+        path: addr.levels.map((l) => l.marker).join(''),
+        inserted: true,
+      });
+    });
+  }
+}
+
+// "Section 1(f)(2)(A) is amended to read as follows: ``(A) …''" — a whole
+// provision replaced by the text that follows. See the note in quotedRefs().
+const RE_READ_AS_FOLLOWS = /\bto\s+read\s+as\s+follows\s*:/gi;
+
+function quotedRefs(text, ops, target, steps, headBase, from, to) {
   if (!target || (target.kind !== 'usc' && target.kind !== 'cfr')) return [];
   if (!target.section || target.etSeq || target.note) return [];
 
   const out = [];
+
+  // A whole-provision replacement, which emits no op at all.
+  //
+  // 447 of the 628 references that provably point out of the block they sit in
+  // were in one of these — the largest single reason the composition pass could
+  // not see a block. TODO 12 wants these captured as operations so the redline
+  // can draw them; that is a bigger change and moves what is on screen. This
+  // reads the block for its CROSS-REFERENCES only, which adds citations and
+  // cannot move a single mark.
+  //
+  // The base is the provision the instruction had WALKED to, not the head's own
+  // address, and that distinction is the whole of it: "Section 47(c) is amended--
+  // (A) in paragraph (1)-- (i) in subparagraph (B) … to read as follows: ``(iii)
+  // …''" replaces a clause of (c)(1)(B), and reading the head would put it at
+  // (c). Measured over the corpus, 102 of 445 of these blocks open with a marker
+  // that does NOT match the head's last one, and every one sampled was a walk.
+  RE_READ_AS_FOLLOWS.lastIndex = from || 0;
+  let pm;
+  while ((pm = RE_READ_AS_FOLLOWS.exec(text)) && pm.index < to) {
+    const block = readAddedBlock(text, pm.index + pm[0].length);
+    if (!block) continue;
+    // The last step written before the phrase is where the walk had got to —
+    // the same test scopeOps() applies to an operation, and for the same reason.
+    let walked = headBase || '';
+    for (const st of steps || []) {
+      if (st.start > pm.index) break;
+      walked = st.path;
+    }
+    blockRefs(text, block.start, block.end, text.slice(block.start, block.end), walked, out);
+  }
+
   for (const op of ops) {
     // Only the two shapes that place a whole provision, because only those have
     // a scope derived from the block's OWN leading marker — which is what says
@@ -1657,53 +1748,7 @@ function quotedRefs(text, ops, target) {
       (op.type === 'add-at-end' && !op.rangeEnd) ||
       (op.type === 'insert' && op.placement === 'after-unit');
     if (!isBlock || !op.text || op.start == null) continue;
-    const lead = op.text.match(/^\s*(?:``|‘‘|["“])?\s*(\([A-Za-z0-9]{1,8}\))/);
-    if (!lead) continue;
-    const blockDepth = markerDepth(lead[1]);
-
-    // The path the new provision hangs off, with anything at the block's own
-    // depth or deeper dropped: scopeUnitInserts() leaves the anchor sibling on
-    // the end of `scope`, and a sibling is not an ancestor.
-    const base = ((op.scope || '').match(MARKER_RE) || [])
-      .map((mk) => ({ marker: mk, depth: markerDepth(mk) }))
-      .filter((l) => l.depth < blockDepth);
-    const marks = outline(text, op.start, op.end);
-    const body = text.slice(op.start, op.end);
-
-    RE_REF.lastIndex = 0;
-    let rm;
-    while ((rm = RE_REF.exec(body))) {
-      if (refContinues(body.slice(rm.index + rm[0].length, rm.index + rm[0].length + 80))) continue;
-      const resolved = resolvePhrase(unitPairs(rm[1]), base);
-      if (!resolved) continue;
-      const phraseStart = op.start + rm.index + rm[0].indexOf(rm[1]);
-      let cursor = 0;
-      resolved.addresses.forEach((addr, i) => {
-        const idx = rm[1].indexOf(addr.item, cursor);
-        if (idx === -1) return;
-        cursor = idx + addr.item.length;
-        // Inside the block at its own level? Then it is new law talking about
-        // itself, and locateInternal finds it a few lines away.
-        const first = (addr.item.match(MARKER_RE) || [])[0];
-        const d = resolved.subject.depth;
-        if (marks.some((mk) => mk.marker === first && mk.depth === d)) return;
-        if (styleDisagrees(first, d)) return;
-        if (!addr.levels.every((l, n) => l.depth === n)) return;
-        // The first address wears the unit word; later items in a list are just
-        // their own marker, exactly as emit() spans them.
-        const start = i === 0 ? phraseStart : phraseStart + idx;
-        const end = phraseStart + idx + addr.item.length;
-        out.push({
-          start,
-          end,
-          text: text.slice(start, end),
-          unit: resolved.subject.unit,
-          markers: addr.item,
-          path: addr.levels.map((l) => l.marker).join(''),
-          inserted: true,
-        });
-      });
-    }
+    blockRefs(text, op.start, op.end, op.text, op.scope, out);
   }
   return out;
 }
@@ -2818,7 +2863,7 @@ export function extractAmendments(text, citations, divisions = []) {
     // end of an Act — where nothing knows which section it lands in — is left
     // alone. Refs rather than steps: these move no cursor and scope no
     // operation, they are only addresses the reader can open.
-    nav.refs.push(...quotedRefs(text, ops, target));
+    nav.refs.push(...quotedRefs(text, ops, target, nav.steps, base, h.headEnd, bodyEnd));
 
     return [{
       start: h.start,

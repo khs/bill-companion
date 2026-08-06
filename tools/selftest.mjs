@@ -2403,6 +2403,52 @@ section('references inside quoted inserted law');
        /language the bill is inserting/.test(res.note), res.note);
   }
 
+  // --- "amended to read as follows" replaces a whole provision -------------
+  //
+  // 447 of the 628 references that provably point out of the block they sit in
+  // were in one of these, and it was the largest single reason the composition
+  // pass could not see a block at all: a whole-provision replacement emits no
+  // operation, so there was nothing carrying the quoted text.
+  {
+    const t = normalizeText(
+      'SEC. 2. MODIFICATION OF RATES.\n' +
+      '    (a) In General.--Section 1(f)(2)(A) of the Internal Revenue Code of 1986\n' +
+      'is amended to read as follows:\n' +
+      QB(['    ', '    '],
+         ['(A) except as provided in paragraph (8), by increasing the minimum',
+          'and maximum dollar amounts, and']) + '\n'
+    );
+    const cites = extractCitations(t);
+    const rel = expandRelativeRefs(cites, extractAmendments(t, cites)).filter((c) => c.insertedLaw);
+    const p8 = rel.find((c) => /paragraph \(8\)/.test(c.text));
+    ok('a replacement block\'s cross-reference is composed', Boolean(p8),
+       rel.map((c) => `${c.text} -> ${c.subsection}`).join(' | '));
+    // The block IS (f)(2)(A), so its parent is (f)(2) and a paragraph-level
+    // reference truncates to (f) — never (f)(2)(8), which would be a paragraph
+    // nested inside a paragraph.
+    eq('  at the level the reference names', p8 && `${p8.title}:${p8.section}${p8.subsection}`, '26:1(f)(8)');
+  }
+  {
+    // …and the base is the provision the instruction WALKED to, not the head's.
+    // 102 of 445 of these blocks open with a marker that does not match the
+    // head's last one, and every one sampled was a walk.
+    const t = normalizeText(
+      'SEC. 3. WALKED.\n' +
+      '    Section 47(c) of the Internal Revenue Code of 1986 is amended--\n' +
+      '        (1) in paragraph (1)--\n' +
+      '            (A) in subparagraph (B), by amending clause (iii) to read as\n' +
+      '        follows:\n' +
+      QB(['    '], ['(iii) as described in subparagraph (D), the amount applies.']) + '\n'
+    );
+    const cites = extractCitations(t);
+    const rel = expandRelativeRefs(cites, extractAmendments(t, cites)).filter((c) => c.insertedLaw);
+    const d = rel.find((c) => /subparagraph \(D\)/.test(c.text));
+    ok('a replacement written inside a walk uses the walked path', Boolean(d),
+       rel.map((c) => `${c.text} -> ${c.subsection}`).join(' | '));
+    eq('  so the reference is (c)(1)(D)', d && `${d.title}:${d.section}${d.subsection}`, '26:47(c)(1)(D)');
+    ok('  and not the head-derived (c)(D)', !d || d.subsection !== '(c)(D)', d && d.subsection);
+  }
+
   // --- a reference inside a quoted OPERAND is not an address --------------
   //
   // "by striking ``paragraph (3)''" quotes the words; it does not refer to the
