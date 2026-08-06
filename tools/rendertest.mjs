@@ -2008,6 +2008,16 @@ section('embedding & about');
   const mail = aboutModal.querySelector('a[href^="mailto:"]');
   ok('  and offers a way to report a bug', Boolean(mail), aboutModal.innerHTML.slice(0, 300));
   eq('  to a working address', mail && mail.getAttribute('href'), 'mailto:keller.scholl@gmail.com');
+  // linkedom has no cascade, so the rule is asserted against the stylesheet
+  // itself — the same move the hidden-attribute check above makes against
+  // index.html. This one was added as `.about-box .credit a`, which the contact
+  // address is not inside, so it rendered default-blue and underlined in the
+  // middle of a designed panel until the selector was widened.
+  const css = readFileSync(join(ROOT, 'app/ui/style.css'), 'utf8');
+  ok('  and every anchor in the dialog is styled, not just the credit',
+     /\.about-box p a \{/.test(css), 'no .about-box p a rule');
+  ok('  with the ↗ reserved for links that really leave the page',
+     /\.about-box p a\[href\^="http"\]::after/.test(css), 'the ↗ is not gated on an http href');
   document.getElementById('about-ok').dispatchEvent(new window.Event('click'));
   eq('the close button closes it', aboutModal.hidden, true);
 
