@@ -2994,3 +2994,48 @@ LVXXXVI--FEDERAL MARITIME
      answers exactly this question and says `(ii)` is a REAL marker because the
      line above it ends in "and". Wiring that into the list separator is the work;
      it is not a character-class change.
+
+54. **I audited what item 49 fixed and not what it MOVED, and the movement held a
+   regression.** (2026-08-06.) Item 49 changed the redline — additions drawn
+   1,749 → 1,759, already in the law 767 → 782, provision not on screen 545 → 520
+   — and shipped with the improvement counted and the 25 moved additions unread.
+   That is this file's own withdrawal rule broken by the entry that restates it,
+   and the lesson is narrower than "audit more": **a rule that reads a DEPTH off a
+   marker has to be audited against paths that do not start at subsection level.**
+
+   Every addition whose scope item 49 changed, checked against the shipped shards:
+   70 where only the NEW scope exists in the provision, 60 where both do (the new
+   one deeper and more specific), 5 unresolvable, and **1 that was a real bug**:
+
+   ```
+   (1) in paragraph (6)-- (A) in subparagraph (B)-- (i) in clause (i), by
+       inserting after clause (i) the following: ``(ii) planning for …''
+     -> 16 U.S.C. 3839aa-1(6)(B)(i)(i)
+   ```
+
+   Two faults, both of them a depth read off an ambiguous marker:
+
+   - **`pathLevels()` gave the marker its INDEX.** A path is contiguous, so
+     position answers where style cannot — but it need not start at subsection
+     level. `(6)(B)(i)` states a paragraph, a subparagraph and a clause, at depths
+     1, 2 and 3, against indexes 0, 1 and 2. The depth is one deeper than the
+     level BEFORE it, which is the same thing said correctly.
+   - **`scopeUnitInserts()` truncates by the anchor's STYLE depth**, which then
+     disagrees with the depth the path put that very marker at. The walk had
+     already stopped AT the anchor, so asking whether the path already ends there
+     settles it without reasoning about depth at all — and that is the fix, because
+     it cannot be wrong about a case the depth model cannot read.
+
+   Corpus does not move at all: a scope is invisible to `opSpans`, which keys on
+   `type:start-end`. Redline: additions drawn 1,759 → 1,760, not on screen 520 →
+   519, and `no such level at all` 263 → 262.
+
+   One flagged case is NOT a regression and is worth recording because it looks
+   exactly like one. `42 U.S.C. 1395u` scopes an addition to `(h)(V)` — a path
+   with a hole where the paragraph should be, because a navigation step composes a
+   subparagraph onto a subsection when the bill skips a level. That is item 34's
+   413-strong family and it predates all of this; `reScope()` shortens it to
+   `(h)`, which is where the addition drew before. The reader sees the same thing.
+   **Check reScope before calling a deeper scope a loss** — it shortens from the
+   inside out first, which is why the 6 op scopes that "only existed at the old
+   level" under item 52 were not lost either.

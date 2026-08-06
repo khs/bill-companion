@@ -706,6 +706,25 @@ function scopeUnitInserts(ops) {
     const addedDepth = markerDepth(added[1]);
     const anchorPath = chain.filter((mk) => markerDepth(mk) <= addedDepth);
     if (!anchorPath.length) continue;
+    // The walk may already have STOPPED at the anchor, in which case there is
+    // nothing to truncate and nothing to append:
+    //
+    //   (2) in paragraph (6)— (B) in subparagraph (B)— (i) in clause (i), by
+    //       inserting after clause (i) the following: ``(ii) planning for …''
+    //
+    // walks to (6)(B)(i) and anchors on clause (i), the same provision. The
+    // truncation below is by the anchor's STYLE depth, which disagrees with the
+    // depth the path put that marker at whenever the path does not start at
+    // subsection level — so 16 U.S.C. 3839aa-1 composed (6)(B)(i)(i) and
+    // 18 U.S.C. 4042 composed (a)(6)(i)(i), levels nothing has. Asking whether
+    // the path already ends there settles it without reasoning about depth at
+    // all.
+    const walked = String(op.scope || '');
+    const anchorStr = anchorPath.join('');
+    if (walked.endsWith(anchorStr)) {
+      op.placement = 'after-unit';
+      continue;
+    }
     const depth = markerDepth(anchorPath[0]);
     const kept = pathLevels(op.scope).filter((l) => l.depth < depth);
     op.scope = kept.map((l) => l.marker).join('') + anchorPath.join('');
@@ -1277,12 +1296,24 @@ const RE_AMBIG_MARKER = /^\((?:i|v|x|I|V|X)\)$/;
  * Narrow on purpose: only the six markers whose style genuinely cannot be read.
  * Everything else keeps its style depth, which is what handles the paths where
  * the Code has flattened a level away and position would be wrong.
+ *
+ * "By position" is one deeper than the level BEFORE it, not the marker's index.
+ * A path is contiguous, but it need not start at subsection level: an
+ * instruction that walks to `(6)(B)(i)` states a paragraph, a subparagraph and a
+ * clause, at depths 1, 2 and 3, while the indexes are 0, 1 and 2. Reading the
+ * index left that clause at depth 2, so the `depth < 3` filter in
+ * scopeUnitInserts() kept it and the anchor was appended to itself —
+ * `by inserting after clause (i) the following: ``(ii) …''` scoped to
+ * 16 U.S.C. 3839aa-1(6)(B)(i)(i), a level nothing has. Found by auditing what
+ * this rule MOVED rather than what it fixed.
  */
 function pathLevels(path) {
-  return (String(path || '').match(MARKER_RE) || []).map((marker, i) => ({
-    marker,
-    depth: RE_AMBIG_MARKER.test(marker) ? i : markerDepth(marker),
-  }));
+  const out = [];
+  for (const marker of String(path || '').match(MARKER_RE) || []) {
+    const prev = out.length ? out[out.length - 1].depth : -1;
+    out.push({ marker, depth: RE_AMBIG_MARKER.test(marker) ? prev + 1 : markerDepth(marker) });
+  }
+  return out;
 }
 
 /**

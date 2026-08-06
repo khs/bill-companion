@@ -484,6 +484,39 @@ section('relative navigation inside amendments');
   eq('a navigation step composes onto the head-extended base', a4?.steps?.[0]?.path, '(p)(2)(A)');
 }
 {
+  // An anchor the walk has already reached must not be appended to itself.
+  // Verbatim from H.R. 2 — the walk ends at clause (i) and the insert anchors on
+  // clause (i), so there is nothing to truncate and nothing to add.
+  //
+  // Two separate faults produced 16 U.S.C. 3839aa-1(6)(B)(i)(i), a level nothing
+  // has. Both are about reading a depth off a marker whose style is ambiguous:
+  // pathLevels() gave (i) its INDEX (2) where a path starting at paragraph level
+  // puts it at 3, and scopeUnitInserts() truncates by the anchor's STYLE depth,
+  // which then disagreed with it. Found by auditing what item 49's rule MOVED
+  // rather than what it fixed.
+  const t =
+    'Section 1240A of the Food Security Act of 1985 (16 U.S.C. 3839aa-1) is\n' +
+    'amended--\n' +
+    '    (1) in paragraph (6)--\n' +
+    '        (A) in subparagraph (B)--\n' +
+    '            (i) in clause (i), by inserting after clause (i) the following:\n' +
+    "        ``(ii) planning for resource-conserving crop rotations.'';\n";
+  const am = extractAmendments(t, extractCitations(t))[0];
+  const ins = am?.ops?.find((o) => o.placement === 'after-unit');
+  eq('an anchor the walk already reached is not appended twice', ins?.scope, '(6)(B)(i)');
+
+  // The depth of an ambiguous marker inside a path is one deeper than the level
+  // BEFORE it, not its index — a path is contiguous but need not start at
+  // subsection level.
+  const t2 =
+    'Section 4042(a)(6) of title 18, United States Code, is amended--\n' +
+    '    (1) in clause (i), by inserting after clause (i) the following:\n' +
+    "        ``(ii) a second thing.'';\n";
+  const am2 = extractAmendments(t2, extractCitations(t2))[0];
+  const ins2 = am2?.ops?.find((o) => o.placement === 'after-unit');
+  eq('  and the same holds for a path rooted at a paragraph', ins2?.scope, '(a)(6)(i)');
+}
+{
   // Stepping back UP the hierarchy. A subsection cannot live inside a
   // subparagraph, so a later "subsection (c)" must truncate the running path,
   // not extend it. Appending blindly produced 5 U.S.C. 801(a)(2)(A)(c).
