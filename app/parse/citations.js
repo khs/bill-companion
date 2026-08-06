@@ -1620,8 +1620,8 @@ function emit(out, resolved, line, lineStart, phraseStart, phrase, source) {
 // section 6033" names its section outright, and "paragraph (2) thereof" names
 // the provision just mentioned; neither is relative to the block's parent. The
 // unit chain a phrase legitimately carries ("of subsection (f)") is consumed by
-// UNIT_PHRASE itself, so anything still beginning with "of" is somebody else's
-// address — the same rule RE_UNIT_OF_SECTION applies to internal citations.
+// UNIT_PHRASE itself, so anything still beginning with an ADDRESS is somebody
+// else's — the same rule RE_UNIT_OF_SECTION applies to internal citations.
 //
 // The gap may carry a quote opener, because GPO opens every quoted PARAGRAPH
 // with one and a phrase that runs past the 72-column measure continues behind
@@ -1629,7 +1629,49 @@ function emit(out, resolved, line, lineStart, phraseStart, phrase, source) {
 // about; here the block is scanned whole, so the opener is simply a character in
 // the middle of a sentence and has to be stepped over like the indent beside it.
 const REF_GAP = '[\\s,;]*(?:``|‘‘|["“])?[ \\t]*';
-const RE_REF_CONTINUES = new RegExp(`^${REF_GAP}(?:of\\b|thereof\\b)`, 'i');
+
+// A bare `of` is not an address, and testing for one refused 110 references that
+// were relative to the block after all. "of" is the commonest preposition in
+// English and statutory prose is made of it:
+//
+//     ``subparagraph (A) or (B) of the spun-off plan shall continue …''
+//     ``…the amount described in paragraph (3) of $500,000 …''
+//     ``…under subsection (b), of the funds of, or an equal value of …''
+//
+// none of which continues into an address at all. So the openers are listed
+// rather than assumed. Each one is a place a reference can point that is NOT
+// relative to the enclosing block:
+//
+//   thereof / of that <unit> / of such <unit>   the provision just named
+//   of section N / of title N / of the … Act    somebody else's numbering
+//   of this Act|title|chapter                   the bill, not the law
+//   of <unit> (…)                              the chain MARKER_LIST broke on,
+//                                              "paragraphs (1), (2), and (3) of
+//                                              subsection (a)" — the phrase
+//                                              names its own parent
+//
+// Deliberately NOT an opener: "of this section|subsection|paragraph|…". That
+// names the provision the reference SITS IN, which is the block's own ancestry —
+// exactly what blockRefs composes against — so those resolve rather than
+// decline. 26 U.S.C. 45Q's ``subsection (a) of this section'' is 45Q(a).
+const UNIT_OR_SECTION = '(?:subsection|paragraph|subparagraph|clause|subclause|item|subitem|section)';
+const RE_REF_CONTINUES = new RegExp(
+  `^${REF_GAP}(?:` +
+    [
+      'thereof\\b',
+      `of\\s+(?:that|such)\\s+(?:${UNIT_OR_SECTION}|Act|title|chapter|determination)\\b`,
+      'of\\s+sections?\\s+\\d',
+      'of\\s+this\\s+(?:Act|title|chapter)\\b',
+      'of\\s+title\\s+\\d',
+      // The broken chain: a unit word followed by its own markers.
+      `of\\s+(?:the\\s+)?${UNIT_OR_SECTION}s?\\s*\\(`,
+      // A named Act or Code. Bounded, and stopped at a sentence end, so it
+      // cannot reach forward past the phrase into an unrelated capitalised word.
+      'of\\s+the\\s+[A-Z][^;.]{0,90}?(?:Act|Code)\\b',
+    ].join('|') +
+    ')',
+  'i'
+);
 
 // …and the "of" may sit behind a tail MARKER_LIST could not take. Its separator
 // is one of ", " / "and" / "or", so ", or (o)" stops the list dead: the comma
@@ -2942,7 +2984,28 @@ export function extractAmendments(text, citations, divisions = []) {
     // exists in the resolved provision for 265 of the 306 that resolve; the other
     // 41 are the Act-relative divergence above, and reScope() reconciles those
     // against the tree rather than this pass guessing at them.
-    const base = (target && target.subsection) || subsection;
+    //
+    // …and where the head EXTENDS the parenthetical rather than diverging from
+    // it, the longer path is the address and dropping it lost a level off
+    // everything downstream a second time:
+    //
+    //   Paragraph (2) of section 72(p) is amended        head (p)(2), paren (p)
+    //   Subparagraph (B) of section 280F(d)(7) is …      head (d)(7)(B), paren (d)(7)
+    //
+    // The extension is the inner unit the head names, over a prefix the two
+    // already agree on, so it is stated in the same numbering the parenthetical
+    // is — which is what makes this safe where preferring the head outright is
+    // not. Measured over the corpus: 222 heads extend the parenthetical's path
+    // against 22 that genuinely diverge, and the prefix test excludes all 22.
+    // Those 22 are the Act-relative shape item 35 documents (12 U.S.C. 375 IS
+    // section 22(d) of the Federal Reserve Act, so the Act's own "(d)" names
+    // nothing in the codified section) plus the mirror case, where the
+    // PARENTHETICAL is the longer of the two and is already preferred.
+    const paren = (target && target.subsection) || '';
+    const base =
+      paren && subsection.startsWith(paren) && subsection.length > paren.length
+        ? subsection
+        : paren || subsection;
     const nav = extractSteps(text, h.headEnd, bodyEnd, base);
     scopeOps(ops, nav.steps, base);
     scopeAdditions(ops);

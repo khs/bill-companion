@@ -2840,3 +2840,157 @@ LVXXXVI--FEDERAL MARITIME
    and the suite reported a pass. A suite that can skip a third of itself silently
    is worse than one that fails. The guards read the bundles now, and both tools
    assert the data was present, so the skip can never again be reported as a pass.
+
+51. **A bare "of" is not an address, and testing for one refused 110 references
+   that were relative to the block after all.** (2026-08-06, from the item 49
+   audit: the `continues` guard was 17 right and 7 wrong out of 24 sampled.)
+   `refContinues()` refused any reference followed by `of`, on the reasoning that
+   the unit chain a phrase legitimately carries is consumed by `UNIT_PHRASE`
+   itself, so anything still beginning with "of" must be somebody else's address.
+   "of" is the commonest preposition in English and statutory prose is made of it:
+
+   ```
+   ``subparagraph (A) or (B) of the spun-off plan shall continue …''
+   ``…the amount described in paragraph (3) of $500,000 …''
+   ``…under subsection (b), of the funds of, or an equal value of commodities …''
+   ``…the aggregate amount taken into account under paragraph (5) of this
+      subsection shall not exceed $10,000 …''
+   ```
+
+   None of those continues into an address. The last is the interesting one and it
+   is the commonest of the four: **"of this subsection" names the very provision
+   the block is joining**, which is exactly what `blockRefs` composes against — so
+   it should resolve rather than decline. 26 U.S.C. 164's new (b)(6), the SALT cap,
+   refers to "paragraph (5) of this subsection", which is 164(b)(5).
+
+   So the openers are listed rather than assumed, each one a place a reference can
+   point that is NOT relative to the enclosing block: `thereof`, `of that|such
+   <unit>`, `of section N`, `of title N`, `of the … Act|Code`, `of this
+   Act|title|chapter`, and the broken chain `of <unit> (…)` that `MARKER_LIST`
+   stops on. Deliberately absent: **`of this <unit>`**, and equally `of this
+   section` — those name the reference's own ancestry.
+
+   Of 559 refusals inside quoted blocks, 110 are released and **39 become
+   addresses**; the other 71 are declined by the three tests item 41 already
+   applies, which is the designed behaviour and a better outcome than the guard's
+   (`locateInternal` finds them inside the block). **39 of 39 reach a provision
+   that exists**, and the miss counts do not move at all — 12 no-section and 102
+   no-path before and after. Read against the Code: 18 U.S.C. 922(d)/(g)/(n) (the
+   purchase prohibitions, from the Bipartisan Safer Communities Act),
+   42 U.S.C. 1396a(a)(10)(A)(i)(I)–(VII), 7 U.S.C. 2(c)(2)(C)(i),
+   26 U.S.C. 402A(c)(4)(D).
+
+   Corpus: `refs +40` and `relative +40` on 13 bills, the two deltas equal on
+   every bill and **nothing else moved** — the signature of pure addition, each
+   released reference becoming one new relative citation and displacing none.
+   `tools/coverage.mjs` reports 3,495 of 15,237 before and after: this adds
+   citations and cannot move a mark.
+
+52. **The instruction head's path is used where it EXTENDS the parenthetical's.**
+   (2026-08-06, the upstream fault the item 49 audit named — 20 of 24 `gap`
+   refusals and 18 of 20 `styleDisagrees` refusals were refusing addresses that
+   arrived already broken, and this is why.) Item 35 established that the
+   codified subsection wins wherever the parenthetical states one, and that
+   ordering is load-bearing: 12 U.S.C. 375 IS section 22(d) of the Federal
+   Reserve Act, so the Act's own (d) names nothing in the codified section. But
+   "wins outright" threw the head away even when the two agreed:
+
+   ```
+   Paragraph (3) of section 3111(f) is amended by striking ``the credit''
+     head (f)(3) · parenthetical (f) · scoped to (f)
+     -> struck ``the credit'' in the CHAPEAU of § 3111
+   Subparagraph (B) of section 280F(d)(7) …    head (d)(7)(B) · paren (d)(7)
+   Paragraph (37)(A)(i) of section 7(a) of the Small Business Act (15 U.S.C. 636(a))
+     head (a)(37)(A)(i) · paren (a) · steps composed (a)(iv)(IV)(bb), a path with
+     a HOLE in it — item 34's largest family, 413 of 675
+   ```
+
+   The extension is the inner unit the head names, over a prefix the two already
+   agree on, so it is stated in the same numbering the parenthetical is. That is
+   what makes preferring it safe where preferring the head outright is not.
+   Measured before building: **222 heads extend the parenthetical's path against
+   22 that genuinely diverge**, and a directional prefix test excludes all 22 —
+   they are item 35's Act-relative shape plus the mirror case, where the
+   PARENTHETICAL is the longer of the two and is already right (SSA § 472(c) is
+   42 U.S.C. 672(c)(1)).
+
+   **Coverage FELL, 3,495 → 3,463, and that is the fix working** — the second
+   time this has happened here, so read the marks before believing the metric.
+   The accounting closes exactly: drawn 1,979 → 1,946, of which **32 marks were
+   withdrawn and 1 was reclassified from "pending" to "already in force"**; not
+   found +28 and withheld +4 are the same 32. And **all 32 of the withdrawn marks
+   had landed in the section's own chapeau**, outside the provision the
+   instruction names — checked mechanically rather than sampled, by asking of each
+   one where the old mark fell and whether that node is inside the new scope. Not
+   one was inside.
+
+   Against that, `addresses the provision does not have` fell 1,230 → 1,162 while
+   `no such level at all` stayed at **263** — so 68 operations stopped needing to
+   be widened at all and none became lost. 413 op scopes changed: 318 where both
+   the old and new path exist (the new one deeper and real), 74 where only the new
+   one exists, 6 where only the old did — and those 6 are not a regression,
+   because `reScope()` shortens from the inside out first and lands them back on
+   exactly their old scope, now carrying `scopeWidened` so the pane can say the
+   level was not found.
+
+   Corpus: `refs +48` and `relative +48` on 7 bills and nothing else — `opSpans`
+   keys on `type:start-end`, so a scope change is invisible to it, which is
+   precisely why this needed `coverage.mjs` and the withdrawal audit rather than
+   a baseline diff.
+
+53. **Two things measured and deliberately NOT built, with the numbers.** Both
+   were on the item 49 audit's list and both fail on measurement rather than on
+   taste. Recorded so nobody re-derives them — and so nobody trusts the audit
+   over the corpus.
+
+   - **"of section N" must not be composed against the target's title.** The
+     audit called reading this tail "the single highest-value change across all
+     four guards". Measured, it is the worst thing in this file's vocabulary: a
+     confident answer about the wrong statute. 216 such tails; composing
+     `<target title> U.S.C. <tail section>` gives **98 hits, 94 sections that do
+     not exist, and 24 that exist without the path** — because 83 of the 216 sit
+     in title 42, where the numbering in the quoted law is the Social Security
+     Act's, not the Code's:
+
+     ```
+     ``…the requirements of section 1859 of the Social Security Act …''
+        in a block joining 42 U.S.C. 1395w-28   ->  42 U.S.C. 1859, which is
+        nothing; the Act's § 1859 IS 1395w-28, and the bill says so
+     ``…described in section 1861(iii)(2)) furnished during …''
+        ->  42 U.S.C. 1861 EXISTS and is about something else entirely
+     ```
+
+     That last shape is the whole objection: not a blank but a real provision,
+     wrongly named. `sectionsMatchCode` belongs to the IRC and nothing else, and
+     this is that invariant arriving from a new direction. The title-26 subset
+     alone is clean — **56 of 60**, and 3 of the 4 misses are tails that name
+     their own Act ("of section 437 of the Higher Education Act of 1965") while
+     the fourth is 26 U.S.C. 179A, repealed since. So a title-26-only pass is
+     available and honest; it is 58 citations, and it wants the `enactedAs` route
+     through the Act index rather than a title assumption, because that is the
+     mechanism that would also serve the other 158.
+   - **The Oxford comma breaks `MARKER_LIST`, and fixing it steals a real outline
+     marker.** `MARKER_LIST`'s separator is a comma OR the word, never both, so
+     ", and (3)" stops a list dead — which item 41 already documents for ", or
+     (o)" without noticing it is general. Admitting `,\s*(?:and|or)` is worth
+     **+464 refs**, and it correctly reads "paragraphs (1), (2), and (3) of
+     subsection (a)" and "subsections (a), (b), and (c) as subsections (b), (c),
+     and (d)". But roughly one in eight of the new matches is a theft:
+
+     ```
+         (i) by striking ``(as defined in section 71(b)(2))'' in
+     subparagraph (B), and
+         (ii) by adding at the end the following new subparagraph:
+     ```
+
+     `(ii)` there is the next SUB-INSTRUCTION, and the list absorbs it. Confining
+     the separator to one physical line does not help and the reason is worth
+     knowing: `extractSteps` matches against the **two-line overlay probe**
+     (item 24), which replaces the newline with a single space — so the marker at
+     the head of the next line really is adjacent by the time any pattern sees it.
+     This is item 24's own warning ("the join must not steal a real outline
+     marker") failing in the one direction it was checked and found safe in. The
+     guard is `isWrappedMarkerLine` in `app/parse/outline.js`, which already
+     answers exactly this question and says `(ii)` is a REAL marker because the
+     line above it ends in "and". Wiring that into the list separator is the work;
+     it is not a character-class change.

@@ -444,6 +444,46 @@ section('relative navigation inside amendments');
      ams2[0]?.subsection, '(d)(7)(B)');
 }
 {
+  // …and the head's path is used where it EXTENDS the parenthetical's rather
+  // than diverging from it. The codified subsection wins outright (above), which
+  // dropped the inner unit whenever the parenthetical stated anything at all:
+  // "Paragraph (3) of section 3111(f) is amended by striking ``the credit''"
+  // scoped to (f) and struck those words in the chapeau of § 3111, a provision
+  // the instruction had just said it was not talking about. 222 heads extend the
+  // parenthetical against 22 that genuinely diverge.
+  const ext =
+    'Subparagraph (B) of section 280F(d)(7) of the Internal Revenue Code of 1986\n' +
+    "(26 U.S.C. 280F(d)(7)) is amended by striking ``old''.\n";
+  const a1 = extractAmendments(ext, extractCitations(ext))[0];
+  eq('the head extends the parenthetical, so the longer path is the scope',
+     a1?.ops?.find((o) => o.type === 'strike')?.scope, '(d)(7)(B)');
+
+  // Both guards, and each was wrong first. A DIVERGENT head is still refused —
+  // 12 U.S.C. 375 IS section 22(d) of the Federal Reserve Act, so the Act's own
+  // (d) names nothing in the codified section.
+  const div =
+    "Section 22(d) of the Federal Reserve Act (12 U.S.C. 375(9)) is amended by striking ``old''.\n";
+  const a2 = extractAmendments(div, extractCitations(div))[0];
+  eq('a divergent head loses to the parenthetical',
+     a2?.ops?.find((o) => o.type === 'strike')?.scope, '(9)');
+
+  // …and so is the mirror case, where the PARENTHETICAL is the longer of the
+  // two. The prefix test is directional on purpose: only the head may extend.
+  const rev =
+    "Section 472(c) of the Social Security Act (42 U.S.C. 672(c)(1)) is amended by striking ``old''.\n";
+  const a3 = extractAmendments(rev, extractCitations(rev))[0];
+  eq('a longer parenthetical is not shortened to the head',
+     a3?.ops?.find((o) => o.type === 'strike')?.scope, '(c)(1)');
+
+  // The steps below the head compose against the longer path too, which is the
+  // half that moves what the reader is shown.
+  const nav =
+    'Paragraph (2) of section 72(p) of the Internal Revenue Code of 1986 (26 U.S.C.\n' +
+    "72(p)) is amended--\n    (1) in subparagraph (A), by striking ``old'';\n";
+  const a4 = extractAmendments(nav, extractCitations(nav))[0];
+  eq('a navigation step composes onto the head-extended base', a4?.steps?.[0]?.path, '(p)(2)(A)');
+}
+{
   // Stepping back UP the hierarchy. A subsection cannot live inside a
   // subparagraph, so a later "subsection (c)" must truncate the running path,
   // not extend it. Appending blindly produced 5 U.S.C. 801(a)(2)(A)(c).
@@ -2740,6 +2780,54 @@ section('references inside quoted inserted law');
     // never both — so the list stops at (m) and the "of section 414" that says
     // whose subsections these are sits just past the end of the match.
     eq('a list broken by ", or" still sees the section it names', rel.length, 0);
+  }
+
+  // --- a bare "of" is not an address --------------------------------------
+  //
+  // "of" is the commonest preposition in English and statutory prose is made of
+  // it, so testing for one refused 110 references that were relative to the
+  // block after all. "of this subsection" names the very provision the block is
+  // joining, which is exactly what blockRefs composes against.
+  {
+    const t = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Subsection (b) of section 164 of the Internal Revenue Code of 1986 is\n' +
+      'amended by adding at the end the following:\n' +
+      QB(['    ', '    '],
+         ['(6) Limitation.--The aggregate amount taken into account under',
+          'paragraph (5) of this subsection shall not exceed $10,000.']) + '\n'
+    );
+    const cites = extractCitations(t);
+    const rel = expandRelativeRefs(cites, extractAmendments(t, cites)).filter((c) => c.insertedLaw);
+    eq('"of this subsection" is the block\'s own ancestry, and composes', rel.length, 1);
+    eq('  and it reaches 26 U.S.C. 164(b)(5)',
+       rel[0] && `${rel[0].title}:${rel[0].section}${rel[0].subsection}`, '26:164(b)(5)');
+  }
+  // …while the forms that really do open an address stay refused. Both of these
+  // were the reason the guard existed, and neither may be lost to narrowing it.
+  {
+    const t = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Section 1 of the Internal Revenue Code of 1986 is amended by adding at\n' +
+      'the end the following:\n' +
+      QB(['    ', '    '], ['(j) Rules.--The amount described in subsection (b) of section 6033',
+                            'shall apply.']) + '\n'
+    );
+    const cites = extractCitations(t);
+    const rel = expandRelativeRefs(cites, extractAmendments(t, cites)).filter((c) => c.insertedLaw);
+    eq('"of section N" still names somebody else\'s numbering', rel.length, 0);
+  }
+  {
+    const t = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Section 1 of the Internal Revenue Code of 1986 is amended by adding at\n' +
+      'the end the following:\n' +
+      QB(['    ', '    '], ['(j) Rules.--The amount described in paragraph (2) thereof shall',
+                            'apply for the year.']) + '\n'
+    );
+    const cites = extractCitations(t);
+    const rel = expandRelativeRefs(cites, extractAmendments(t, cites)).filter((c) => c.insertedLaw);
+    eq('"thereof" still names the provision just mentioned', rel.length, 0);
   }
 
   // --- against the real bill ----------------------------------------------
