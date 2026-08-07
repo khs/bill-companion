@@ -1375,19 +1375,12 @@ linkedom has no cascade and that whole class of bug is otherwise invisible.
    above the accent-coloured section head (the opt-out holds), the `↳` on a
    composed citation is legible without shouting, and the redline's green
    insert / struck-through strike read correctly side by side.
-   Still unlooked-at, and all *layout*, which is the kind linkedom cannot check:
-   - `.sec-head.run-in`, the appropriations heading that carries its own first
-     sentence. Same risk in reverse: if the override loses, 648 paragraphs of
-     H.J. Res. 31 render as uppercase accent-coloured headings.
-   - `<optgroup>` in the jump menu. Native select styling varies by platform and
-     nobody has seen it on any of them.
-   And the Public Law pane added the same day is a fourth: `.card.warn` for
-   "As enacted", `.prov` blocks for each section, and a `.links` row reused as a
-   table of contents for up to 200 entries — which is a lot of chips in a row
-   and has never been looked at.
-   Go and look at these rather than asking; the tooling is there now. Dark mode
-   is the one thing still needing Keller, since the agent screenshots whatever
-   theme the browser is in.
+   **All four of the things this item listed as unlooked-at have now been looked
+   at — see item 56.** Two were sound (`.sec-head.run-in` and the jump menu's
+   `<optgroup>`s), dark mode was confirmed by Keller, and the Public Law pane's
+   `.links` table of contents was 200 inert chips and 5,660 pixels, which is
+   fixed. The pane overflow found on the way was a bug nobody had listed at all.
+   Keep the habit rather than the list: go and look after any UI change.
 12. **`inserting after subparagraph (C) the following` is placed.** (Fixed
    2026-08-02.) It was worse than "misplaced": an insert reaches `apply()` with
    either a paired strike or a quoted anchor, and this shape has neither, so it
@@ -3115,3 +3108,67 @@ LVXXXVI--FEDERAL MARITIME
    become relative citations. Redline barely moves and moves the right way: drawn
    1,946 → 1,947, additions drawn 1,760 → 1,761, provision not on screen 519 →
    518, `no such level at all` unchanged at 262.
+
+56. **The four unlooked-at things were looked at, and two of them were broken.**
+   (2026-08-06. TODO 11 listed four pieces of layout nobody had ever seen. Keller
+   confirmed dark mode; the agent looked at the other three. Both bugs found are
+   invisible to every test in this repo, because linkedom has no layout and a
+   height is layout.)
+
+   Confirmed sound, and no longer open:
+
+   - **Dark mode.** Keller's own report.
+   - **`.sec-head.run-in`.** H.J. Res. 31 renders 649 of its 660 section heads as
+     run-in, and the override wins on every one: `text-transform: none`, body ink
+     rather than the accent, 16px serif at weight 400. The named risk — 649
+     paragraphs rendering as uppercase accent-coloured headings if the override
+     lost — is closed, checked by computed style rather than by eye.
+   - **`<optgroup>` in the jump menu.** 26 groups over 661 options on the same
+     bill, labelled `DIVISION A — … › TITLE I — …`. Native select popups are drawn
+     by the OS and cannot be screenshotted, so this is verified as structure; how
+     a given platform paints the group labels is still unseen and probably
+     unknowable from here.
+
+   **The panes overflowed each other at every narrow viewport.** `.pane-body`
+   carries `padding-bottom: 60vh` so the last paragraph can scroll up to the top
+   of the reading area — right while a pane IS the viewport. Stacked (≤860px
+   wide), each pane is about `(100vh - topbar) / 2`, so a 60vh padding is taller
+   than the box holding it, and **padding is the one thing flexbox will not
+   shrink**: `min-height: 0` cannot help and neither can `flex-basis`, because a
+   border box is never smaller than its own padding. Measured at 536×419: the
+   bill's `.pane-body` was 269px inside a 123px `.pane`, `.pane` is
+   `overflow: visible`, so the bill's text painted straight over the context pane
+   below it — and the whole document grew a 57px scroll, which was that same
+   overflow (166 topbar + 41 head + 269 body = 476 against a 419 viewport).
+
+   Container query units are the fix rather than a smaller `vh`, and the reason is
+   worth keeping: **the topbar's height changes as its buttons wrap**, so any
+   fraction of the viewport is a guess about how much is left — 166px at 536 wide
+   against ~51px at 1280. `45cqh` of the pane always fits beside a ~41px pane
+   head. Verified at 536×419, 820×760 stacked and 1000×700 side-by-side: page
+   overflow 0, neither pane overflowing, and the scroll-past affordance still
+   there. Desktop is deliberately untouched — there a pane is full height and 60vh
+   has always fitted, which is why nobody saw this.
+
+   **The Public Law contents was 200 inert chips and 5,660 pixels.** A reader
+   clicking a bare "Public Law 115-141" got the 1,254-section Consolidated
+   Appropriations Act, 2018's table of contents as a wrapping row of `.crumb`
+   spans — forty-six screens of them at that pane height, sitting between them and
+   the "Read elsewhere" links that would actually take them somewhere. The old
+   note ("…and 1054 more") was honest about the truncation and silent about the
+   length, which is the same shape as the CFR cap before TODO 8 gave it a way out.
+   Capped at `LIST_CAP` (40) with the same "Show all N" control, now shared by
+   both lists rather than written twice.
+
+   Two details. The truncation card is a **sibling** of the contents card, not a
+   child — a card inside a card reads as a nested panel. And the chips are still
+   inert: they name 1,254 sections and none of them is clickable, so this is a
+   list and not yet navigation. Making them navigable needs a handler that
+   resolves one section of one Public Law, which is a feature rather than a layout
+   fix; recorded here rather than done.
+
+   The render test asserts the cap, the message, the sibling relationship and the
+   whole round trip — control offered, host asked, every entry listed, control
+   gone — because asserting only that the control exists would pass against one
+   that did nothing. That is TODO 13's rule, and it is the only part of any of this
+   a test can reach. rendertest 405 -> 412; selftest and the corpus do not move.

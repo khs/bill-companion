@@ -1759,6 +1759,32 @@ section('resolvers');
     ok('a bare Public Law renders its contents',
        /Contents — 286 sections/.test(wholeEl.textContent),
        [...wholeEl.querySelectorAll('h4')].map((h) => h.textContent).join(' | '));
+
+    // …capped, because it was not. 1,254 sections gave 200 inert chips running
+    // 5,660 pixels down the pane — forty-six screens between the reader and the
+    // links below. Seen on screen; a height is layout, so nothing here could
+    // have caught it, and what IS assertable is the cap and the way out.
+    const toc = [...wholeEl.querySelectorAll('.card')].find((c) => /^Contents/.test(c.textContent));
+    eq('  capped at 40 entries', toc.querySelectorAll('.links > *').length, 40);
+    ok('  and says so', /Showing the first 40 of 286 sections in this law/.test(wholeEl.textContent),
+       wholeEl.textContent.slice(0, 200));
+    ok('  the "Truncated" card is a sibling, not nested inside the contents',
+       toc.querySelectorAll('.card').length === 0, `${toc.querySelectorAll('.card').length} nested`);
+    let askedAll = false;
+    const capped = renderContext(whole, { onShowAll: () => { askedAll = true; } });
+    const showAll = [...capped.querySelectorAll('.crumb.clickable')].find((e) => /Show all 286/.test(e.textContent));
+    ok('  and offers a way to see the rest', !!showAll,
+       [...capped.querySelectorAll('.crumb.clickable')].map((e) => e.textContent).join(' | '));
+    showAll.dispatchEvent(new capped.ownerDocument.defaultView.Event('click', { bubbles: true }));
+    ok('  which asks the host to lift the cap', askedAll);
+
+    // …and lifting it renders every entry, with the control gone. Asserting only
+    // that the control exists would pass against one that did nothing — the same
+    // round trip TODO 13's widen control is held to.
+    const allEl = renderContext(whole, { showAllSections: true, onShowAll: () => {} });
+    const allToc = [...allEl.querySelectorAll('.card')].find((c) => /^Contents/.test(c.textContent));
+    eq('  lifted, every section is listed', allToc.querySelectorAll('.links > *').length, 286);
+    ok('  and the control is gone', !/Show all/.test(allEl.textContent));
   }
 
   // Live eCFR through the real resolver: XML parse, section split, ancestry.

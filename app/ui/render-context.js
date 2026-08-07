@@ -300,37 +300,15 @@ export function renderContext(res, handlers) {
     // all of them is slow and unreadable. It always said so; what it did not do
     // was offer any way to see the rest, which made the cap a dead end for
     // anyone who actually wanted section 51 of 200.
-    const CAP = 40;
-    const all = handlers.showAllSections || res.sections.length <= CAP;
-    for (const s of all ? res.sections : res.sections.slice(0, CAP)) {
+    const all = handlers.showAllSections || res.sections.length <= LIST_CAP;
+    for (const s of all ? res.sections : res.sections.slice(0, LIST_CAP)) {
       root.appendChild(cfrSection(s, s === res.focus, res));
     }
     if (!all) {
-      const c = document.createElement('div');
-      c.className = 'card';
-      const h = document.createElement('h4');
-      h.textContent = 'Truncated';
-      c.appendChild(h);
-      const p = document.createElement('p');
-      p.textContent = `Showing the first ${CAP} of ${res.sections.length} sections in this part.`;
-      c.appendChild(p);
-      if (handlers.onShowAll) {
-        const row = document.createElement('div');
-        row.className = 'links';
-        const b = document.createElement('span');
-        b.className = 'crumb clickable';
-        b.textContent = `Show all ${res.sections.length}`;
-        b.setAttribute('role', 'button');
-        b.tabIndex = 0;
-        const go = () => handlers.onShowAll();
-        b.addEventListener('click', go);
-        b.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
-        });
-        row.appendChild(b);
-        c.appendChild(row);
-      }
-      root.appendChild(c);
+      root.appendChild(
+        truncatedCard(`Showing the first ${LIST_CAP} of ${res.sections.length} sections in this part.`,
+                      res.sections.length, handlers)
+      );
     }
   }
 
@@ -695,6 +673,53 @@ function appendMarked(parent, text, red, path) {
     s.textContent = seg.text;
     parent.appendChild(s);
   }
+}
+
+/**
+ * How many entries a list in this pane shows before it offers the rest.
+ *
+ * A CFR part can run to hundreds of sections and a Public Law to over a
+ * thousand, and rendering them all is slow and unreadable — the Consolidated
+ * Appropriations Act, 2018's contents came to 200 chips and 5,660 pixels, some
+ * forty-six screens of them, sitting between the reader and the "Read elsewhere"
+ * links below. Found by looking at it; nothing linkedom can check, because a
+ * height is layout.
+ */
+const LIST_CAP = 40;
+
+/**
+ * "Showing the first N of M", with a control that shows the rest.
+ *
+ * A cap that cannot be lifted is a dead end for anyone who wanted entry 51 of
+ * 200, which is why this exists at all — see TODO 8. Shared by the CFR part view
+ * and the Public Law contents, because a reader meeting one has met the other.
+ */
+function truncatedCard(message, total, handlers) {
+  const c = document.createElement('div');
+  c.className = 'card';
+  const h = document.createElement('h4');
+  h.textContent = 'Truncated';
+  c.appendChild(h);
+  const p = document.createElement('p');
+  p.textContent = message;
+  c.appendChild(p);
+  if (handlers.onShowAll) {
+    const row = document.createElement('div');
+    row.className = 'links';
+    const b = document.createElement('span');
+    b.className = 'crumb clickable';
+    b.textContent = `Show all ${total}`;
+    b.setAttribute('role', 'button');
+    b.tabIndex = 0;
+    const go = () => handlers.onShowAll();
+    b.addEventListener('click', go);
+    b.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+    });
+    row.appendChild(b);
+    c.appendChild(row);
+  }
+  return c;
 }
 
 function cfrSection(s, isFocus, res) {
@@ -1382,22 +1407,40 @@ function plawCard(root, res, handlers) {
     const h = document.createElement('h4');
     h.textContent = `Contents — ${res.plaw.total} sections`;
     c.appendChild(h);
+    // Capped for the same reason the CFR part view is, and it was not: 1,254
+    // sections yielded 200 inert chips running 5,660 pixels down the pane, so a
+    // reader who clicked a bare "Public Law 115-141" had forty-six screens of
+    // them to scroll past before reaching the links that would actually take
+    // them somewhere. The old note ("…and 1054 more") was honest about the
+    // truncation and silent about the length.
+    const shown = handlers.showAllSections ? res.plaw.toc : res.plaw.toc.slice(0, LIST_CAP);
     const list = document.createElement('div');
     list.className = 'links';
-    for (const t of res.plaw.toc.slice(0, 200)) {
+    for (const t of shown) {
       const s = document.createElement('span');
       s.className = 'crumb';
       s.textContent = `Sec. ${t.num}. ${t.heading}`.slice(0, 90);
       list.appendChild(s);
     }
     c.appendChild(list);
-    if (res.plaw.toc.length > 200) {
+    let trunc = null;
+    if (shown.length < res.plaw.toc.length) {
+      // A sibling of the contents card, not a child of it: a card inside a card
+      // reads as a nested panel and the "Show all" control belongs beside the
+      // list it lifts the cap on, exactly as it does for a CFR part.
+      trunc = truncatedCard(
+        `Showing the first ${shown.length} of ${res.plaw.total} sections in this law.`,
+        res.plaw.toc.length, handlers
+      );
+    } else if (res.plaw.toc.length < res.plaw.total) {
+      // Every entry we hold, but the law has more than the shards recorded.
       const more = document.createElement('p');
       more.className = 'dim';
-      more.textContent = `…and ${res.plaw.toc.length - 200} more.`;
+      more.textContent = `…and ${res.plaw.total - res.plaw.toc.length} more.`;
       c.appendChild(more);
     }
     root.appendChild(c);
+    if (trunc) root.appendChild(trunc);
   }
 
   if (res.links && res.links.length) root.appendChild(links(res.links));

@@ -591,6 +591,29 @@ mark.hit { background: color-mix(in srgb, var(--err) 22%, transparent); border-r
   .gutter { cursor: row-resize; }
   .pane-bill { border-right: 0; border-bottom: 1px solid var(--rule); }
   .billmeta { order: 10; width: 100%; }
+
+  /* The scroll-past allowance has to be measured against the PANE, not the
+     viewport, the moment the panes stop being full height.
+
+     `.pane-body`'s `padding-bottom: 60vh` lets the last paragraph scroll up to
+     the top of the reading area, which is right when a pane IS the viewport.
+     Stacked, each pane is about (100vh - topbar) / 2 — call it 45vh — so a 60vh
+     padding is taller than the box that holds it, and padding is the one thing
+     flexbox will not shrink: `min-height: 0` cannot help and neither can
+     `flex-basis`, because a border box is never smaller than its own padding. So
+     `.pane-body` overflowed `.pane`, `.pane` is `overflow: visible`, and the
+     bill's text painted straight over the context pane below it — at every
+     narrow viewport, not merely short ones. Seen on screen; no test could have
+     caught it, since linkedom has no layout.
+
+     Container query units are the fix rather than a smaller `vh`, because the
+     topbar's own height changes as its buttons wrap, so any fraction of the
+     viewport is a guess about how much is left. 45cqh of the pane always fits
+     beside a ~41px pane head, and asks the question that was meant all along.
+     Desktop is deliberately untouched: there a pane is full height and 60vh has
+     always fitted. */
+  .pane { container-type: size; }
+  .pane-body, .pane-ctx .pane-body { padding-bottom: 45cqh; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
