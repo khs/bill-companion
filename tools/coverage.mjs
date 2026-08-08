@@ -61,7 +61,7 @@ const bills = (Array.isArray(manifest) ? manifest : manifest.bills || Object.val
 const zero = () => ({
   drawn: 0, enacted: 0, withheld: 0, missing: 0,
   addDrawn: 0, addApplied: 0, addStranded: 0,
-  repMarked: 0, repInForce: 0, repStranded: 0,
+  repMarked: 0, repInForce: 0, repWhole: 0, repStranded: 0,
   widened: 0, lost: 0,
 });
 const total = zero();
@@ -98,6 +98,7 @@ for (const bill of bills) {
     // The same walk render-context does: apply() at each node with its own
     // path, then additionsAt() once that node's children are laid out. Asking
     // in any other order would measure a rendering nobody sees.
+    if (red.wholeSectionRewrite) red.wholeSectionRewrite();
     const walk = (n) => {
       // nodeEl() asks replacedAt() for every node it lays out, so this has to as
       // well — leaving it out reported all 923 replacements as "not on screen"
@@ -128,7 +129,8 @@ for (const bill of bills) {
         // out of both buckets would have shrunk the inline denominator by that
         // much and read as an improvement.
         const rep = red.replacedOps ? red.replacedOps().find((q) => q.start === o.start) : null;
-        if (rep && rep.inLaw) s.repInForce++;
+        if (rep && rep.wholeSection) s.repWhole++;
+        else if (rep && rep.inLaw) s.repInForce++;
         else if (here(placed, o)) s.repMarked++;
         else s.repStranded++;
       } else if (structural) {
@@ -183,10 +185,11 @@ console.log(`  provision not on screen    : ${total.addStranded}`);
 // redline.js — so a mark is the success state, and the split that matters is
 // whether the rewrite has already happened, because that decides whether the
 // text on screen is the provision as it stands or as this bill made it.
-const reps = total.repMarked + total.repInForce + total.repStranded;
+const reps = total.repMarked + total.repInForce + total.repWhole + total.repStranded;
 if (reps) {
   console.log(bold('\nwhole-provision replacements'), reps);
   console.log(`  already in force           : ${total.repInForce}`);
+  console.log(`  whole section, stated      : ${total.repWhole}`);
   console.log(`  marked, rewrite not matched: ${total.repMarked}`);
   console.log(`  provision not on screen    : ${total.repStranded}`);
 }

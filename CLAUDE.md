@@ -3325,3 +3325,66 @@ LVXXXVI--FEDERAL MARITIME
    subdivision heading — a whole new chapter of the IRC among them. 5 of them
    were additions rather than replacements, which is why additions drawn moves
    1,761 -> 1,756 with "not on screen" 518 -> 523.
+
+59. **A section-headed block means the OPPOSITE thing for a replacement, and I
+   had just declined 134 of them.** (2026-08-08, from classifying the 188
+   replacements item 58 left stranded.) Item 58 extended item 48's refusal — a
+   whole SECTION is never part of another section — to the new `replace` family.
+   That is right where the instruction walked INTO the provision and wrong where
+   it stayed at section level, which is most of them:
+
+   ```
+   Section 45Q is amended to read as follows:
+   ``SEC. 45Q. CREDIT FOR CARBON OXIDE SEQUESTRATION. ``(a) General Rule.--…
+
+   Section 510 of the Social Security Act (42 U.S.C. 710) is amended to read
+   as follows: ``SEC. 510. SEXUAL RISK AVOIDANCE EDUCATION. …
+   ```
+
+   The block IS the target, rewritten end to end. For an ADDITION a section-headed
+   block cannot belong inside the provision; for a REPLACEMENT it is the provision.
+   Same characters, opposite meaning, and the scope is what tells them apart:
+
+   - scope empty (the walk stayed at the section) -> `wholeSection`
+   - scope names a subsection -> `newSection`, refused as before, because
+     37 U.S.C. 908(d)(1) cannot read "Sec. 908. Reserves and retired members…"
+     whatever block followed the phrase
+
+   **The case-sensitivity relaxes here, and only here.** `RE_SECTION_BLOCK` is
+   case-sensitive because a bill amends a table of sections by adding lowercase
+   "Sec. 45S. Employer credit." items and 223 of those must not be read as new
+   sections. A scope-less replacement has no table to be confused with, and the
+   Code's own style is exactly the lowercase form — "Section 218 of title 23 is
+   amended to read as follows: ``Sec. 218. Alaska Highway''". 51 of the 134 are
+   written that way and were matching nothing at all.
+
+   A whole-section rewrite has **no node to mark**, because the section is not
+   one, so it is stated at the top of the provision instead. Marking one
+   subsection would say something narrower than the bill does. Here the whole
+   provision IS the right haystack for `rewriteInForce` — for once the claim is
+   about all of it — which is the mirror of item 58's rule and worth noting as
+   the exception that proves it.
+
+   Redline: replacements not on screen **188 -> 71**, with 117 stated as
+   whole-section rewrites and the classification of what is left now honest:
+
+   ```
+     already in force            355
+     whole section, stated       117
+     marked, rewrite not matched 380
+     provision not on screen      71
+   ```
+
+   Corpus does not move — these are flags on ops that already existed.
+   rendertest 424 -> 428.
+
+   **The lesson is item 54's, arriving one commit later.** Item 58 added a
+   refusal and counted the additions it moved (5, all checked); it did not ask
+   what the refusal did to the family it was being added FOR. The classification
+   that found this took ten minutes and I ran it only because the stranded count
+   looked high. Classify what a guard refuses in the population it was written
+   for, not only in the one it came from.
+
+   Left, and measured: 26 replacements whose scope names a level nowhere in the
+   provision, and 8 where a shorter prefix of the scope exists — the same
+   families item 34 classifies for operations generally, at a much smaller scale.

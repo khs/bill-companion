@@ -771,6 +771,10 @@ const RE_SECTION_BLOCK = /^\s*(?:``|‘‘|["“])?\s*SEC(?:TION)?\.?\s+[0-9]+[A
 const RE_PART_BLOCK =
   /^\s*(?:``|‘‘|["“])?\s*(?:PART|SUBPART|TITLE|SUBTITLE|CHAPTER|SUBCHAPTER|DIVISION)\s+[A-Z0-9IVXL]+\s*(?:--|[—–])/;
 
+// The same head in either case, for the one caller where case cannot mislead —
+// see markSectionAdditions().
+const RE_SECTION_HEAD_ANY = /^\s*(?:``|‘‘|["“])?\s*SEC(?:TION)?\.?\s+[0-9]+[A-Za-z0-9\-–]*\./i;
+
 /**
  * A new SECTION is never part of another section, at any depth.
  *
@@ -809,7 +813,30 @@ function markSectionAdditions(ops) {
     // cannot be checked.
     if (op.type !== 'add-at-end' && op.type !== 'replace' &&
         !(op.type === 'insert' && op.placement === 'after-unit')) continue;
-    if (op.text && (RE_SECTION_BLOCK.test(op.text) || RE_PART_BLOCK.test(op.text))) op.newSection = true;
+    // …but for a REPLACEMENT the same block means the opposite thing wherever
+    // the instruction stayed at section level. "Section 45Q is amended to read
+    // as follows: ``SEC. 45Q. CREDIT FOR CARBON OXIDE SEQUESTRATION.…''" is that
+    // section rewritten end to end — the block IS the target, not something that
+    // cannot belong inside it. 134 across the corpus, and declining them was
+    // wrong in both directions: nothing was drawn and nothing was said.
+    //
+    // The refusal still stands where the walk went INTO the provision, which is
+    // the case that is genuinely inconsistent: 37 U.S.C. 908(d)(1) cannot read
+    // "Sec. 908. Reserves and retired members…", whatever block followed the
+    // phrase. So the scope decides, and a section-level rewrite is marked as one.
+    if (!op.text) continue;
+    // A scope-less replacement may match in EITHER case, and that is safe here
+    // where a blanket /i is not. RE_SECTION_BLOCK is case-sensitive because a
+    // bill amends a table of sections by adding lowercase "Sec. 45S. Employer
+    // credit." items, and 223 of those must not be read as new sections. But a
+    // replacement has no table to be confused with, and the Code's own style is
+    // exactly the lowercase form: "Section 218 of title 23 is amended to read as
+    // follows: ``Sec. 218. Alaska Highway''". 51 of the 134 are written that way.
+    if (op.type === 'replace' && !op.scope) {
+      if (RE_SECTION_HEAD_ANY.test(op.text) || RE_PART_BLOCK.test(op.text)) op.wholeSection = true;
+      continue;
+    }
+    if (RE_SECTION_BLOCK.test(op.text) || RE_PART_BLOCK.test(op.text)) op.newSection = true;
   }
 }
 

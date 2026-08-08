@@ -635,6 +635,23 @@ section('redline on the current law');
     const t = createRedline(tiny).replacedAt('(a)', '(A) See below.');
     ok('  a block too short to fingerprint is never claimed in force', t && t.inLaw === false,
        JSON.stringify(t && t.inLaw));
+
+    // A rewrite of the WHOLE section has no node to mark, so it is stated at the
+    // top of the provision instead. "Section 45Q is amended to read as follows:
+    // ``SEC. 45Q. CREDIT FOR CARBON OXIDE SEQUESTRATION.…''" — the block IS the
+    // target, which is the opposite of what a section-headed block means for an
+    // ADDITION, where it cannot belong inside the target at all.
+    const whole = [{ type: 'replace', wholeSection: true, start: 1, end: 60,
+                     text: 'SEC. 45Q. CREDIT FOR CARBON OXIDE SEQUESTRATION. The credit shall be allowed.' }];
+    const wr = createRedline(whole, 'nothing like it here');
+    const got = wr.wholeSectionRewrite();
+    ok('a whole-section rewrite is reported at the section', !!got && got.inLaw === false);
+    ok('  and counts as dealt with', wr.placed().length === 1);
+    ok('  it is not stranded', wr.unplacedReplacements().length === 0);
+    const wr2 = createRedline(whole,
+      'SEC. 45Q. CREDIT FOR CARBON OXIDE SEQUESTRATION. The credit shall be allowed.');
+    ok('  and says so when the law already reads that way',
+       wr2.wholeSectionRewrite().inLaw === true);
   }
 
   // An amendment whose strikes all miss is an amendment that has already been

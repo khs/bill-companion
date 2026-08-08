@@ -595,6 +595,23 @@ export function createRedline(ops, fullText, knownPaths) {
     /** Every replacement, so a report can split them by `inLaw` after the walk. */
     replacedOps: () => replacements,
     /**
+     * A rewrite of the whole section, which has no node to hang a mark on.
+     *
+     * Marked done so `placed()` counts it — the pane states it at the top of the
+     * provision, which is what "dealt with" means for this shape. `inLaw` is
+     * judged against the whole provision here and that is the right haystack for
+     * once: the claim IS about the whole of it.
+     */
+    wholeSectionRewrite: () => {
+      const op = replacements.find((o) => o.wholeSection);
+      if (!op) return null;
+      if (!op.done) {
+        op.done = true;
+        op.inLaw = rewriteInForce(fullText, op.text);
+      }
+      return op;
+    },
+    /**
      * Inserts already in the law, marked where they now sit.
      *
      * Read by the panel so it can say "already in force" rather than "shown

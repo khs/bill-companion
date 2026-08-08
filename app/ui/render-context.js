@@ -498,6 +498,28 @@ function provision(res, scope) {
 
   const red = res.effect ? res.effect.redline : null;
 
+  // A rewrite of the WHOLE section has no node to mark — the section itself is
+  // not one — so it is stated at the top of the provision instead. "Section 45Q
+  // is amended to read as follows: ``SEC. 45Q. CREDIT FOR CARBON OXIDE
+  // SEQUESTRATION.…''" replaces everything below, and marking one subsection
+  // would say something narrower than the bill does. 134 across the corpus.
+  const wholeRewrite = red && red.wholeSectionRewrite ? red.wholeSectionRewrite() : null;
+  if (wholeRewrite) {
+    const c = document.createElement('div');
+    c.className = 'card warn';
+    const h = document.createElement('h4');
+    h.textContent = wholeRewrite.inLaw
+      ? 'Rewritten by this bill — already in force'
+      : 'This bill rewrites this section in full';
+    c.appendChild(h);
+    const p = document.createElement('p');
+    p.textContent = wholeRewrite.inLaw
+      ? 'Everything below is the text this bill substituted for the section that was here.'
+      : 'The bill replaces this section end to end. What follows is the section as it stands; the replacement is listed under the amendment below.';
+    c.appendChild(p);
+    box.appendChild(c);
+  }
+
   // The section's own lead-in sits above every subsection, so it goes first and
   // outside the ancestor ladder. Undivided sections carry all of their text
   // here and would otherwise render as a blank pane.
