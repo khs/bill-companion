@@ -598,6 +598,15 @@ function nodeEl(node, focusPath, red) {
     el.classList.add('was-added');
     el.title = 'Added by this bill — already in force';
   }
+  // …and a provision this bill rewrites from end to end. Deliberately a mark and
+  // not a diff: for a pending bill the text below is what the provision says
+  // today and for an enacted one it is what the bill made it say, and nothing
+  // here can tell those apart reliably enough to colour a whole provision either
+  // way. The panel prints the new language beside it. See replacedAt().
+  if (red && red.replacedAt && red.replacedAt(node.path)) {
+    el.classList.add('replaced');
+    el.title = 'This bill rewrites this provision in full';
+  }
   appendMarked(body, node.text, red, node.path);
   el.appendChild(body);
   if (node.children.length) {
@@ -796,6 +805,13 @@ function effect(eff, handlers) {
       t.textContent = words
         ? `at the end: “${words.length > 120 ? `${words.slice(0, 120)}…` : words}”`
         : 'adds new language at the end';
+    } else if (op.type === 'replace') {
+      // The whole provision, rewritten. The opening words are what let a reader
+      // recognise it against the text above; the rest is on screen already if
+      // the bill is enacted, and is what the provision will say if it is not.
+      t.className = 'op-text added';
+      const words = flat(op.text);
+      t.textContent = `rewritten to read: “${words.length > 140 ? `${words.slice(0, 140)}…` : words}”`;
     } else if (op.type === 'repeal') t.textContent = 'the provision is repealed in full';
     else t.textContent = `“${flat(op.text)}”`;
     row.appendChild(t);
@@ -833,6 +849,11 @@ function effect(eff, handlers) {
         ? '✓ already in force — marked above'
         : op.type === 'strike'
         ? '✓ struck above'
+        : op.type === 'replace'
+        // No coloured text is drawn for a replacement — the provision is marked
+        // as rewritten — so "shown above" would send the reader looking for
+        // green that is not there. Same trap the `rangeSkip` note describes.
+        ? '✓ the provision is marked above'
         : '✓ shown above';
       row.appendChild(f);
     } else if (op.type === 'strike') {

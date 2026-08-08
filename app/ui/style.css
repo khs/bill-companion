@@ -476,6 +476,18 @@ body {
    the bill's work" without claiming it is a pending change. */
 .prov .node.was-added > .body { border-left: 2px solid var(--ins); padding-left: 8px; }
 .prov .node.was-added > .body > .marker { color: var(--ins); }
+/* A provision this bill rewrites from end to end. Ruled down the side like the
+   above, and in the CAUTION colour rather than the insertion one, because which
+   text the reader is looking at depends on whether the bill has passed: the
+   provision as it stands today, or the provision as this bill made it. Marking
+   it either green or struck would answer that, and nothing here knows. Dashed,
+   because it is a statement about the provision rather than a change drawn into
+   it — the same distinction .was-ins makes inline. */
+.prov .node.replaced > .body {
+  border-left: 2px dashed var(--warn, var(--accent));
+  padding-left: 8px;
+}
+.prov .node.replaced > .body > .marker { color: var(--warn, var(--accent)); }
 .prov .node.dimmed { opacity: .45; }
 .prov .node.dimmed:hover { opacity: 1; }
 

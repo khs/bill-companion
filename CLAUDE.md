@@ -3172,3 +3172,87 @@ LVXXXVI--FEDERAL MARITIME
    gone — because asserting only that the control exists would pass against one
    that did nothing. That is TODO 13's rule, and it is the only part of any of this
    a test can reach. rendertest 405 -> 412; selftest and the corpus do not move.
+
+57. **A whole-provision replacement is an operation now, and the pane says so.**
+   (2026-08-08, TODO 12's open item and the job item 44's counter named.) A bill
+   rewriting a provision from end to end emitted **no operation at all**:
+
+   ```
+   Section 1(f)(2)(A) is amended to read as follows:
+   ``(A) except as provided in paragraph (8), by increasing the minimum
+   and maximum dollar amounts, and''.
+
+   Paragraph (4) of section 3111(f) is amended by striking paragraph (4)
+   and inserting the following: ``(4) …''
+   ```
+
+   So the redline drew nothing, and `attachEffect()` returns early on an
+   amendment with no ops, so the panel said nothing either — the reader was told
+   this bill does nothing here, about one of the largest things a bill can do to
+   the statute book. **1,067 across the corpus.**
+
+   Two shapes, one act. Of the 1,067, **896 carried no op and get a new one**;
+   the other **171 are CONVERTED** — the second shape's block had been claimed by
+   the generic insert scan, which then drew nothing with it, because an insert
+   with neither a paired strike nor a quoted anchor falls through both branches
+   of `apply()`. Converting rather than adding is what keeps `overlaps` at zero:
+   one shape, one op, one span.
+
+   **"the following" is required, and it is the whole distinction.** Without it
+   the quoted text is a phrase being substituted rather than a provision being
+   rewritten — "by striking paragraph (3) and inserting ``replacement''" replaces
+   the paragraph with eleven characters, and the insert machinery has always
+   handled it. Making the phrase optional swept those up too, and selftest caught
+   it on the first run.
+
+   The scope is the walk plus the block's own leading marker, unless the walk
+   already stopped there — the identical rule `scopeUnitInserts()` arrived at for
+   an anchor, and it is here for the same reason: it cannot be wrong about a case
+   the depth model cannot read. `Section 1(f)(2)(A) … ``(A) …''` stays (f)(2)(A);
+   `in subparagraph (B), by amending clause (iii) … ``(iii) …''` becomes
+   (c)(1)(B)(iii).
+
+   **What is deliberately NOT built is a diff.** Striking the whole provision and
+   drawing the block after it is the literal truth of a *pending* bill and exactly
+   wrong for an *enacted* one, where the Code already reads the new text — that is
+   the duplication every guard in this file exists to prevent, at the scale of a
+   whole provision. Measured before deciding: of 535 replacements whose provision
+   resolves, the current text already matches the new block in at least 121, and
+   the comparison is unreliable in both directions because the Code stores a
+   node's heading apart from its body while the bill's block carries it inline. So
+   the node is MARKED and the panel prints the new language; the reader compares
+   it against the text in front of them. That is a weaker claim than a diff and
+   one that cannot be wrong. `.node.replaced` is a dashed rule in the CAUTION
+   colour, not the insertion colour, because which text is on screen depends on
+   whether the bill passed and nothing here knows.
+
+   Redline: **735 of 923 replacements mark their provision on screen**, 188 not —
+   those name a level the provision does not have, which `reScope()` reports.
+   Inline operations 15,237 -> 15,084 and `shown to the reader` **3,464 before and
+   after**: not one inline mark was lost, 153 ops merely moved to a bucket of
+   their own. `addresses the provision does not have` 1,156 -> 1,356 and `no such
+   level at all` 262 -> 279, which is the replacement scopes arriving and being
+   reconciled like any other.
+
+   **`tools/coverage.mjs` needed the bucket, and needed it in the walk.** Without
+   the bucket the 171 converted inserts fell out of the inline denominator and
+   read as an improvement — item 50's silent-skip trap exactly. And with the
+   bucket but without `replacedAt()` in coverage's own walk, all 923 reported
+   "not on screen" while the pane was marking them: a report that does not make
+   the same calls the renderer does measures a rendering nobody sees.
+
+   Corpus, accounted to the unit: `ops.replace +1067`, `ops.insert -169`,
+   `opSpans +898`, and **nothing else** — no citations, amendments, targeted,
+   diffSpans, refs, steps, relative, overlaps or badOffsets. 1067 = 898 new + 169
+   converted, and `opSpans` moves by the new ones alone because a conversion keeps
+   its span and only changes the key's type. selftest 659 (the CLARITY PDF gains
+   2, both real, both round-tripping, which is also the check that this shape is
+   read through the doubled-single quote convention), rendertest 412 -> 420.
+
+   Left open, and it is the interesting half: **the enacted/pending distinction.**
+   Telling them apart would let the pane say "rewritten by this bill — already in
+   force" against "this bill would rewrite this" and, for a pending bill, draw the
+   real diff. What blocks it is the heading, measured above. A comparison that
+   folded the Code's heading back into its body before matching is the next step,
+   and it wants its own measured pass because it decides what colour a whole
+   provision is drawn in.

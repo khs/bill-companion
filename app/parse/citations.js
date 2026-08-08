@@ -1964,6 +1964,94 @@ function blockRefs(text, blockStart, blockEnd, blockText, walked, out) {
 // provision replaced by the text that follows. See the note in quotedRefs().
 const RE_READ_AS_FOLLOWS = /\bto\s+read\s+as\s+follows\s*:/gi;
 
+// …and the same act written the other way round. "by striking paragraph (4) and
+// inserting the following:" names the provision instead of quoting it, so
+// RE_STRIKE finds nothing to pair — it is tempered against reaching across
+// "insert", correctly — and the generic insert scan takes the block as though it
+// were a phrase being woven in.
+// "the following" is required, and it is the whole distinction. Without it the
+// quoted text is a PHRASE being substituted, not a provision being rewritten:
+// "by striking paragraph (3) and inserting ``replacement''" replaces the
+// paragraph with eleven characters, and the insert machinery has always handled
+// it. Making the phrase optional swept those up too.
+const RE_STRIKE_AND_INSERT = new RegExp(
+  `\\bby\\s+striking\\s+(?:the\\s+)?(?:${UNIT_WORDS})\\s+(?:${MARKER_PATH})` +
+    '\\s+and\\s+inserting\\s+(?:in\\s+lieu\\s+thereof\\s+)?the\\s+following\\s*[^\\S\\n]*:?',
+  'gi'
+);
+
+/**
+ * A whole provision replaced by the text that follows.
+ *
+ * These emitted NO operation at all, so the redline drew nothing and the panel —
+ * which returns early on an amendment with no ops — said nothing either. 1,066
+ * across the corpus, and each one is a bill rewriting a provision from end to
+ * end, which is among the largest things a bill can do to the statute book.
+ *
+ * Two shapes, one act: `amended to read as follows:` and `by striking <unit>
+ * <markers> and inserting the following:`. Of the 1,066, 896 carry no op and get
+ * a new one; the other 170 are the second shape, where the generic insert scan
+ * had already claimed the block and drew nothing with it, because an insert with
+ * neither a paired strike nor a quoted anchor falls through both branches of
+ * apply(). Those are CONVERTED rather than doubled — one shape with one meaning,
+ * and no two ops sharing a span.
+ *
+ * The span is the block's own, so it round-trips to its text and `badOpOffsets`
+ * holds.
+ */
+function markReplacements(text, ops, from, to) {
+  for (const re of [RE_READ_AS_FOLLOWS, RE_STRIKE_AND_INSERT]) {
+    re.lastIndex = from;
+    let m;
+    while ((m = re.exec(text)) && m.index < to) {
+      const block = readAddedBlock(text, m.index + m[0].length);
+      if (!block) continue;
+      const body = text.slice(block.start, block.end);
+      const existing = ops.find((o) => o.start != null && o.start < block.end && o.end > block.start);
+      if (existing) {
+        existing.type = 'replace';
+        existing.start = block.start;
+        existing.end = block.end;
+        existing.text = body;
+        delete existing.placement;
+        delete existing.relation;
+        delete existing.anchor;
+      } else {
+        ops.push({ type: 'replace', start: block.start, end: block.end, text: body });
+      }
+    }
+  }
+}
+
+/**
+ * The provision a replacement replaces.
+ *
+ * `scopeOps` has already bound the op to the provision the instruction walked
+ * to, and the block's own leading marker names the provision being rewritten —
+ * the same signal `scopeAdditions()` reads, and for the same reason: it is what
+ * survives extraction. So the marker goes on the end of the walk, unless the
+ * walk already stopped there:
+ *
+ *   Section 1(f)(2)(A) is amended to read as follows: ``(A) …''
+ *     walk (f)(2)(A) already ends at (A)      -> (f)(2)(A)
+ *   Section 47(c) … (1) in paragraph (1)-- (A) in subparagraph (B), by amending
+ *   clause (iii) to read as follows: ``(iii) …''
+ *     walk (c)(1)(B), block opens (iii)       -> (c)(1)(B)(iii)
+ *
+ * That is the rule scopeUnitInserts() arrived at for an anchor, and it is here
+ * for the same reason — asking whether the path already ends there settles it
+ * without reasoning about a depth the marker's style may not be able to state.
+ */
+function scopeReplacements(ops) {
+  for (const op of ops) {
+    if (op.type !== 'replace' || !op.text) continue;
+    const lead = op.text.match(/^\s*(?:``|‘‘|["“])?\s*(\([A-Za-z0-9]{1,8}\))/);
+    if (!lead) continue;
+    const scope = String(op.scope || '');
+    if (!scope.endsWith(lead[1])) op.scope = scope + lead[1];
+  }
+}
+
 function quotedRefs(text, ops, target, steps, headBase, from, to) {
   if (!target || (target.kind !== 'usc' && target.kind !== 'cfr')) return [];
   if (!target.section || target.etSeq || target.note) return [];
@@ -3148,9 +3236,13 @@ export function extractAmendments(text, citations, divisions = []) {
         ? subsection
         : paren || subsection;
     const nav = extractSteps(text, h.headEnd, bodyEnd, base);
+    // Before scopeOps, so a replacement is scoped to the walk like any other
+    // operation, and scopeReplacements() only has to add the block's own level.
+    markReplacements(text, ops, h.headEnd, bodyEnd);
     scopeOps(ops, nav.steps, base);
     scopeAdditions(ops);
     scopeUnitInserts(ops);
+    scopeReplacements(ops);
     markRangeAdditions(ops, target);
     markSectionAdditions(ops);
     // After the scoping passes, because the composition rests on the scope each

@@ -3202,9 +3202,15 @@ if (existsSync(clarityPdfPath)) {
   // longer than RE_INSERT's old 400-character operand budget. A PDF bill is where
   // this hurt most — the typeset measure is narrower, so a block of the same
   // provisions carries more line breaks and crosses the budget sooner.
+  // 2 replacements: "by amending paragraph (7) to read as follows: ‘‘(7) DIGITAL
+  // ASSET SERVICE PROVIDER.—…" and the same shape on paragraph (3) of section
+  // 4(a). Both are whole-provision rewrites of the GENIUS Act, both scoped to the
+  // paragraph the block reopens, and both round-trip — checked individually, and
+  // they are also the check that this shape is read through the doubled-single
+  // quote convention a typeset PDF uses.
   const ops = opCounts(ams);
   eq('house print: extracts ‘‘...’’ operands', JSON.stringify(ops),
-     JSON.stringify({ 'add-at-end': 27, insert: 64, redesignate: 6, strike: 44 }));
+     JSON.stringify({ 'add-at-end': 27, insert: 64, redesignate: 6, strike: 44, replace: 2 }));
 
   // Counted against the source. 31 phrases in the bill, 27 of them inside a
   // parsed amendment — the other four sit in the long tail of amendatory
@@ -3250,7 +3256,10 @@ if (existsSync(clarityPdfPath)) {
   // makes those trustworthy rather than the count: seven new ops producing seven
   // new DISTINCT spans is what proves none of them was read twice — once by the
   // block reader and once by the generic scan that used to own this shape.
-  eq('  which collapse to distinct spans', spans.size, 123);
+  // +2 for the two replacements. Both are NEW spans rather than conversions of
+  // an existing insert, and two ops producing two distinct spans is what proves
+  // neither block was claimed twice — the same argument the seven above rest on.
+  eq('  which collapse to distinct spans', spans.size, 125);
   const quoted = ams.flatMap((a) => a.ops).filter((o) => o.text);
   ok('  and they are real quoted language', quoted.some((o) => /digital commodity/i.test(o.text)),
      JSON.stringify(quoted.slice(0, 3).map((o) => o.text)));

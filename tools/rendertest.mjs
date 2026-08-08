@@ -581,6 +581,32 @@ section('redline on the current law');
   eq('  but not a sibling', show(createRedline(scoped).apply('apples; or', '(d)(2)(B)')), 'apples; or');
   eq('  nor the section lead', show(createRedline(scoped).apply('apples; or', '')), 'apples; or');
 
+  // A whole-provision replacement is placed by IDENTITY, not by matching text,
+  // and it draws nothing — the provision is marked instead. 1,067 of these
+  // across the corpus emitted no operation at all before, so the redline drew
+  // nothing and the panel, which returns early on an amendment with no ops,
+  // said nothing either.
+  {
+    const rep = [{ type: 'replace', text: '(A) the new words.', start: 1, end: 19, scope: '(f)(2)(A)' }];
+    const r = createRedline(rep);
+    eq('a replacement draws no coloured text',
+       show(r.apply('the old words.', '(f)(2)(A)')), 'the old words.');
+    ok('  and is not reported placed before its node is laid out', r.placed().length === 0);
+    ok('  it names the provision it rewrites', !!r.replacedAt('(f)(2)(A)'));
+    ok('  and then counts as placed', r.placed().length === 1);
+    // Exactly the provision named, never a child: a rewrite of (A) says nothing
+    // about (A)(i), where a strike scoped to (A) would apply to both.
+    const r2 = createRedline(rep);
+    ok('  a descendant is not the provision replaced', !r2.replacedAt('(f)(2)(A)(i)'));
+    ok('  nor a sibling', !createRedline(rep).replacedAt('(f)(2)(B)'));
+    // Asked once. The renderer walks every node, and a second node answering to
+    // the same op would mark two provisions as the one being rewritten.
+    const r3 = createRedline(rep);
+    ok('  and answered only once', !!r3.replacedAt('(f)(2)(A)') && !r3.replacedAt('(f)(2)(A)'));
+    ok('  a replacement whose provision never appears is reported, not lost',
+       createRedline(rep).unplacedReplacements().length === 1);
+  }
+
   // An amendment whose strikes all miss is an amendment that has already been
   // applied to the law we hold. Its insertions must not be drawn — anchored to
   // text that has moved on, they duplicated language already present:

@@ -61,6 +61,7 @@ const bills = (Array.isArray(manifest) ? manifest : manifest.bills || Object.val
 const zero = () => ({
   drawn: 0, enacted: 0, withheld: 0, missing: 0,
   addDrawn: 0, addApplied: 0, addStranded: 0,
+  repMarked: 0, repStranded: 0,
   widened: 0, lost: 0,
 });
 const total = zero();
@@ -98,6 +99,11 @@ for (const bill of bills) {
     // path, then additionsAt() once that node's children are laid out. Asking
     // in any other order would measure a rendering nobody sees.
     const walk = (n) => {
+      // nodeEl() asks replacedAt() for every node it lays out, so this has to as
+      // well — leaving it out reported all 923 replacements as "not on screen"
+      // while the pane was marking them, which is the same measuring-a-rendering-
+      // nobody-sees mistake the comment above warns about.
+      if (red.replacedAt) red.replacedAt(n.path || '');
       red.apply(n.text || '', n.path || '');
       n.children.forEach(walk);
       red.additionsAt(n.path || '');
@@ -116,7 +122,14 @@ for (const bill of bills) {
     const here = (list, o) => list.some((q) => q.start === o.start);
     for (const o of a.ops) {
       const structural = o.type === 'add-at-end' || o.placement === 'after-unit';
-      if (structural) {
+      if (o.type === 'replace') {
+        // Counted in their own bucket rather than dropped. 169 of these were
+        // inserts until the replacement pass claimed them, and letting them fall
+        // out of both buckets would have shrunk the inline denominator by that
+        // much and read as an improvement.
+        if (here(placed, o)) s.repMarked++;
+        else s.repStranded++;
+      } else if (structural) {
         if (here(applied, o)) s.addApplied++;
         else if (here(placed, o)) s.addDrawn++;
         else s.addStranded++;
@@ -163,3 +176,13 @@ console.log(bold('\nadditions'), adds);
 console.log(`  drawn                      : ${total.addDrawn}`);
 console.log(`  already in the law         : ${total.addApplied}`);
 console.log(`  provision not on screen    : ${total.addStranded}`);
+
+// Whole-provision replacements. Deliberately not a diff — see replacedAt() in
+// redline.js — so "marked" is the success state here and there is no drawn/
+// already-in-force split to report.
+const reps = total.repMarked + total.repStranded;
+if (reps) {
+  console.log(bold('\nwhole-provision replacements'), reps);
+  console.log(`  provision marked on screen : ${total.repMarked}`);
+  console.log(`  provision not on screen    : ${total.repStranded}`);
+}

@@ -287,6 +287,16 @@ export function createRedline(ops, fullText, knownPaths) {
     // that works until a tree is shaped differently.
     .map((o) => ({ ...o, done: false, inLaw: alreadyIn(fullText, o.text) }));
 
+  // Whole-provision replacements. Excluded from `work` and `additions` by their
+  // type alone, so they were being dropped silently; they get their own list
+  // because they are placed by identity — the provision whose path they name —
+  // rather than by matching text or by joining a list. `scopeLost` is honoured
+  // for the same reason it is there: an address the provision does not have is
+  // reported, not guessed at.
+  const replacements = scoped
+    .filter((o) => o.type === 'replace' && typeof o.text === 'string' && !o.scopeLost)
+    .map((o) => ({ ...o, done: false }));
+
   // Has this amendment already happened?
   //
   // The Code we hold is current, so an *enacted* bill has usually already been
@@ -488,6 +498,34 @@ export function createRedline(ops, fullText, knownPaths) {
   }
 
   /**
+   * The provision this bill rewrites from end to end, if it is this one.
+   *
+   * A whole-provision replacement is not a phrase woven into a passage and not a
+   * block joining a list, so neither apply() nor additionsAt() can carry it — and
+   * before these ops existed nothing carried it at all: the redline drew nothing
+   * and the panel, which returns early on an amendment with no operations, said
+   * nothing either. 1,067 across the corpus.
+   *
+   * What is deliberately NOT done here is a diff. Striking the whole provision
+   * and drawing the block after it is the literal truth of a pending bill and
+   * exactly wrong for an enacted one, where the Code already reads the new text —
+   * that is the duplication every guard in this file exists to prevent, at the
+   * scale of a whole provision. So the node is marked and the panel states the
+   * new language; the reader compares it against the text in front of them,
+   * which is a weaker claim than a diff and one that cannot be wrong.
+   *
+   * Matched with `===` rather than a prefix: a replacement acts on exactly the
+   * provision it names, never on its children, the same way an `exact` scope
+   * behaves in inScope().
+   */
+  function replacedAt(path) {
+    const op = replacements.find((o) => !o.done && (o.scope || '') === (path || ''));
+    if (!op) return null;
+    op.done = true;
+    return op;
+  }
+
+  /**
    * The provisions an already-enacted addition put into the law, by path.
    *
    * When the Code already contains the added language there is nothing to draw
@@ -521,6 +559,7 @@ export function createRedline(ops, fullText, knownPaths) {
   return {
     apply,
     additionsAt,
+    replacedAt,
     appliedNodePaths,
     isStale: () => stale,
     /** Ops that never found a home, for the panel to report honestly. */
@@ -531,11 +570,17 @@ export function createRedline(ops, fullText, knownPaths) {
     // that isn't there. `rangeSkip` is the third of these and the same trap —
     // an addition at the end of an Act is marked done by the node that declined
     // it, and calling that "shown above" is the opposite of what was decided.
+    // A replacement is "placed" once the node it names has been laid out and
+    // marked, which is the whole of what it claims — the provision on screen is
+    // the one this bill rewrites. It draws no coloured text, so the panel says
+    // "marked above" rather than "shown above"; see effect().
     placed: () =>
-      [...work, ...additions.filter((o) => !o.applied && !o.staleSkip && !o.rangeSkip)]
+      [...work, ...additions.filter((o) => !o.applied && !o.staleSkip && !o.rangeSkip), ...replacements]
         .filter((o) => o.done),
     /** Additions whose scope names a provision that isn't in the tree shown. */
     unplacedAdditions: () => additions.filter((o) => !o.done),
+    /** …and replacements whose provision is not in the tree being shown. */
+    unplacedReplacements: () => replacements.filter((o) => !o.done),
     /**
      * Inserts already in the law, marked where they now sit.
      *
