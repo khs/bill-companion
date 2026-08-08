@@ -764,6 +764,13 @@ function markRangeAdditions(ops, target) {
 // A block that opens with a SECTION head is a whole new section of the law.
 const RE_SECTION_BLOCK = /^\s*(?:``|‘‘|["“])?\s*SEC(?:TION)?\.?\s+[0-9]+[A-Za-z0-9\-–]*\./;
 
+// …and a subdivision heading, which is higher still. Case-SENSITIVE and
+// separator-bearing for the same reason RE_SECTION_BLOCK is: a bill amends a
+// table of contents by adding lowercase entries, and "part of the amount" must
+// not read as the head of a part.
+const RE_PART_BLOCK =
+  /^\s*(?:``|‘‘|["“])?\s*(?:PART|SUBPART|TITLE|SUBTITLE|CHAPTER|SUBCHAPTER|DIVISION)\s+[A-Z0-9IVXL]+\s*(?:--|[—–])/;
+
 /**
  * A new SECTION is never part of another section, at any depth.
  *
@@ -793,8 +800,16 @@ const RE_SECTION_BLOCK = /^\s*(?:``|‘‘|["“])?\s*SEC(?:TION)?\.?\s+[0-9]+[A
  */
 function markSectionAdditions(ops) {
   for (const op of ops) {
-    if (op.type !== 'add-at-end' && !(op.type === 'insert' && op.placement === 'after-unit')) continue;
-    if (op.text && RE_SECTION_BLOCK.test(op.text)) op.newSection = true;
+    // A replacement is eligible for the same reason an addition is, and the
+    // corpus shows the same fault: "sec. 908. Reserves and retired members…"
+    // scoped to 37 U.S.C. 908(d)(1), and a "PART E—FEDERAL PAYMENTS FOR FOSTER
+    // CARE…" heading scoped to 42 U.S.C. 622(b)(19). A whole section, or the
+    // heading of a part, is never the text of a subsection whatever the walk
+    // said, so the block's own first line refuses it where the attribution
+    // cannot be checked.
+    if (op.type !== 'add-at-end' && op.type !== 'replace' &&
+        !(op.type === 'insert' && op.placement === 'after-unit')) continue;
+    if (op.text && (RE_SECTION_BLOCK.test(op.text) || RE_PART_BLOCK.test(op.text))) op.newSection = true;
   }
 }
 

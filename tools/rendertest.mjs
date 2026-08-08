@@ -605,6 +605,36 @@ section('redline on the current law');
     ok('  and answered only once', !!r3.replacedAt('(f)(2)(A)') && !r3.replacedAt('(f)(2)(A)'));
     ok('  a replacement whose provision never appears is reported, not lost',
        createRedline(rep).unplacedReplacements().length === 1);
+
+    // Has the rewrite already happened? Decided against the node the caller
+    // passes, not the whole provision — measured, that laxer haystack reported
+    // 42 U.S.C. 254b-2(b)(1)(F) in force for a rewrite that genuinely differs,
+    // because the words turn up elsewhere in the section.
+    const long = '(A) the Secretary shall determine whether each applicant satisfies '
+      + 'the eligibility criteria described in subparagraph (B) of this paragraph.';
+    const bigRep = [{ type: 'replace', text: long, start: 1, end: 40, scope: '(a)(1)(A)' }];
+    const inForce = createRedline(bigRep).replacedAt('(a)(1)(A)', long);
+    ok('  a rewrite the provision already reads is in force', inForce && inForce.inLaw === true,
+       JSON.stringify(inForce && inForce.inLaw));
+    const pending = createRedline(bigRep).replacedAt('(a)(1)(A)',
+      '(A) the Secretary shall publish an annual report describing the program.');
+    ok('  one it does not read is not claimed to be', pending && pending.inLaw === false,
+       JSON.stringify(pending && pending.inLaw));
+    // A near-copy is the shape a rewrite usually takes, and it is exactly where
+    // alreadyIn()'s 80-character prefix cannot help: the opening words match
+    // whether or not the change has happened. The whole of it is what separates
+    // them.
+    const nearly = createRedline(bigRep).replacedAt('(a)(1)(A)',
+      '(A) the Secretary shall determine whether each applicant satisfies '
+      + 'the wholly different conditions imposed by an unrelated statute enacted later.');
+    ok('  and a near-copy that diverges is not either', nearly && nearly.inLaw === false,
+       JSON.stringify(nearly && nearly.inLaw));
+    // Too short to be a fingerprint. A false "already in force" tells the reader
+    // a pending rewrite has happened, so the floor refuses rather than guesses.
+    const tiny = [{ type: 'replace', text: '(A) See below.', start: 1, end: 14, scope: '(a)' }];
+    const t = createRedline(tiny).replacedAt('(a)', '(A) See below.');
+    ok('  a block too short to fingerprint is never claimed in force', t && t.inLaw === false,
+       JSON.stringify(t && t.inLaw));
   }
 
   // An amendment whose strikes all miss is an amendment that has already been

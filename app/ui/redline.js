@@ -518,10 +518,21 @@ export function createRedline(ops, fullText, knownPaths) {
    * provision it names, never on its children, the same way an `exact` scope
    * behaves in inScope().
    */
-  function replacedAt(path) {
+  function replacedAt(path, provisionText) {
     const op = replacements.find((o) => !o.done && (o.scope || '') === (path || ''));
     if (!op) return null;
     op.done = true;
+    // …and whether it has already happened, which is the one thing that makes
+    // the mark say something. Decided HERE rather than at construction — the
+    // opposite of an addition's `inLaw`, deliberately — because the haystack is
+    // different. "Does the law already contain this added language anywhere in
+    // the provision?" is the right question for an addition; for a replacement
+    // the question is whether THIS node reads the new text, and testing the
+    // whole provision answers a laxer one. Measured: against the whole
+    // provision, 42 U.S.C. 254b-2(b)(1)(F) reports in force for a rewrite that
+    // genuinely differs, because the words turn up elsewhere in the section.
+    // The caller has the node; nothing here does.
+    if (typeof provisionText === 'string') op.inLaw = rewriteInForce(provisionText, op.text);
     return op;
   }
 
@@ -581,6 +592,8 @@ export function createRedline(ops, fullText, knownPaths) {
     unplacedAdditions: () => additions.filter((o) => !o.done),
     /** …and replacements whose provision is not in the tree being shown. */
     unplacedReplacements: () => replacements.filter((o) => !o.done),
+    /** Every replacement, so a report can split them by `inLaw` after the walk. */
+    replacedOps: () => replacements,
     /**
      * Inserts already in the law, marked where they now sit.
      *
@@ -656,6 +669,43 @@ export function createRedline(ops, fullText, knownPaths) {
  * of a line is removed: a quoted term inside the sentence is content, and both
  * single conventions take two characters, so a lone apostrophe is left alone.
  */
+/**
+ * Does this provision already read the way the bill rewrites it?
+ *
+ * A whole-provision rewrite needs a different test from `alreadyIn` and the
+ * reason is length. `alreadyIn` matches the first 80 folded characters, which
+ * identifies a short added block and is exactly wrong here: a rewrite is
+ * usually a near-copy of the old provision with one clause changed, so its
+ * opening 80 characters match whether or not the change has happened. What
+ * separates the two is the whole of it.
+ *
+ * So: what share of the new text's words does the provision already contain?
+ * Measured over the corpus, the populations separate sharply — of 541
+ * replacements whose provision resolves, 411 sit at 95% or better and the
+ * samples there are exact matches, while the tail below 70% is genuinely
+ * different text. There is no middle to speak of.
+ *
+ * Words of three letters or more, so the statutory scaffolding ("of", "the",
+ * "any") cannot carry a match on its own, and at least eight of them, because
+ * below that a short provision matches anything of its kind. A false positive
+ * here tells the reader a pending rewrite has already happened, which is this
+ * app's worst category, so the threshold is set where the measurement put the
+ * gap rather than where it would score best.
+ */
+const REWRITE_MATCH = 0.95;
+const REWRITE_MIN_WORDS = 8;
+function rewriteInForce(provisionText, block) {
+  if (typeof provisionText !== 'string' || !provisionText) return false;
+  const words = (s) =>
+    fold(String(s).replace(BLOCK_OPENERS, '$1$2')).norm.split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+  const want = words(block);
+  if (want.length < REWRITE_MIN_WORDS) return false;
+  const have = new Set(words(provisionText));
+  let hit = 0;
+  for (const w of want) if (have.has(w)) hit++;
+  return hit / want.length >= REWRITE_MATCH;
+}
+
 const BLOCK_OPENERS = /(^|\n)([ \t]*)(?:``|‘‘|["“])/g;
 function alreadyIn(fullText, added) {
   if (typeof fullText !== 'string' || !fullText) return false;

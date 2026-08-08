@@ -3256,3 +3256,72 @@ LVXXXVI--FEDERAL MARITIME
    folded the Code's heading back into its body before matching is the next step,
    and it wants its own measured pass because it decides what colour a whole
    provision is drawn in.
+
+58. **A rewrite that has already happened says so — and the heading was never
+   the obstacle.** (2026-08-08, the half item 57 left open.) Item 57 marked every
+   whole-provision replacement with one neutral sentence because it could not
+   tell an enacted rewrite from a pending one, and blamed the Code storing a
+   node's heading apart from its body while the bill's block carries it inline.
+
+   **That was wrong, and measuring it is what showed it.** Folding the heading
+   back in is worth **1.4 percentage points**. What was actually wrong was the
+   comparison: item 57 reached for a prefix test, and a rewrite is usually a
+   near-copy of the old provision with one clause changed, so its opening 80
+   characters match whether or not the change has happened. `alreadyIn()`'s
+   80-character prefix — right for a short added block, which it identifies — is
+   exactly the wrong instrument here. What separates the two populations is the
+   whole of it.
+
+   `rewriteInForce()` asks what share of the new text's words the provision
+   already contains. Over the corpus the populations separate sharply and there
+   is almost no middle:
+
+   ```
+     >= 0.95   411     the samples at this level are exact matches
+     0.85-0.95  50
+     0.70-0.85  22
+     0.50-0.70  22
+     <  0.50    36     genuinely different text
+   ```
+
+   Words of three letters or more, so statutory scaffolding cannot carry a match
+   on its own, and at least eight of them, because below that a short provision
+   matches anything of its kind.
+
+   **The haystack is the node, not the provision, and that distinction is the
+   whole safety of it.** An addition's `inLaw` is decided once at construction
+   against the whole provision, because "does the law contain this language
+   anywhere here?" is the right question for an addition. A replacement's is
+   decided in `replacedAt()` against the node the caller passes, because the
+   question is whether THIS passage reads the new way. Measured against the whole
+   provision instead, 42 U.S.C. 254b-2(b)(1)(F) reports in force for a rewrite
+   that genuinely differs — "$3,800,000,000 for fiscal year 2018 and
+   $4,000,000,000 for fiscal year 2019" against a provision that still reads
+   "$3,800,000,000 for fiscal year 2018;" — because the words turn up elsewhere
+   in the section. `createRedline` has no access to a single node; the renderer
+   does, so the renderer passes it.
+
+   **No "pending" wording was added, deliberately.** Every one of the 541
+   replacements whose provision resolves comes from an *enacted* bill — the
+   corpus's pending bills amend Acts that reach no Code section — so there is no
+   validated example of the negative to hold a claim to. Where the match fails,
+   the neutral sentence item 57 wrote is kept, which is exactly today's
+   behaviour. Claiming "this bill would rewrite this" would have been wrong on
+   all 58 low-overlap cases in the corpus, every one of them from a law that
+   passed.
+
+   Redline: **355 of 923 replacements are marked already in force**, ruled in the
+   insertion colour and titled so; 380 keep the caution-coloured neutral mark and
+   188 name a provision not on screen. Nothing else moves — inline operations,
+   `shown to the reader` at 3,464, and the corpus are all unchanged.
+
+   Found on the way, and it is item 48's rule arriving in the new family: **a
+   whole CHAPTER, PART or TITLE is never the text of a subsection.** 37 U.S.C.
+   908(d)(1) was being told it now reads "SEC. 908. Reserves and retired
+   members…", and 42 U.S.C. 622(b)(19) that it reads "PART E—FEDERAL PAYMENTS FOR
+   FOSTER CARE…". `RE_PART_BLOCK` refuses those the same way `RE_SECTION_BLOCK`
+   refuses a section, and `markSectionAdditions` now runs over replacements too.
+   57 blocks across the corpus, every one checked and every one a genuine
+   subdivision heading — a whole new chapter of the IRC among them. 5 of them
+   were additions rather than replacements, which is why additions drawn moves
+   1,761 -> 1,756 with "not on screen" 518 -> 523.

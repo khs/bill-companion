@@ -488,6 +488,12 @@ body {
   padding-left: 8px;
 }
 .prov .node.replaced > .body > .marker { color: var(--warn, var(--accent)); }
+/* …and where the rewrite has already happened, the same rule in the insertion
+   colour: the text on screen IS the bill's work, exactly as .was-added says.
+   Still dashed rather than solid, because a rewrite replaced language that was
+   there before, where an addition put something new in an empty place. */
+.prov .node.replaced.in-force > .body { border-left-color: var(--ins); }
+.prov .node.replaced.in-force > .body > .marker { color: var(--ins); }
 .prov .node.dimmed { opacity: .45; }
 .prov .node.dimmed:hover { opacity: 1; }
 

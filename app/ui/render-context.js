@@ -562,6 +562,25 @@ function indent(parent) {
   return d;
 }
 
+/**
+ * A node and everything under it, as the bill would have written it.
+ *
+ * The heading goes back inline with its `.--` separator, because that is how a
+ * bill writes a provision and how the block being compared against it reads —
+ * the Code stores the two apart. Worth only a point or so on the match either
+ * way, which is worth knowing: the heading was written down as the obstacle to
+ * telling an enacted rewrite from a pending one and it never was.
+ */
+function subtreeText(node) {
+  const parts = [];
+  const walk = (n) => {
+    parts.push(`${n.marker || ''} ${n.heading ? `${n.heading}.--` : ''}${n.text || ''}`.trim());
+    (n.children || []).forEach(walk);
+  };
+  walk(node);
+  return parts.join('\n');
+}
+
 function nodeEl(node, focusPath, red) {
   const el = document.createElement('div');
   el.className = 'node';
@@ -603,9 +622,16 @@ function nodeEl(node, focusPath, red) {
   // today and for an enacted one it is what the bill made it say, and nothing
   // here can tell those apart reliably enough to colour a whole provision either
   // way. The panel prints the new language beside it. See replacedAt().
-  if (red && red.replacedAt && red.replacedAt(node.path)) {
+  // The node's OWN subtree is the haystack, not the whole provision: the
+  // question is whether this passage reads the new way, and asking the section
+  // answers a laxer one. See replacedAt().
+  const rep = red && red.replacedAt ? red.replacedAt(node.path, subtreeText(node)) : null;
+  if (rep) {
     el.classList.add('replaced');
-    el.title = 'This bill rewrites this provision in full';
+    if (rep.inLaw) el.classList.add('in-force');
+    el.title = rep.inLaw
+      ? 'Rewritten by this bill — already in force'
+      : 'This bill rewrites this provision in full';
   }
   appendMarked(body, node.text, red, node.path);
   el.appendChild(body);
@@ -853,7 +879,12 @@ function effect(eff, handlers) {
         // No coloured text is drawn for a replacement — the provision is marked
         // as rewritten — so "shown above" would send the reader looking for
         // green that is not there. Same trap the `rangeSkip` note describes.
-        ? '✓ the provision is marked above'
+        // And whether the rewrite has already happened is the fact that decides
+        // what the reader is looking at: the provision as it stands, or the
+        // provision as this bill made it.
+        ? (op.inLaw
+            ? '✓ already in force — the provision above is the rewrite'
+            : '✓ the provision is marked above')
         : '✓ shown above';
       row.appendChild(f);
     } else if (op.type === 'strike') {
