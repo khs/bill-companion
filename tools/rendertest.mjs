@@ -652,6 +652,26 @@ section('redline on the current law');
       'SEC. 45Q. CREDIT FOR CARBON OXIDE SEQUESTRATION. The credit shall be allowed.');
     ok('  and says so when the law already reads that way',
        wr2.wholeSectionRewrite().inLaw === true);
+
+    // A heading rewrite renames a provision; it does not replace a word of its
+    // text. Refused by being kept OUT of the replacements list rather than by a
+    // flag inside it, because placed() does not filter that list — a refusal
+    // spelled "do not mark, but mark done" leaves placed() true and the panel
+    // prints "the provision is marked above" about a node carrying no mark.
+    // That is the invariant this file has broken three times.
+    const head = [{ type: 'replace', headingOnly: true, scope: '(d)(1)', start: 1, end: 50,
+                    text: 'Sec. 908. Reserves and retired members: acceptance of employment.' }];
+    const hr = createRedline(head, 'the provision text', new Set(['(d)(1)', '(d)']));
+    ok('a heading rewrite is not marked on the provision', !hr.replacedAt('(d)(1)', 'the provision text'));
+    ok('  nor carded as a whole-section rewrite', !hr.wholeSectionRewrite());
+    ok('  and placed() does not claim it was shown', hr.placed().length === 0);
+    ok('  nor is it reported stranded', hr.unplacedReplacements().length === 0);
+    ok('  it is reported as what it is', hr.headingRewrites().length === 1);
+    // …and the guard overrides wholeSection, which 15 of the 46 also carry.
+    const both = [{ type: 'replace', headingOnly: true, wholeSection: true, start: 1, end: 40,
+                    text: 'SEC. 914. GOVERNMENT LODGING PROGRAM.' }];
+    ok('  a heading rewrite that also looks whole-section is still a heading',
+       !createRedline(both, 'x').wholeSectionRewrite());
   }
 
   // An amendment whose strikes all miss is an amendment that has already been

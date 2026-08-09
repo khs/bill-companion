@@ -517,6 +517,44 @@ section('relative navigation inside amendments');
   eq('  and the same holds for a path rooted at a paragraph', ins2?.scope, '(a)(6)(i)');
 }
 {
+  // A heading rewrite renames a provision; it does not replace a word of its
+  // text. Read from the INSTRUCTION, because 11 of the 46 blocks are a bare
+  // caption carrying no "SEC. N." and no "PART X--" — no test of the block's
+  // shape can see those.
+  const head =
+    'Section 908 of title 37, United States Code, is amended--\n' +
+    '    (1) Section heading.--The heading of such section is amended to read as\n' +
+    "follows:\n        ``Sec. 908. Reserves and retired members: acceptance of employment.''.\n";
+  const a = extractAmendments(head, extractCitations(head))[0];
+  const rep = a?.ops?.find((o) => o.type === 'replace');
+  ok('a heading rewrite is flagged as one', rep?.headingOnly === true, JSON.stringify(rep));
+
+  // A bare caption, which is the half no block-shape guard can reach.
+  const bare =
+    'Section 118 of title 10, United States Code, is amended--\n' +
+    '    (1) by amending the section heading to read as follows:\n' +
+    "        ``Materiel readiness metrics and objectives for major weapon systems''.\n";
+  const b = extractAmendments(bare, extractCitations(bare))[0];
+  ok('  including one with no section head in the block at all',
+     b?.ops?.find((o) => o.type === 'replace')?.headingOnly === true);
+
+  // The sentence boundary is load-bearing: a heading amended in an EARLIER
+  // sentence must not silence the rewrite that follows it.
+  const apart =
+    'Section 100 of title 5, United States Code, is amended by amending the\n' +
+    'heading. Subsection (a) of such section is amended to read as follows:\n' +
+    "        ``(a) The Director shall report annually.''.\n";
+  const c = extractAmendments(apart, extractCitations(apart))[0];
+  ok('  and a heading amended in a previous sentence does not silence this one',
+     c?.ops?.find((o) => o.type === 'replace')?.headingOnly !== true);
+
+  // An ordinary rewrite is untouched.
+  const plain = "Paragraph (2) of section 72(p) is amended to read as follows:\n``(2) New text.''.\n";
+  const d = extractAmendments(plain, extractCitations(plain))[0];
+  ok('  while an ordinary provision rewrite is not flagged',
+     d?.ops?.find((o) => o.type === 'replace')?.headingOnly !== true);
+}
+{
   // Stepping back UP the hierarchy. A subsection cannot live inside a
   // subparagraph, so a later "subsection (c)" must truncate the running path,
   // not extend it. Appending blindly produced 5 U.S.C. 801(a)(2)(A)(c).

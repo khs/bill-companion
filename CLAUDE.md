@@ -3388,3 +3388,139 @@ LVXXXVI--FEDERAL MARITIME
    Left, and measured: 26 replacements whose scope names a level nowhere in the
    provision, and 8 where a shorter prefix of the scope exists — the same
    families item 34 classifies for operations generally, at a much smaller scale.
+
+60. **A heading rewrite is not a provision rewrite — and item 58's headline fix
+   never fired.** (2026-08-09, from a multi-agent adversarial audit of the
+   `replace` family shipped the day before. Five investigations, each checked by
+   two independent lenses.) The audit found ten defects in one day's code, seven
+   of them confidently-wrong output. This entry fixes the family that four of
+   them belong to; the rest are recorded in the TODO below.
+
+   **Item 58's own named example still rendered wrong.** That entry says it
+   stopped 37 U.S.C. 908(d)(1) being told it reads "Sec. 908. Reserves and
+   retired members…". It did not. Two reasons, and both are this file's own
+   tracked traps:
+
+   - `markSectionAdditions()` sets `newSection` on a `replace` op and **nothing
+     reads it**. `redline.js`'s `replacements` filter does not test it, and
+     `render-context.js`'s `newSection` message sits inside the
+     `add-at-end || after-unit` arm a replacement can never enter. That is item
+     33's rule — a field the parser sets and no consumer reads is a feature that
+     does not exist — broken two commits after item 59 restated it.
+   - `RE_SECTION_BLOCK` stays case-SENSITIVE for a scoped replacement, because
+     item 59 relaxed only the scope-less branch. The Code's own style is the
+     lowercase "Sec. 908.", so the block was never even flagged.
+
+   **The fix is not either of those.** Both are narrow tests of the BLOCK, and
+   11 of the 46 blocks are a bare caption — "Grant Program", "Materiel readiness
+   metrics and objectives for major weapon systems" — carrying no "SEC. N." and
+   no "PART X--" at all. No test of the block's shape can ever see them. The
+   instruction says it outright, in two shapes and 34 occurrences:
+
+   ```
+   (1) Section heading.--The heading of such section is amended to read as
+   follows: ``Sec. 908. Reserves and retired members: acceptance of employment''
+   (1) by amending the section heading to read as follows: ``Materiel readiness…''
+   ```
+
+   `RE_HEADING_REWRITE` is anchored with `$` against the text ENDING at the
+   phrase, so it names the instruction introducing THIS block and not a heading
+   amended earlier, and `[^.;]` forbids crossing a sentence boundary — without
+   it "…amend the heading. Subsection (a) is amended to read as follows" matches.
+   Asserted both ways.
+
+   **Refused by being kept OUT of the `replacements` list, not by a flag inside
+   it, and that is the load-bearing detail.** `placed()` is
+   `[...work, ...additions.filter(…), ...replacements].filter(o => o.done)` — the
+   replacements list is **unfiltered** — so a refusal spelled "do not mark, but
+   mark done" leaves `placed()` true and the panel prints "the provision is
+   marked above" about a node carrying no mark. A verifying agent patched
+   `replacedAt()` the obvious way and reproduced exactly that on 2 U.S.C. 1382.
+   This is the tracked invariant that has now been broken four times ("`placed()`
+   must know all of them… each of the three was added separately and each broke
+   this the same way"), and `coverage.mjs` tests `here(placed, o)`, so **the
+   report could not have detected its own bug.** Absent from the list, every
+   consumer is right for free.
+
+   **The message has to be true.** Routing these through `newSection` would print
+   "⚠ adds a whole new section, not part of this one". Not one of the 46 adds a
+   section; every one renames one.
+
+   And a replacement matched NO arm of the panel's not-placed chain — `strike`,
+   `insert`, `add-at-end || after-unit` — so it printed its language and then
+   said nothing at all about whether the reader would find it. It has an arm now.
+
+   Redline, all of it withdrawal: whole-section cards 117 -> 107, node marks
+   380 -> 363, so **27 false claims withdrawn**, plus 11 previously counted as
+   "provision not on screen" reclassified as the refusals they are. The total
+   stays 923. `coverage.mjs` gained the bucket, because lumping a deliberate
+   refusal in with "not on screen" turns a wrong label into no label, which is
+   not an improvement. Corpus unchanged — these are flags on ops that already
+   existed. selftest 659 -> 663, rendertest 428 -> 434.
+
+   **Two lessons from the audit, and the second is the useful one.** The first is
+   item 54's again: item 58 counted the additions its new refusal moved and never
+   asked what the refusal did to the family it was added for. The second is
+   sharper — *I wrote a commit message naming a provision as fixed and never
+   rendered it.* The audit did, in a DOM, and it was still wrong. A named example
+   in a commit message is a claim; render it.
+
+61. **What the audit found and this entry does NOT fix.** Six defects remain,
+   measured and ranked, so the next pass starts from evidence rather than
+   re-deriving it. In order of value against risk:
+
+   - **`scopeReplacements()` APPENDS the block's marker where `scopeAdditions()`
+     truncates.** `(b)(3)` + a block opening `(4)` becomes `(b)(3)(4)`, `reScope()`
+     shortens it back to `(b)(3)`, and the pane marks the walk's provision as
+     rewritten. 169 of the marked carry `scopeWidened` and 153 had exactly the
+     block's own marker thrown away; 18% of replace scopes fail to deepen against
+     0.2-0.6% for every other op type. The fix is two halves that must ship
+     together — read the address the instruction states ("by amending subsection
+     (d)(2) to read as follows"), and a replacement-only membership test in
+     `reScope()`. Measured full-proposal diff: 156 marks moved, 4 gained, **0
+     withdrawn**, 0 correct marks destroyed, 84 existing mis-marks repaired,
+     evidenced marks 358 -> 448. Do NOT implement the phrase as a navigation step
+     — that moves `steps`/`refs`, which the baseline sees.
+   - **A widened replacement scope breaks the identity claim `replacedAt()` rests
+     on.** State it as an identity test: the marked node's own marker must equal
+     the block's leading marker. Provably exact — `reScope()`'s shorten branch
+     drops from the end and `scopeReplacements()` appends at the end, so
+     shortening always removes the naming marker. 170 wrong marks withdrawn, 2
+     right ones kept, including 42 U.S.C. 1396a(a) (107 KB) claimed "already in
+     force" for a 1,786-character block.
+   - **`markRangeAdditions()` flags only `add-at-end`**, so `rangeEnd` is set on
+     none of the 26 resolved et seq. replacements; 12 make a claim. Shape the
+     guard by reading, not by score: 2 U.S.C. 135a and 15 U.S.C. 1701(1) are
+     **correct** and a blanket refusal deletes both.
+   - **`coverage.mjs` passes `flattenText(n)` where `render-context.js` passes
+     `subtreeText(n)`** — so the report measures a rendering nobody sees, by
+     exactly 58 ops each way. The pane's real split is 413 in force / 322 marked
+     against the report's 355 / 380.
+   - **`rewriteInForce()` false positive, demonstrated against shipped data.**
+     26 U.S.C. 25C(d) scores 0.9624 against a provision that does not contain the
+     bill's two-tier version at all. 6 of 484 in-force claims have a money or
+     percentage figure absent from the provision — unigram containment cannot see
+     a changed number, which is the one thing these rewrites usually change.
+   - **Item 48's open hazard is live here**: 43 replacement blocks belong to a
+     later instruction and 36 reach the reader. All 8 non-heading cases are
+     closed by the identity test above, so the symptom goes before the cause.
+
+   Also settled by measurement, so nobody re-derives them: **sibling quoted blocks
+   are not worth building** (64 of 279 provably incoherent; the target key does
+   not separate branches of the same section, and the composition path already
+   covers the safe subset) — and the "better lever" that investigation proposed,
+   widening `quotedRefs()` to plain inserts and strikes, **was already tried and
+   reverted**, with the reason written inside the function being measured. 263 of
+   its 578 addresses are exact-span duplicates of what the read-as-follows loop
+   already emits. **`styleDisagrees()` is not wrong today**: it fires 12 times in
+   2,630 and all 12 composed addresses reach nothing. And **`ladder` and
+   `bill.sections[].division` really are dead** — a runtime tripwire recorded 0
+   reads across 4,741 citations and 39.6 MB of export HTML, and `ladder` is
+   additionally *stale*, disagreeing with what the pane draws in 38 of 5,773
+   cases because resolution rewrites the path afterwards.
+
+   One live bug found in passing, outside the replace family: **the anaphoric
+   PREFIX**. `refContinues()` catches "of such paragraph" as a tail and nothing
+   catches "such paragraph (16)" as a prefix, so a reference in new SSA 2107
+   composes 42 U.S.C. 1397gg(e)(16) where 1396a(e)(16) is meant. 4 of the 2,396
+   shipped inserted-law addresses.

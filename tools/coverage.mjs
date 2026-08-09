@@ -61,7 +61,7 @@ const bills = (Array.isArray(manifest) ? manifest : manifest.bills || Object.val
 const zero = () => ({
   drawn: 0, enacted: 0, withheld: 0, missing: 0,
   addDrawn: 0, addApplied: 0, addStranded: 0,
-  repMarked: 0, repInForce: 0, repWhole: 0, repStranded: 0,
+  repMarked: 0, repInForce: 0, repWhole: 0, repHeading: 0, repStranded: 0,
   widened: 0, lost: 0,
 });
 const total = zero();
@@ -129,7 +129,11 @@ for (const bill of bills) {
         // out of both buckets would have shrunk the inline denominator by that
         // much and read as an improvement.
         const rep = red.replacedOps ? red.replacedOps().find((q) => q.start === o.start) : null;
-        if (rep && rep.wholeSection) s.repWhole++;
+        // A heading rewrite is REFUSED, not stranded, and the difference matters:
+        // lumping a deliberate refusal in with "the provision is not on screen"
+        // turns a wrong label into no label, which is not an improvement.
+        if (o.headingOnly) s.repHeading++;
+        else if (rep && rep.wholeSection) s.repWhole++;
         else if (rep && rep.inLaw) s.repInForce++;
         else if (here(placed, o)) s.repMarked++;
         else s.repStranded++;
@@ -185,11 +189,12 @@ console.log(`  provision not on screen    : ${total.addStranded}`);
 // redline.js — so a mark is the success state, and the split that matters is
 // whether the rewrite has already happened, because that decides whether the
 // text on screen is the provision as it stands or as this bill made it.
-const reps = total.repMarked + total.repInForce + total.repWhole + total.repStranded;
+const reps = total.repMarked + total.repInForce + total.repWhole + total.repHeading + total.repStranded;
 if (reps) {
   console.log(bold('\nwhole-provision replacements'), reps);
   console.log(`  already in force           : ${total.repInForce}`);
   console.log(`  whole section, stated      : ${total.repWhole}`);
+  console.log(`  heading only, refused      : ${total.repHeading}`);
   console.log(`  marked, rewrite not matched: ${total.repMarked}`);
   console.log(`  provision not on screen    : ${total.repStranded}`);
 }

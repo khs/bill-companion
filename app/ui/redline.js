@@ -293,8 +293,19 @@ export function createRedline(ops, fullText, knownPaths) {
   // rather than by matching text or by joining a list. `scopeLost` is honoured
   // for the same reason it is there: an address the provision does not have is
   // reported, not guessed at.
+  // A heading rewrite is refused by being kept OUT of this list rather than by a
+  // flag inside it, and that is deliberate. placed() is
+  // `[...work, ...additions.filter(…), ...replacements].filter(o => o.done)` —
+  // `replacements` is unfiltered — so a refusal spelled "do not mark, but mark
+  // done" leaves placed() true and the panel prints "the provision is marked
+  // above" about a node carrying no mark. That is the tracked invariant this file
+  // has broken three times ("placed() must know all of them… each of the three
+  // was added separately and each broke this the same way"), and coverage.mjs
+  // tests here(placed, o), so the report could not have detected its own bug.
+  // Absent from the list, every consumer is right for free.
+  const headingRewrites = scoped.filter((o) => o.type === 'replace' && o.headingOnly);
   const replacements = scoped
-    .filter((o) => o.type === 'replace' && typeof o.text === 'string' && !o.scopeLost)
+    .filter((o) => o.type === 'replace' && typeof o.text === 'string' && !o.scopeLost && !o.headingOnly)
     .map((o) => ({ ...o, done: false }));
 
   // Has this amendment already happened?
@@ -594,6 +605,15 @@ export function createRedline(ops, fullText, knownPaths) {
     unplacedReplacements: () => replacements.filter((o) => !o.done),
     /** Every replacement, so a report can split them by `inLaw` after the walk. */
     replacedOps: () => replacements,
+    /**
+     * Rewrites of a provision's HEADING, refused above and reported here.
+     *
+     * Refusing is not the same as saying nothing: the bill really does rename
+     * this provision, and that is worth one true sentence. Routing them through
+     * `newSection` would have printed "adds a whole new section, not part of
+     * this one" — and not one of them adds a section; every one renames one.
+     */
+    headingRewrites: () => headingRewrites,
     /**
      * A rewrite of the whole section, which has no node to hang a mark on.
      *

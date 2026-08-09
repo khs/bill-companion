@@ -933,6 +933,29 @@ function effect(eff, handlers) {
       f.textContent =
         op.replaces != null || op.anchor ? '⚠ anchor text not found' : '⚠ position not stated';
       row.appendChild(f);
+    } else if (op.type === 'replace') {
+      // A replacement matched NONE of the arms above, so it printed its language
+      // and then said nothing at all about whether the reader would find it —
+      // no status, and none of the widen control an addition gets. 119 of them
+      // in the default view.
+      const f = document.createElement('span');
+      if (op.headingOnly) {
+        // Refused, and the honest sentence is available from the same
+        // instruction that refused it. The bill renames the provision; it does
+        // not touch a word of its text, and a card claiming a 5,808-character
+        // section was "replaced end to end" over a 95-character caption is the
+        // worst kind of wrong this pane can be.
+        f.className = 'found';
+        f.textContent = '✓ rewrites this provision’s heading, not its text';
+      } else {
+        f.className = 'notfound';
+        f.textContent = op.scope
+          ? `⚠ rewrites ${op.scope}, which is not shown here`
+          : '⚠ the provision it rewrites is not shown here';
+      }
+      row.appendChild(f);
+      c.appendChild(row);
+      continue;
     } else if (op.type === 'add-at-end' || op.placement === 'after-unit') {
       // Three reasons an addition isn't drawn, and they mean opposite things.
       // Already in the law is the bill having *succeeded*; the reader should not

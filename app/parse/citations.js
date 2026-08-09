@@ -775,6 +775,13 @@ const RE_PART_BLOCK =
 // see markSectionAdditions().
 const RE_SECTION_HEAD_ANY = /^\s*(?:``|‘‘|["“])?\s*SEC(?:TION)?\.?\s+[0-9]+[A-Za-z0-9\-–]*\./i;
 
+// "…the heading of such section is amended to read as follows" and "…by amending
+// the section heading to read as follows" — the two shapes the corpus writes, 34
+// occurrences. Matched against the text ENDING at the phrase, so the `$` anchors
+// it to the instruction that introduces this block and not to a heading amended
+// somewhere earlier. `[^.;]` forbids crossing a sentence boundary.
+const RE_HEADING_REWRITE = /\bheading\b[^.;]{0,110}$/i;
+
 /**
  * A new SECTION is never part of another section, at any depth.
  *
@@ -2049,6 +2056,23 @@ function markReplacements(text, ops, from, to) {
       const block = readAddedBlock(text, m.index + m[0].length);
       if (!block) continue;
       const body = text.slice(block.start, block.end);
+      // A heading rewrite is not a provision rewrite. "The heading of such
+      // section is amended to read as follows: ``Sec. 908. Reserves and retired
+      // members''" renames a provision; it does not replace a word of its text.
+      // 34 across the corpus in two shapes — "the heading of X is amended to
+      // read as follows" and "by amending the section heading to read as
+      // follows" — and read as replacements they produced the worst output this
+      // app has: 10 U.S.C. 4871's card claimed a 5,808-character section was
+      // "replaced end to end" over a 95-character caption.
+      //
+      // Read from the INSTRUCTION rather than from the block, and that is the
+      // whole reason this exists as its own test: 11 of the blocks are a bare
+      // caption — "Grant Program", "Materiel readiness metrics and objectives
+      // for major weapon systems" — carrying no "SEC. N." and no "PART X--", so
+      // no test of the block's shape can ever see them. The sentence boundary in
+      // the lookbehind is load-bearing: without it "…amend the heading. Section
+      // 5 is amended to read as follows" would match.
+      const headingOnly = RE_HEADING_REWRITE.test(text.slice(Math.max(0, m.index - 140), m.index));
       const existing = ops.find((o) => o.start != null && o.start < block.end && o.end > block.start);
       if (existing) {
         existing.type = 'replace';
@@ -2058,8 +2082,12 @@ function markReplacements(text, ops, from, to) {
         delete existing.placement;
         delete existing.relation;
         delete existing.anchor;
+        if (headingOnly) existing.headingOnly = true;
       } else {
-        ops.push({ type: 'replace', start: block.start, end: block.end, text: body });
+        ops.push({
+          type: 'replace', start: block.start, end: block.end, text: body,
+          ...(headingOnly ? { headingOnly: true } : {}),
+        });
       }
     }
   }
