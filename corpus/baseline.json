@@ -599,8 +599,8 @@
   "targeted": 759,
   "distributed": 0,
   "steps": 688,
-  "refs": 1293,
-  "relative": 1731,
+  "refs": 1291,
+  "relative": 1729,
   "ops": {
    "strike": 869,
    "insert": 1077,
@@ -631,8 +631,8 @@
   "targeted": 724,
   "distributed": 0,
   "steps": 593,
-  "refs": 1062,
-  "relative": 1390,
+  "refs": 1061,
+  "relative": 1389,
   "ops": {
    "insert": 816,
    "add-at-end": 385,
@@ -695,8 +695,8 @@
   "targeted": 549,
   "distributed": 0,
   "steps": 426,
-  "refs": 741,
-  "relative": 1045,
+  "refs": 739,
+  "relative": 1043,
   "ops": {
    "add-at-end": 221,
    "strike": 525,

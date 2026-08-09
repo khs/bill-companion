@@ -2900,6 +2900,25 @@ section('references inside quoted inserted law');
     const rel = expandRelativeRefs(cites, extractAmendments(t, cites)).filter((c) => c.insertedLaw);
     eq('"thereof" still names the provision just mentioned', rel.length, 0);
   }
+  // The same anaphor arriving as a PREFIX. refContinues() reads the tail — "of
+  // such subsection" — and nothing read the head, so "such paragraph (16)" was
+  // composed relative to the block: new SSA 2107(e)(1)(J) writes "Paragraphs (5)
+  // and (16) of section 1902(e) … and the State has elected to apply such
+  // paragraph (16)", where the first is refused for its tail and the second
+  // named the same provision and reached 42 U.S.C. 1397gg(e)(16) instead of
+  // 1396a(e)(16).
+  {
+    const t = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Section 1 of the Internal Revenue Code of 1986 is amended by adding at\n' +
+      'the end the following:\n' +
+      QB(['    ', '    '], ['(j) Rules.--The amount described in paragraph (5) of section 219(g)',
+                            'shall be reduced under such paragraph (5).']) + '\n'
+    );
+    const cites = extractCitations(t);
+    const rel = expandRelativeRefs(cites, extractAmendments(t, cites)).filter((c) => c.insertedLaw);
+    eq('an anaphoric "such <unit> (N)" points back, not at the block', rel.length, 0);
+  }
 
   // --- the Oxford comma, and the two guards extending a list needs -----------
   //

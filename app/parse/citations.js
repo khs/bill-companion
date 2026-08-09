@@ -1927,6 +1927,10 @@ const STYLE_DEPTH = [
   [/^[A-HJ-UWYZ]$/, UNIT_DEPTH.subparagraph],
 ];
 
+// "such paragraph (16)", "that subparagraph (A)", "said clause (ii)" — a
+// reference pointing back at a provision already named. See blockRefs().
+const RE_ANAPHOR_PREFIX = /\b(?:such|that|said)\s+$/i;
+
 function styleDisagrees(marker, unitDepth) {
   const s = marker.slice(1, -1);
   const hit = STYLE_DEPTH.find(([re]) => re.test(s));
@@ -1998,6 +2002,16 @@ function blockRefs(text, blockStart, blockEnd, blockText, walked, out) {
   let rm;
   while ((rm = RE_REF.exec(body))) {
     if (refContinues(body.slice(rm.index + rm[0].length, rm.index + rm[0].length + 80))) continue;
+    // …and the same anaphor arriving as a PREFIX. refContinues() reads the tail
+    // — "paragraph (2) of such subsection" — and nothing read the head, so "such
+    // paragraph (16)" was composed relative to the block. New SSA 2107(e)(1)(J)
+    // reads "Paragraphs (5) and (16) of section 1902(e) … and the State has
+    // elected to apply such paragraph (16)": the first phrase is correctly
+    // refused because it continues into "of section 1902(e)", and the second
+    // named the same provision and composed 42 U.S.C. 1397gg(e)(16) where
+    // 1396a(e)(16) is meant. "such" points back at something already named,
+    // which is by definition not the block's own parent.
+    if (RE_ANAPHOR_PREFIX.test(body.slice(Math.max(0, rm.index - 24), rm.index))) continue;
     const pairs = unitPairs(rm[1]);
     const resolved = resolvePhrase(pairs, base);
     if (!resolved) continue;
