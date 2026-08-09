@@ -3620,3 +3620,42 @@ LVXXXVI--FEDERAL MARITIME
    not on screen 71 -> 73 — 923 throughout. **Provable mis-marks 96 -> 3**, the
    three being the residuals item 61 already named as not fixable from the bill.
    Corpus unchanged. selftest 663, rendertest 437.
+
+64. **A step must not become its own child, and a property test found it.**
+   (2026-08-09.) With the known bugs cleared, `tools/proptest.mjs` went in: ten
+   invariants checked over every op, citation and section the corpus produces —
+   74,839 citations, 22,874 ops, 16,712 composed addresses, 9,045 sections — plus
+   220 deterministic fuzz cases feeding damaged text through the whole pipeline.
+
+   It failed on four, at two sites, and both were the same shape:
+
+   ```
+   Section 1461 of the Safe Drinking Water Act (42 U.S.C. 300j-21(3)) is
+   amended-- (1) in paragraph (3), by striking …   ->  300j-21(3)(3)
+   ```
+
+   300j-21 numbers its TOP level with digits, so the parenthetical's (3) sits at
+   position 0 while the unit word "paragraph" claims depth 1 — the base survives
+   `place()`'s filter and the step lands underneath it. Item 34's flattening
+   family, arriving through the step composer, and the composed address reaches
+   nothing.
+
+   `place()` drops the kept level where the step names the marker it already
+   holds. Safe because a real path essentially never repeats a marker adjacently:
+   **1 of 230,633 node paths** across fourteen shipped titles, and a composed one
+   that does reaches nothing by construction. Corpus unchanged — the address is
+   corrected, not added or removed.
+
+   **What the properties are, and why they are properties rather than fixtures.**
+   Each needs the whole population to be worth anything: every span round-trips;
+   no two citations and no two ops of one amendment share a start; a scope is a
+   marker path and nothing else; no scope or composed address repeats a marker
+   adjacently; quoted blocks never overlap or invert; sections are ordered and
+   inside the text; **a refused op is never reported placed** — the invariant that
+   has broken five times — and a marked replacement's node marker IS the block's
+   leading marker. The fuzz half mutates a real bill (truncation, stripped quote
+   openers, unbalanced parens, a paren bomb, reversal) and asserts only that
+   nothing throws and that offsets still round-trip, because a span that does not
+   is what mis-renders the bill pane.
+
+   Run it after any parser change. It is a test, not a report: it exits non-zero.

@@ -1520,6 +1520,19 @@ function unitPairs(phrase) {
 function place(levels, depth, markerPath) {
   const kept = levels.filter((l) => l.depth < depth);
   const added = (markerPath.match(MARKER_RE) || []).map((marker, i) => ({ marker, depth: depth + i }));
+  // A step that names the provision the base already names must not become its
+  // own child. "Section 1461 of the Safe Drinking Water Act (42 U.S.C.
+  // 300j-21(3)) is amended-- (1) in paragraph (3)" composed 300j-21(3)(3),
+  // which reaches nothing: 300j-21's top level is digit-numbered, so the
+  // parenthetical's (3) sits at position 0 while the unit word "paragraph"
+  // claims depth 1 and the base survives the filter. Item 34's flattening
+  // family, arriving through the step composer.
+  //
+  // Safe because a real path essentially never repeats a marker adjacently:
+  // 1 of 230,633 node paths across fourteen titles of the shipped Code, and a
+  // composed one that does reaches nothing by construction. Found by a property
+  // test over every op and address the corpus produces, not by a fixture.
+  if (kept.length && added.length && kept[kept.length - 1].marker === added[0].marker) kept.pop();
   return [...kept, ...added];
 }
 
