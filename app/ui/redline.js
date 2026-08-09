@@ -181,6 +181,33 @@ function reScope(ops, knownPaths) {
     const scope = String(o.scope || '');
     if (!scope || exists(scope)) return o;
     const marks = scope.match(/\([A-Za-z0-9]{1,8}\)/g) || [];
+    // A REPLACEMENT keeps its last marker, because that marker is the provision.
+    // The block reopens what it replaces by name — "``(4) Congestion
+    // mitigation…''" replaces (4) — so where the walk composed too many levels
+    // above it ("(b)(3)" + "(4)" = "(b)(3)(4)"), the repair is to drop INTERIOR
+    // levels and keep the lead, not to shorten from the end. Shortening from the
+    // end throws away the one marker that names the provision, which is what
+    // left 42 U.S.C. 1396a(a) claiming a 1,786-character block.
+    //
+    // Exact membership, not the prefix test the other branches use, because
+    // replacedAt() matches with `===`. A test rather than a guess: it only ever
+    // adopts a path the provision actually has, which is why it withdraws
+    // nothing.
+    if (o.type === 'replace' && marks.length > 1) {
+      const lead = marks[marks.length - 1];
+      for (let i = marks.length - 2; i >= 0; i--) {
+        const tryPath = marks.slice(0, i).join('') + lead;
+        if (paths.some((p) => String(p) === tryPath)) {
+          return { ...o, scope: tryPath, scopeWidened: scope };
+        }
+      }
+    }
+    // A phrase-composed scope naming nothing falls back to where the op applied
+    // before the phrase was read, rather than being reported lost. See
+    // scopeReplacements().
+    if (o.scopeFromPhrase && o.scopeFallback && exists(o.scopeFallback)) {
+      return { ...o, scope: o.scopeFallback, scopeWidened: scope };
+    }
     for (let i = marks.length - 1; i > 0; i--) {
       const shorter = marks.slice(0, i).join('');
       if (exists(shorter)) return { ...o, scope: shorter, scopeWidened: scope };
@@ -532,6 +559,28 @@ export function createRedline(ops, fullText, knownPaths) {
   function replacedAt(path, provisionText) {
     const op = replacements.find((o) => !o.done && (o.scope || '') === (path || ''));
     if (!op) return null;
+    // IDENTITY. A replacement names one provision, and the block reopens it by
+    // its own marker — "``(4) Congestion mitigation…''" replaces (4) and nothing
+    // else. So the node's own marker has to BE that marker, and where it is not,
+    // this scope arrived here by repair rather than by the bill saying so.
+    //
+    // That happens through reScope(): scopeReplacements() appends the block's
+    // marker at the END and reScope()'s shorten branch drops from the END, so
+    // shortening always removes the very marker that names the provision. The
+    // result is a claim about an ancestor — and then rewriteInForce() measures
+    // containment against the wrong haystack, which is how 42 U.S.C. 1396a(a),
+    // 107,063 characters of it, came to be titled "already in force" for a
+    // 1,786-character block. Provable rather than observed: of 171 such claims,
+    // zero had the marked node's marker equal to the block's lead.
+    //
+    // A block with no leading marker cannot be tested and is left alone — that
+    // is the flush-sentence shape, one case, and refusing it would be a guess
+    // rather than a test.
+    const lead = String(op.text || '').match(/^\s*(?:``|‘‘|["“])?\s*(\([A-Za-z0-9]{1,8}\))/);
+    if (lead) {
+      const own = (String(path || '').match(/\([A-Za-z0-9]{1,8}\)/g) || []).pop();
+      if (own !== lead[1]) return null;
+    }
     op.done = true;
     // …and whether it has already happened, which is the one thing that makes
     // the mark say something. Decided HERE rather than at construction — the

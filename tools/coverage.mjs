@@ -49,6 +49,7 @@ const { unwrapPre } = await imp('tools/measure.mjs');
 const { resolve } = await imp('app/resolve/index.js');
 const { flattenText } = await imp('app/resolve/provision-tree.js');
 const { createRedline } = await imp('app/ui/redline.js');
+const { subtreeText } = await imp('app/ui/render-context.js');
 
 const bold = (s) => `\x1b[1m${s}\x1b[0m`;
 const dim = (s) => `\x1b[2m${s}\x1b[0m`;
@@ -104,7 +105,14 @@ for (const bill of bills) {
       // well — leaving it out reported all 923 replacements as "not on screen"
       // while the pane was marking them, which is the same measuring-a-rendering-
       // nobody-sees mistake the comment above warns about.
-      if (red.replacedAt) red.replacedAt(n.path || '', flattenText(n));
+      // subtreeText, NOT flattenText — the same call nodeEl() makes. They differ
+      // by the node's heading, which the Code stores apart from its body and the
+      // bill's block carries inline, and the difference moved 58 ops each way:
+      // the pane's real split was 413 in force / 322 marked while this report
+      // printed 355 / 380. Imported rather than re-spelled, for the reason
+      // measure.mjs exists — a metric that means something slightly different
+      // from the code it measures is worse than no metric.
+      if (red.replacedAt) red.replacedAt(n.path || '', subtreeText(n));
       red.apply(n.text || '', n.path || '');
       n.children.forEach(walk);
       red.additionsAt(n.path || '');

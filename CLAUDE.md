@@ -3524,3 +3524,55 @@ LVXXXVI--FEDERAL MARITIME
    catches "such paragraph (16)" as a prefix, so a reference in new SSA 2107
    composes 42 U.S.C. 1397gg(e)(16) where 1396a(e)(16) is meant. 4 of the 2,396
    shipped inserted-law addresses.
+
+62. **The replacement scope is the block’s own marker, and the bill often states
+   it outright.** (2026-08-09, item 61’s first two entries, shipped together.)
+   Three changes, and the third is the instrument.
+
+   - ** appended where it should compose.** The walk stops
+     at (b)(3), the block opens (4), and the scope became (b)(3)(4) — a paragraph
+     inside a paragraph.  then shortened it back to (b)(3) and the
+     pane marked the wrong sibling “rewritten in full”. 18% of replace scopes
+     failed to deepen, against 0.2–0.6% for every other op type.
+   - **The instruction states the address three words before the block.** “by
+     amending subsection (d)(2) to read as follows:” — nothing read it, so
+     7 U.S.C. 2016’s (h)(13) arrived as a bare (13) that exists nowhere. Composed
+     the way a navigation step is, and it is a CLAIM:  carries
+     , so a composed path naming nothing falls back to where the
+     op applied before rather than being reported lost. Anchored with  at the
+     phrase — 34 of 164 occurrences have no block within 20 characters, and a
+     forward scan attaches those to a distant one.
+   - ** keeps a replacement’s LAST marker.** Every other branch
+     shortens from the end, which throws away the very marker naming the
+     provision. A replacement drops INTERIOR levels instead, by exact membership
+     rather than the prefix test, because  matches with .
+
+   **And the identity guard, which is what makes any of it safe.** The marked
+   node’s own marker must BE the block’s leading marker. Provable rather than
+   observed:  appends at the end and ’s shorten
+   branch drops from the end, so a shortened scope has always lost the naming
+   marker — of 171 such claims, zero had them equal. That is how
+   42 U.S.C. 1396a(a), 107,063 characters of it, came to be titled “already in
+   force” for a 1,786-character block. A block with no leading marker cannot be
+   tested and is left alone.
+
+   ** was measuring a rendering nobody sees.** It passed
+    where  passes  — they differ by the
+   node’s heading, and the difference was 58 ops each way.  is
+   exported and imported now rather than re-spelled, for the reason 
+   exists.
+
+   Redline, and this is the accounting: already in force **355 → 519**, marked
+   380 → 186, not on screen 71 → 73, heading refused 38, whole section 107 —
+   total unchanged at 923. **Provable mis-marks 96 → 3**, where a mis-mark is a
+   marked node scoring under .95 while a DISJOINT node holds ≥ .95 of the
+   block’s words. All three residuals are known and not fixable from the bill:
+   10 U.S.C. 2684a and 16 U.S.C. 410aaa-75 were renumbered by the Code after
+   enactment, and 12 U.S.C. 24a is an upstream navigation gap — the bill writes
+   “(3) subsection (a)(3), by amending subparagraph (A)” without the “in” that
+    needs.
+
+   Corpus unchanged.  keys  on  and the
+   word  does not appear in it, which is exactly why this needed
+    and a mis-mark audit rather than a baseline diff.
+   selftest 663, rendertest 434 → 437.

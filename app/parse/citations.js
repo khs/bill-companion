@@ -782,6 +782,7 @@ const RE_SECTION_HEAD_ANY = /^\s*(?:``|‘‘|["“])?\s*SEC(?:TION)?\.?\s+[0-9]
 // somewhere earlier. `[^.;]` forbids crossing a sentence boundary.
 const RE_HEADING_REWRITE = /\bheading\b[^.;]{0,110}$/i;
 
+
 /**
  * A new SECTION is never part of another section, at any depth.
  *
@@ -1287,6 +1288,23 @@ const RE_NAV_MATTER = new RegExp(
   'gi'
 );
 const RE_REF = new RegExp(`\\b(${UNIT_PHRASE})`, 'gi');
+
+// "by amending subsection (d)(2) to read as follows:" — the instruction naming
+// the provision it rewrites. Read by markReplacements(), which sits far above
+// this line; the definition lives HERE because it is built from UNIT_WORDS and a
+// const is not hoisted, so evaluating it earlier throws "Cannot access
+// 'UNIT_WORDS' before initialization". markReplacements only reads it at call
+// time, which is long after module evaluation.
+//
+// Anchored with `$` against the text ending at the phrase, so it belongs to THIS
+// block: measured backward from each op, 34 of 164 phrase occurrences have no
+// block within 20 characters, and a forward scan attaches those to a distant
+// one. ", as so redesignated," is the only middle the corpus ever writes.
+const RE_AMENDING_UNIT = new RegExp(
+  `\\bamending\\s+(?:the\\s+)?(${UNIT_WORDS})\\s+((?:${MARKER})+)` +
+    '(?:\\s*,\\s*as\\s+so\\s+redesignated\\s*,)?\\s*$',
+  'i'
+);
 const RE_PAIR = new RegExp(`(${UNIT_WORDS})\\s+(${MARKER_LIST})`, 'gi');
 const RE_LIST_SEP = new RegExp(`\\s*${LIST_SEP}\\s*`);
 
@@ -2073,6 +2091,14 @@ function markReplacements(text, ops, from, to) {
       // the lookbehind is load-bearing: without it "…amend the heading. Section
       // 5 is amended to read as follows" would match.
       const headingOnly = RE_HEADING_REWRITE.test(text.slice(Math.max(0, m.index - 140), m.index));
+      // …and the instruction may state the address outright. "by amending
+      // subsection (d)(2) to read as follows:" names the provision three words
+      // before the block, and nothing was reading it: the scope came from the
+      // walk plus the block's leading marker, so 7 U.S.C. 2016's "(h)(13)"
+      // arrived as a bare "(13)" that exists nowhere and was reported lost.
+      // Captured here, where the phrase is already in hand, and composed in
+      // scopeReplacements().
+      const stated = text.slice(Math.max(0, m.index - 90), m.index).match(RE_AMENDING_UNIT);
       const existing = ops.find((o) => o.start != null && o.start < block.end && o.end > block.start);
       if (existing) {
         existing.type = 'replace';
@@ -2083,10 +2109,12 @@ function markReplacements(text, ops, from, to) {
         delete existing.relation;
         delete existing.anchor;
         if (headingOnly) existing.headingOnly = true;
+        if (stated) { existing.statedUnit = stated[1].toLowerCase(); existing.statedPath = stated[2]; }
       } else {
         ops.push({
           type: 'replace', start: block.start, end: block.end, text: body,
           ...(headingOnly ? { headingOnly: true } : {}),
+          ...(stated ? { statedUnit: stated[1].toLowerCase(), statedPath: stated[2] } : {}),
         });
       }
     }
@@ -2116,8 +2144,34 @@ function scopeReplacements(ops) {
   for (const op of ops) {
     if (op.type !== 'replace' || !op.text) continue;
     const lead = op.text.match(/^\s*(?:``|‘‘|["“])?\s*(\([A-Za-z0-9]{1,8}\))/);
-    if (!lead) continue;
     const scope = String(op.scope || '');
+    // The address the instruction states beats anything composed from the walk,
+    // because it IS the bill saying which provision it rewrites. Composed the
+    // way a navigation step is — the stated markers replace the walked path from
+    // the unit word's own depth down — so "in subsection (c) … by amending
+    // subsection (d)(2)" gives (d)(2) and not (c)(d)(2).
+    //
+    // A CLAIM, not an assertion, and it carries the fallback for the same reason
+    // `scopeFromHead` does: where the composed path names nothing, the shipped
+    // scope is where the op applied before the phrase was read, which is a
+    // better answer than reporting it lost. Measured cost of the guard: 2 of 54
+    // on this corpus — free here, and insurance against the first bill that
+    // writes an Act-relative address in the phrase over a codified parenthetical.
+    if (op.statedPath && UNIT_DEPTH[op.statedUnit] !== undefined) {
+      const appended = lead && !scope.endsWith(lead[1]) ? scope + lead[1] : scope;
+      const above = pathLevels(scope)
+        .filter((l) => l.depth < UNIT_DEPTH[op.statedUnit])
+        .map((l) => l.marker)
+        .join('');
+      const composed = above + op.statedPath;
+      if (composed !== appended) {
+        op.scopeFallback = appended;
+        op.scopeFromPhrase = true;
+      }
+      op.scope = composed;
+      continue;
+    }
+    if (!lead) continue;
     if (!scope.endsWith(lead[1])) op.scope = scope + lead[1];
   }
 }

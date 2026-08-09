@@ -631,10 +631,32 @@ section('redline on the current law');
        JSON.stringify(nearly && nearly.inLaw));
     // Too short to be a fingerprint. A false "already in force" tells the reader
     // a pending rewrite has happened, so the floor refuses rather than guesses.
-    const tiny = [{ type: 'replace', text: '(A) See below.', start: 1, end: 14, scope: '(a)' }];
-    const t = createRedline(tiny).replacedAt('(a)', '(A) See below.');
+    // Scope and lead must agree — see the identity test below; a block opening
+    // (A) scoped to (a) is exactly what that refuses.
+    const tiny = [{ type: 'replace', text: '(A) See below.', start: 1, end: 14, scope: '(b)(1)(A)' }];
+    const t = createRedline(tiny).replacedAt('(b)(1)(A)', '(A) See below.');
     ok('  a block too short to fingerprint is never claimed in force', t && t.inLaw === false,
        JSON.stringify(t && t.inLaw));
+
+    // IDENTITY. The marked node's own marker must BE the block's leading marker.
+    // Where it is not, the scope arrived by repair rather than by the bill saying
+    // so: reScope()'s shorten branch drops from the end and scopeReplacements()
+    // appends at the end, so shortening always removes the marker that names the
+    // provision — leaving a claim about an ancestor, and rewriteInForce()
+    // measuring containment against the wrong haystack. That is how
+    // 42 U.S.C. 1396a(a), 107,063 characters, was titled "already in force" for a
+    // 1,786-character block.
+    const idOps = [{ type: 'replace', text: '(4) Congestion mitigation and air quality.', start: 1, end: 43, scope: '(b)(3)' }];
+    ok('a replacement is not marked on a node that is not the one it names',
+       !createRedline(idOps).replacedAt('(b)(3)', 'the old paragraph three'));
+    const idOk = [{ type: 'replace', text: '(4) Congestion mitigation and air quality.', start: 1, end: 43, scope: '(b)(4)' }];
+    ok('  and is marked where the marker does match',
+       !!createRedline(idOk).replacedAt('(b)(4)', 'the old paragraph four'));
+    // A flush block carries no marker, so identity cannot be tested; refusing it
+    // would be a guess rather than a test.
+    const flush = [{ type: 'replace', text: 'The Secretary shall report annually to Congress.', start: 1, end: 48, scope: '(c)' }];
+    ok('  a block with no leading marker is left alone',
+       !!createRedline(flush).replacedAt('(c)', 'old text'));
 
     // A rewrite of the WHOLE section has no node to mark, so it is stated at the
     // top of the provision instead. "Section 45Q is amended to read as follows:

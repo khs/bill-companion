@@ -593,7 +593,7 @@ function indent(parent) {
  * way, which is worth knowing: the heading was written down as the obstacle to
  * telling an enacted rewrite from a pending one and it never was.
  */
-function subtreeText(node) {
+export function subtreeText(node) {
   const parts = [];
   const walk = (n) => {
     parts.push(`${n.marker || ''} ${n.heading ? `${n.heading}.--` : ''}${n.text || ''}`.trim());
