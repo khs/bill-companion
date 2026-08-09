@@ -3576,3 +3576,47 @@ LVXXXVI--FEDERAL MARITIME
    word  does not appear in it, which is exactly why this needed
     and a mis-mark audit rather than a baseline diff.
    selftest 663, rendertest 434 → 437.
+
+63. **Two more from item 61, and the fifth time `placed()` needed a new
+   exclusion.** (2026-08-09.)
+
+   **A rewrite that changes a figure is not in force, and unigram containment
+   cannot see it.** `rewriteInForce()` matched 96% of the block's words and said
+   yes — but a rewrite is a near-copy of the old provision with one clause
+   altered, and the clause altered is very often a dollar amount, a percentage or
+   a year. 26 U.S.C. 25C(d) scored 0.9624 against a provision that does not
+   contain the bill's two-tier version at all; 26 U.S.C. 461(l)(1) matched at
+   0.964 while missing "2026", the one year the Inflation Reduction Act changed.
+   Every figure in the block must now be in the provision, as a whole token so
+   "1,000" cannot satisfy "10,000", and asked of the block's figures only — the
+   provision may carry figures the rewrite drops, which is the rewrite working.
+   **97 claims move from "already in force" to the neutral mark**, which is the
+   safe direction: some of the 97 may be genuine matches whose figure is
+   formatted differently, and the cost of that is a weaker sentence rather than a
+   false one.
+
+   **An et seq. target answers with the section the range BEGINS at.**
+   `markRangeAdditions()` flagged only `add-at-end`, so `rangeEnd` was set on none
+   of the 26 resolved replacements against a range and 12 made a claim —
+   15 U.S.C. 1692(a), the FDCPA's findings, marked with the text of § 814. But
+   **not an outright refusal, and this is where a score would have misled**: two
+   of the twelve are right. 2 U.S.C. 135a really is "National library service for
+   the blind and print disabled" and the bill's new SEC. 1. is that section;
+   15 U.S.C. 1701(1) reads its block verbatim. So the flag is set at parse and the
+   pane declines only where the law does not already read the block. 7 refused, the
+   correct ones kept.
+
+   **`placed()` needed `replacements` filtered, for the fifth time this list has
+   needed a new exclusion.** `rangeSkip` is spelled "mark done and draw nothing",
+   and `placed()` filtered `additions` by it while leaving `replacements`
+   unfiltered — so the panel would have said "the provision is marked above"
+   about a node carrying no mark. The pattern is now explicit and worth stating
+   once: **every "dealt with but deliberately not drawn" flag has to be named in
+   both the decliner and `placed()`**, and `coverage.mjs` tests `here(placed, o)`,
+   so the report can never catch this class of bug on its own.
+
+   Redline after items 62 and 63 together: already in force 355 -> 422, whole
+   section 117 -> 105, heading refused 38, et seq. refused 7, marked 380 -> 278,
+   not on screen 71 -> 73 — 923 throughout. **Provable mis-marks 96 -> 3**, the
+   three being the residuals item 61 already named as not fixable from the bill.
+   Corpus unchanged. selftest 663, rendertest 437.

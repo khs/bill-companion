@@ -593,6 +593,11 @@ export function createRedline(ops, fullText, knownPaths) {
     // genuinely differs, because the words turn up elsewhere in the section.
     // The caller has the node; nothing here does.
     if (typeof provisionText === 'string') op.inLaw = rewriteInForce(provisionText, op.text);
+    // A range target answers with the section the range BEGINS at, which is
+    // rarely the section being rewritten. Declined unless the law already reads
+    // the block — two of the twelve corpus claims are right and a blanket
+    // refusal deletes both. See markRangeAdditions().
+    if (op.rangeEnd && !op.inLaw) { op.rangeSkip = true; op.done = true; return null; }
     return op;
   }
 
@@ -645,9 +650,18 @@ export function createRedline(ops, fullText, knownPaths) {
     // marked, which is the whole of what it claims — the provision on screen is
     // the one this bill rewrites. It draws no coloured text, so the panel says
     // "marked above" rather than "shown above"; see effect().
+    // `replacements` is filtered here too, and it must be. A refusal spelled
+    // "mark done and draw nothing" — which is how rangeSkip works — otherwise
+    // leaves placed() true and the panel says "the provision is marked above"
+    // about a node carrying no mark. Fifth time this list has needed a new
+    // exclusion; the pattern is that every "dealt with but deliberately not
+    // drawn" flag has to be named in BOTH places.
     placed: () =>
-      [...work, ...additions.filter((o) => !o.applied && !o.staleSkip && !o.rangeSkip), ...replacements]
-        .filter((o) => o.done),
+      [
+        ...work,
+        ...additions.filter((o) => !o.applied && !o.staleSkip && !o.rangeSkip),
+        ...replacements.filter((o) => !o.rangeSkip),
+      ].filter((o) => o.done),
     /** Additions whose scope names a provision that isn't in the tree shown. */
     unplacedAdditions: () => additions.filter((o) => !o.done),
     /** …and replacements whose provision is not in the tree being shown. */
@@ -677,8 +691,12 @@ export function createRedline(ops, fullText, knownPaths) {
       if (!op.done) {
         op.done = true;
         op.inLaw = rewriteInForce(fullText, op.text);
+        // Same refusal as replacedAt(): a range target answers with the section
+        // the range begins at, and three of the whole-section cards named a
+        // different section from the one on screen.
+        if (op.rangeEnd && !op.inLaw) op.rangeSkip = true;
       }
-      return op;
+      return op.rangeSkip ? null : op;
     },
     /**
      * Inserts already in the law, marked where they now sit.
@@ -789,7 +807,24 @@ function rewriteInForce(provisionText, block) {
   const have = new Set(words(provisionText));
   let hit = 0;
   for (const w of want) if (have.has(w)) hit++;
-  return hit / want.length >= REWRITE_MATCH;
+  if (hit / want.length < REWRITE_MATCH) return false;
+  // EVERY figure has to be there, and unigram containment cannot see that a
+  // figure changed. A rewrite is usually a near-copy with one clause altered,
+  // and the clause altered is very often a dollar amount, a percentage or a
+  // year — so the words match at 96% while the one thing the bill actually does
+  // is absent. 26 U.S.C. 25C(d) scored 0.9624 against a provision that does not
+  // contain the bill's two-tier version at all; 6 of 484 in-force claims had a
+  // figure the provision does not hold.
+  //
+  // A whole-token test, so "1,000" and "10,000" cannot satisfy each other, and
+  // asked of the block's figures only: the provision may carry figures the
+  // rewrite drops, which is the rewrite doing its job.
+  const figures = (s) => String(s).match(/\d[\d,.]*/g) || [];
+  const held = new Set(figures(provisionText).map((f) => f.replace(/[.,]$/, '')));
+  for (const f of figures(String(block).replace(BLOCK_OPENERS, '$1$2'))) {
+    if (!held.has(f.replace(/[.,]$/, ''))) return false;
+  }
+  return true;
 }
 
 const BLOCK_OPENERS = /(^|\n)([ \t]*)(?:``|‘‘|["“])/g;

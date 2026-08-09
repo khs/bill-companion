@@ -62,7 +62,7 @@ const bills = (Array.isArray(manifest) ? manifest : manifest.bills || Object.val
 const zero = () => ({
   drawn: 0, enacted: 0, withheld: 0, missing: 0,
   addDrawn: 0, addApplied: 0, addStranded: 0,
-  repMarked: 0, repInForce: 0, repWhole: 0, repHeading: 0, repStranded: 0,
+  repMarked: 0, repInForce: 0, repWhole: 0, repHeading: 0, repRange: 0, repStranded: 0,
   widened: 0, lost: 0,
 });
 const total = zero();
@@ -141,6 +141,9 @@ for (const bill of bills) {
         // lumping a deliberate refusal in with "the provision is not on screen"
         // turns a wrong label into no label, which is not an improvement.
         if (o.headingOnly) s.repHeading++;
+        // Also a refusal, not a failure: the target is an et seq. range and the
+        // provision on screen is the section the range begins at.
+        else if (rep && rep.rangeSkip) s.repRange++;
         else if (rep && rep.wholeSection) s.repWhole++;
         else if (rep && rep.inLaw) s.repInForce++;
         else if (here(placed, o)) s.repMarked++;
@@ -197,12 +200,14 @@ console.log(`  provision not on screen    : ${total.addStranded}`);
 // redline.js — so a mark is the success state, and the split that matters is
 // whether the rewrite has already happened, because that decides whether the
 // text on screen is the provision as it stands or as this bill made it.
-const reps = total.repMarked + total.repInForce + total.repWhole + total.repHeading + total.repStranded;
+const reps = total.repMarked + total.repInForce + total.repWhole + total.repHeading +
+             total.repRange + total.repStranded;
 if (reps) {
   console.log(bold('\nwhole-provision replacements'), reps);
   console.log(`  already in force           : ${total.repInForce}`);
   console.log(`  whole section, stated      : ${total.repWhole}`);
   console.log(`  heading only, refused      : ${total.repHeading}`);
+  console.log(`  et seq. range, refused     : ${total.repRange}`);
   console.log(`  marked, rewrite not matched: ${total.repMarked}`);
   console.log(`  provision not on screen    : ${total.repStranded}`);
 }

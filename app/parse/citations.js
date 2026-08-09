@@ -758,7 +758,19 @@ function scopeUnitInserts(ops) {
  */
 function markRangeAdditions(ops, target) {
   if (!target || !target.etSeq) return;
-  for (const op of ops) if (op.type === 'add-at-end') op.rangeEnd = true;
+  // A replacement is eligible too. The target is a RANGE — "15 U.S.C. 1692 et
+  // seq." — and the resolver answers with the section the range begins at, so a
+  // block rewriting some other section of the Act lands on the Act's findings:
+  // 15 U.S.C. 1692(a) was marked with FDCPA § 814's text. 26 such replacements
+  // resolve and 12 made a claim.
+  //
+  // But NOT an outright refusal, and this is where a score would have misled: two
+  // of the twelve are right. 2 U.S.C. 135a really is "National library service
+  // for the blind and print disabled" and the bill's new SEC. 1. is that section;
+  // 15 U.S.C. 1701(1) reads its block verbatim. So the flag is set here and the
+  // pane declines only where the law does NOT already read the block — see
+  // replacedAt(). Shard evidence beats a containment score.
+  for (const op of ops) if (op.type === 'add-at-end' || op.type === 'replace') op.rangeEnd = true;
 }
 
 // A block that opens with a SECTION head is a whole new section of the law.
