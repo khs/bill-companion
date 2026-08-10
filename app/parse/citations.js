@@ -1926,8 +1926,21 @@ function extractSteps(text, from, to, basePath) {
       const resolved = resolvePhrase(unitPairs(nm[1]), current);
       if (!resolved) continue;
       claimed.push([rel(phraseStart), rel(nm.index + nm[0].length)]);
+      const before = steps.length;
       emit(steps, resolved, probe, lineStart, phraseStart, nm[1], text, curSec);
-      // Only the first address of a list advances the cursor.
+      // Only the first address of a list advances the cursor — and only the
+      // first may SCOPE an operation, which is the half that was missing.
+      // `emit` pushes every member of a list, and `scopeOps()` binds an op to
+      // the LAST step before it, so "in subsections (a) through (i), by
+      // striking ``X'' each place it appears" scoped to (i): nine subsections
+      // named, and the one marked was the one furthest from the cursor this
+      // very line had just set. The reader saw a chip for subsection (a), found
+      // the operand plainly there, and the panel said "⚠ not found verbatim".
+      //
+      // The later members are still addresses worth a chip, so they move to
+      // `refs` rather than being dropped — the same thing a bare reference is,
+      // which is what they are once they are not steering the walk.
+      if (steps.length > before + 1) refs.push(...steps.splice(before + 1));
       current = resolved.addresses[0].levels;
     }
 

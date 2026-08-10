@@ -680,7 +680,18 @@ section('relative navigation inside amendments');
     "    (1) in subparagraphs (A) and (B), by striking ``x'';\n";
   const ams = extractAmendments(t, extractCitations(t));
   eq('a list yields one address per item',
-     (ams[0]?.steps || []).map((s) => s.path).join(' '), '(A) (B)');
+     [...(ams[0]?.steps || []), ...(ams[0]?.refs || [])].map((s) => s.path).join(' '),
+     '(A) (B)');
+  // …but only the FIRST is a step. `scopeOps()` binds an op to the last step
+  // before it, so a list put the op on its last member — "in subsections (a)
+  // through (i), by striking ``X'' each place it appears" scoped to (i), nine
+  // subsections named and the one marked furthest from the cursor the same
+  // line had just set. 93 across the corpus. The rest are addresses worth a
+  // chip and nothing more, which is what a ref is.
+  eq('  but only the first of them steers the walk',
+     (ams[0]?.steps || []).map((s) => s.path).join(' '), '(A)');
+  eq('  and the rest are plain references',
+     (ams[0]?.refs || []).map((s) => s.path).join(' '), '(B)');
 }
 {
   // The user's case: clause references that are operands or positions, not

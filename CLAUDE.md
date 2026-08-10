@@ -4261,3 +4261,48 @@ LVXXXVI--FEDERAL MARITIME
    Corpus unchanged for both: a scope is invisible to `opSpans`, which keys on
    `type:start-end`, and a refusal is a flag on an op that already existed.
    selftest 686 → 697, rendertest 448 → 453, proptest clean.
+
+73. **Only the first member of a navigation list may scope an operation.**
+   (2026-08-10, L2 of item 65.) `extractSteps` sets `current =
+   resolved.addresses[0].levels` under a comment reading "Only the first address
+   of a list advances the cursor" — and `emit()` pushes **every** member into
+   `steps`, while `scopeOps()` binds an operation to the LAST step before it. So
+   half the rule was written down and the other half did the opposite:
+
+   ```
+   Section 9063 of such title is amended--
+       (A) in subsections (a) through (i), by striking ``in the Air Force''
+       each place it appears and inserting ``in the Air Force and Space Force''
+   ```
+
+   Nine subsections named, and the operation was scoped to (i) — the one
+   furthest from the cursor the same line had just set. The reader saw a chip
+   for subsection (a), opened it, found the operand plainly there, and the panel
+   said "⚠ not found verbatim" about text on the screen in front of them.
+
+   The later members are still addresses worth a chip, so they move to `refs`
+   rather than being dropped: once they are not steering the walk, a list member
+   is exactly what a bare reference is. Corpus `steps -93` and `refs +93`, equal
+   and opposite on every bill, which is the signature — nothing gained, nothing
+   lost, 93 reclassified.
+
+   133 op scopes changed and 0 composed addresses moved. Marks: **3 withdrawn,
+   3 gained, 31 moved**, and every one of the 31 is from the list's last member
+   to its first — `(i)`→`(a)`, `(d)`→`(a)`, `(g)`→`(b)`, `(4)`→`(3)`. Net zero,
+   which is the honest summary: the same number of marks, on the member the
+   instruction names first.
+
+   **What this does NOT fix, and it is the interesting half.** An instruction
+   that names nine subsections still marks one. Two of the three withdrawals are
+   that exactly — "in paragraphs (1)(B) and (2)(B), by striking ``$1,000'' each
+   place such term appears" marked (2)(B) before and marks neither now, because
+   the operand as spelled is not in (1)(B). Choosing the first over the last is
+   right — it is the member every other consumer already assumes, and the one
+   the cursor is left on — but the bill said *all of them*. Scoping an operation
+   to a SET wants `inScope()` in `redline.js` to take one, and `reScope()`,
+   `scopeAdditions()` and the panel's messages all read `op.scope` as a string
+   today. It is also entangled with L3 of item 65: `each place it appears`
+   latches `op.done` after the first passage, so `all` cannot cross a node
+   either. Those two want doing together.
+
+   selftest 697 → 699, rendertest 453, proptest clean.

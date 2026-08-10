@@ -198,7 +198,7 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 - **Right:** the announce test should require the line to actually announce a table, or be gated to front matter. Nothing resets `inToc` here because in an appropriations division the next non-caps line is a lowercase account heading and `realBodyFollows` returns false.
 - **Frequency:** 101 mid-body mentions across 20 of 26 bills; this is the one that lands, and it lands on the Consolidated Appropriations Act, 2020.
 
-**L2. A navigation LIST scopes the operation to its last member only** — `extractSteps` sets `current = resolved.addresses[0].levels` under a comment saying "Only the first address of a list advances the cursor", but `emit()` pushes **every** address into `steps` and `scopeOps()` binds the op to the last one. `in subsections (a) through (i), by striking … each place it appears` → scope `(i)`: nine subsections named, one marked. **95 list-member steps, 139 ops, 13 bills.** Reader consequence driven end to end (hr6395 §924 / 10 U.S.C. 9063): the app draws a chip for subsection (a), the reader clicks it, the operand is visibly present, nothing is marked, and the panel prints "⚠ not found verbatim".
+**L2. A navigation LIST scopes the operation to its last member only** — PARTLY FIXED 2026-08-10, CLAUDE.md item 73 (first member now scopes; scoping to a SET is still open, with L3) — `extractSteps` sets `current = resolved.addresses[0].levels` under a comment saying "Only the first address of a list advances the cursor", but `emit()` pushes **every** address into `steps` and `scopeOps()` binds the op to the last one. `in subsections (a) through (i), by striking … each place it appears` → scope `(i)`: nine subsections named, one marked. **95 list-member steps, 139 ops, 13 bills.** Reader consequence driven end to end (hr6395 §924 / 10 U.S.C. 9063): the app draws a chip for subsection (a), the reader clicks it, the operand is visibly present, nothing is marked, and the panel prints "⚠ not found verbatim".
 
 **L3. "Each place it appears" never crosses a node** — `app/ui/redline.js` sets `op.done = true` after the first passage the strike lands in, while `render-context.js` builds one redline per provision and calls `apply()` per node. So `all` can only ever widen *within* one node. hr5376 §13903(b)(1) on 26 U.S.C. 461(l)(1): both (A) and (B) contain "January 1, 2027"; one mark drawn. **10 strikes corpus-wide where the operand is in more than one in-scope node** — worst is 7 U.S.C. 136w-8, operand present in **10 nodes, one mark**. The fix must be scoped to `all` only: `op.done` deliberately prevents double-drawing, and `atEnd` should stay latched.
 
@@ -408,7 +408,7 @@ Two guards to carry over from today's work:
 
 ### Still unfixed
 
-W6–10, W13–W16, L2–L9, C1 — 20 of the 27 (W1–W5, W11, W12, L1 are done). W2 remains the largest by count (550
+W6–10, W13–W16, L3–L9, C1 — 19 of the 27 (W1–W5, W11, W12, L1 done; L2 partly). W2 remains the largest by count (550
 citations across a real section boundary) and carries its own trap, recorded in
 its section above: attribute via `viaAmendment` and require the head to sit
 inside a parsed section, because positional attribution overcounts wherever
