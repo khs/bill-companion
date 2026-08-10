@@ -3541,7 +3541,12 @@ if (existsSync(clarityPdfPath)) {
   // quote convention a typeset PDF uses.
   const ops = opCounts(ams);
   eq('house print: extracts ‘‘...’’ operands', JSON.stringify(ops),
-     JSON.stringify({ 'add-at-end': 27, insert: 64, redesignate: 6, strike: 44, replace: 2 }));
+     // 8 redesignations, not 6: REDESIG_LIST omitted "subclause", so
+     // "redesignating subclauses (III) and (IV) as subclauses (IV) and (V)" —
+     // written twice in this print — produced no operation at all, while the
+     // identical sentence with "clause" worked. 45 such instructions across 8
+     // corpus bills, against 0 produced.
+     JSON.stringify({ 'add-at-end': 27, insert: 64, redesignate: 8, strike: 44, replace: 2 }));
 
   // Counted against the source. 31 phrases in the bill, 27 of them inside a
   // parsed amendment — the other four sit in the long tail of amendatory

@@ -4306,3 +4306,64 @@ LVXXXVI--FEDERAL MARITIME
    either. Those two want doing together.
 
    selftest 697 → 699, rendertest 453, proptest clean.
+
+74. **Three narrow ones, and a fourth measured and declined.** (2026-08-10,
+   L4, L7 and L6 of item 65, with W15 recorded rather than built.)
+
+   **`REDESIG_LIST` omitted "subclause" and "subitem".** `redesignating
+   subclause (III) as subclause (IV)` produced no operation at all, while the
+   identical sentence with "clause" worked — 45 written across 8 bills against 0
+   produced. `UNIT_DEPTH` lists both levels and item 39 already built the
+   consumer; only this one alternation had never been told. Longest-first in the
+   alternation, or "clause" matches inside "subclause" and leaves the "sub"
+   stranded. Corpus `ops.redesignate +41`, every one a real instruction.
+
+   One thing the new population surfaced, and it is item 55's hazard in a new
+   place: `REDESIG_LIST`'s separator is a bare comma, so
+   `by redesignating subclause (VII) as subclause (IX), (I) by inserting after
+   subclause (V)` absorbs the next SUB-INSTRUCTION's marker and the panel's arrow
+   reads "subclause (VII) → subclause (IX), (I)". **1 of 976 redesignations**, and
+   a wrong label rather than a wrong provision. A marker-count test does not fix
+   it: 17 of 976 have different counts on the two sides and 16 are legitimate —
+   a RANGE on one side ("paragraphs (17) through (34)", two endpoints) against an
+   enumerated LIST on the other. It wants `stealsMarker()`'s question, which needs
+   source offsets `RE_REDESIG` does not have.
+
+   **`RE_USC_LONG` had no hyphen in its section pattern.** "Section 949p-4 of
+   title 10, United States Code, is amended" produced no citation of any kind,
+   so no target, so the pane reported that the bill changes nothing. `RE_USC`
+   twenty lines below already carries the hyphen with a comment explaining
+   exactly this. 0 of the corpus's 3,540 long-form citations was hyphenated —
+   but the form is written almost entirely for the positive-law titles, and
+   t10's index alone holds `s949p_1` … `s949p_7`. Corpus `citations +1`: the
+   Frontier Act's "section 247d-6d(c)(1) of title 42, United States Code", which
+   is the PREP Act's liability immunity and had been invisible.
+
+   **A whole-section rewrite could essentially never be reported in force.**
+   `rewriteInForce()`'s figure guard (item 63) requires every figure in the block
+   to be in the provision, and a whole-section rewrite opens with its own
+   caption — "SEC. 6102. …" — whose number never appears in the provision's body.
+   So 68 of 106 passed the word test at ≥0.95 and **all 68 failed on the caption's
+   own number**. The caption line is dropped before both tests, the same way
+   `BLOCK_OPENERS` already is, and only the first line, because a caption is the
+   one line whose text is apparatus rather than provision. Whole-section rewrites
+   reported already in force: **0 → 53 of 106.** Safe direction, which is why it
+   was invisible: the wrong answer was a weaker true sentence, never a false one.
+
+   **W15 — making the containment symmetric — was built, measured and reverted.**
+   The reasoning is sound on its face: a rewrite that only DELETES is a subset of
+   the provision it replaces, scores 1.0, and would be reported "already in force"
+   while the clause it removes is still on disk. The measurement says otherwise. A
+   provision the Code holds TODAY is regularly longer than what this bill made it,
+   because a later Act added to it — 26 U.S.C. 25C(b) is the Inflation Reduction
+   Act's own rewrite plus the Inflation Reduction Act's own later home-audit
+   paragraph, and 30C(c) the same with the census-tract definitions. A symmetric
+   test at the same threshold **withdrew 42 claims and every one sampled was that
+   shape, against 0 demonstrated false positives.** Nothing textual separates "the
+   bill deleted a clause" from "someone else added one", and the corpus is
+   structurally blind to the case W15 names because all 422 in-force claims come
+   from enacted bills. Recorded here so nobody re-derives it; the reasoning is
+   left in the function.
+
+   selftest 699 (the house print gains 2 redesignations, both real and both the
+   subclause shape), rendertest 453, proptest clean.

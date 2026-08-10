@@ -40,8 +40,16 @@ const RE_USC = new RegExp(
 // "section 801(a)(2)(A) of title 5, United States Code" — the form bills use for
 // positive-law titles instead of "5 U.S.C. 801". Common enough that missing it
 // leaves real amendments with no resolvable target.
+//
+// The hyphen is here for the reason RE_USC carries one twenty lines below:
+// 10 U.S.C. 949p-4 is a real section, and without it "Section 949p-4 of title
+// 10, United States Code, is amended" produced no citation of any kind, so no
+// target, so the pane reported that the bill changes nothing. 0 of the corpus's
+// 3,540 long-form citations is hyphenated — but this form is written almost
+// entirely for the positive-law titles (t10 772 of them, t49 522, t18 248), and
+// t10's index alone holds s949p_1 through s949p_7.
 const RE_USC_LONG = new RegExp(
-  '\\b[Ss]ections?\\s+(\\d+[A-Za-z]*)' +
+  '\\b[Ss]ections?\\s+(\\d+[A-Za-z]*(?:[–—-]\\s*\\d+[A-Za-z]*)?)' +
     `(${SUBSEC})` +
     '\\s+of\\s+title\\s+(\\d{1,2}[A-Z]?),\\s*United\\s+States\\s+Code',
   'g'
@@ -1347,8 +1355,16 @@ function readAddedBlock(text, from) {
 // marker, so the panel read "clauses (v) through (vii) → clauses (vi)" — an
 // arrow pointing at a range with its end cut off, which reads as renumbering
 // three clauses into one.
+//
+// The alternation must list every level UNIT_DEPTH does. It omitted subclause
+// and subitem, so "redesignating subclause (III) as subclause (IV)" produced no
+// operation at all while the identical sentence with "clause" worked — 45 real
+// instructions across 8 bills against 0 produced. The shape is supported
+// everywhere else (UNIT_DEPTH lists both, item 39 built the consumer); only
+// this alternation had not been told. Longest-first, or "clause" matches inside
+// "subclause" and the "sub" is left stranded in front of the match.
 const REDESIG_LIST =
-  '(?:subsection|paragraph|subparagraph|clause|item|section)s?\\s*\\([A-Za-z0-9]{1,8}\\)' +
+  '(?:subsection|paragraph|subparagraph|subclause|clause|subitem|item|section)s?\\s*\\([A-Za-z0-9]{1,8}\\)' +
   '(?:\\s*(?:,|and|or|through)\\s*\\([A-Za-z0-9]{1,8}\\))*';
 const RE_REDESIG = new RegExp(
   `redesignat(?:e|ing)\\s+(${REDESIG_LIST})\\s+as\\s+(${REDESIG_LIST})`, 'gi'

@@ -33,10 +33,10 @@
   "chars": 84832,
   "sections": 9,
   "divisions": 0,
-  "citations": 132,
+  "citations": 133,
   "byKind": {
    "act": 1,
-   "usc": 4,
+   "usc": 5,
    "internal": 127
   },
   "amendments": 0,
@@ -73,7 +73,7 @@
   "ops": {
    "add-at-end": 26,
    "insert": 64,
-   "redesignate": 6,
+   "redesignate": 8,
    "strike": 44,
    "replace": 2
   },
@@ -134,7 +134,7 @@
   "ops": {
    "add-at-end": 26,
    "insert": 62,
-   "redesignate": 5,
+   "redesignate": 6,
    "strike": 44,
    "replace": 2
   },
@@ -167,7 +167,7 @@
    "add-at-end": 117,
    "insert": 335,
    "strike": 272,
-   "redesignate": 20,
+   "redesignate": 24,
    "repeal": 1
   },
   "opSpans": 750,
@@ -198,7 +198,7 @@
   "ops": {
    "insert": 828,
    "strike": 678,
-   "redesignate": 104,
+   "redesignate": 106,
    "replace": 105,
    "add-at-end": 262,
    "repeal": 11
@@ -232,7 +232,7 @@
    "insert": 330,
    "add-at-end": 116,
    "replace": 22,
-   "redesignate": 18,
+   "redesignate": 22,
    "repeal": 6
   },
   "opSpans": 752,
@@ -264,7 +264,7 @@
    "strike": 187,
    "insert": 228,
    "add-at-end": 61,
-   "redesignate": 13,
+   "redesignate": 15,
    "replace": 21,
    "repeal": 2
   },
@@ -356,7 +356,7 @@
    "insert": 2435,
    "strike": 1707,
    "add-at-end": 344,
-   "redesignate": 232,
+   "redesignate": 234,
    "repeal": 36
   },
   "opSpans": 4632,
@@ -387,7 +387,7 @@
    "strike": 96,
    "insert": 126,
    "add-at-end": 70,
-   "redesignate": 7,
+   "redesignate": 8,
    "replace": 9,
    "repeal": 1
   },
@@ -417,7 +417,7 @@
   "relative": 1814,
   "ops": {
    "insert": 1038,
-   "redesignate": 105,
+   "redesignate": 112,
    "replace": 99,
    "add-at-end": 245,
    "strike": 904,
@@ -543,7 +543,7 @@
   "ops": {
    "insert": 163,
    "strike": 132,
-   "redesignate": 14,
+   "redesignate": 16,
    "add-at-end": 52,
    "replace": 19,
    "repeal": 2
@@ -574,6 +574,7 @@
    "add-at-end": 17,
    "strike": 24,
    "insert": 22,
+   "redesignate": 1,
    "replace": 1
   },
   "opSpans": 64,
@@ -606,7 +607,7 @@
    "insert": 1054,
    "add-at-end": 347,
    "replace": 106,
-   "redesignate": 90,
+   "redesignate": 92,
    "repeal": 5
   },
   "opSpans": 2356,
@@ -637,7 +638,7 @@
    "insert": 799,
    "add-at-end": 377,
    "strike": 610,
-   "redesignate": 59,
+   "redesignate": 64,
    "replace": 78,
    "repeal": 2
   },
@@ -669,7 +670,7 @@
    "add-at-end": 112,
    "replace": 67,
    "insert": 294,
-   "redesignate": 50,
+   "redesignate": 51,
    "strike": 265
   },
   "opSpans": 738,
@@ -702,7 +703,7 @@
    "strike": 525,
    "insert": 620,
    "replace": 78,
-   "redesignate": 66,
+   "redesignate": 67,
    "repeal": 1
   },
   "opSpans": 1442,
@@ -731,7 +732,7 @@
   "relative": 474,
   "ops": {
    "replace": 79,
-   "redesignate": 17,
+   "redesignate": 18,
    "strike": 396,
    "insert": 416,
    "add-at-end": 19,
@@ -858,7 +859,7 @@
   "refs": 566,
   "relative": 762,
   "ops": {
-   "redesignate": 44,
+   "redesignate": 47,
    "strike": 391,
    "insert": 377,
    "replace": 55,

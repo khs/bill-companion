@@ -907,12 +907,32 @@ function rewriteInForce(provisionText, block) {
   if (typeof provisionText !== 'string' || !provisionText) return false;
   const words = (s) =>
     fold(String(s).replace(BLOCK_OPENERS, '$1$2')).norm.split(/[^a-z0-9]+/).filter((w) => w.length > 2);
-  const want = words(block);
+  // A whole-section rewrite opens with its own caption — "SEC. 6102. …" — and
+  // no section number ever appears in the provision's body, so the figure guard
+  // below rejected essentially every one of them: 68 of 106 passed the word
+  // test at ≥0.95 and all 68 failed on the caption's own number. Dropped the
+  // same way BLOCK_OPENERS is, and only the FIRST line, because a caption is
+  // the one line whose text is apparatus rather than the provision.
+  const body = String(block).replace(/^\s*(?:``|‘‘|["“])?\s*SEC(?:TION)?\.?\s+[\w–—-]+\.[^\n]*\n/i, '');
+  const want = words(body);
   if (want.length < REWRITE_MIN_WORDS) return false;
   const have = new Set(words(provisionText));
   let hit = 0;
   for (const w of want) if (have.has(w)) hit++;
   if (hit / want.length < REWRITE_MATCH) return false;
+  // The containment is DELIBERATELY one-directional, and that was measured
+  // rather than assumed. A rewrite that only DELETES — the ordinary way a bill
+  // repeals a requirement — is a subset of the provision it replaces, so it
+  // scores 1.0 and would be reported "already in force" while the clause it
+  // removes is still on disk. The obvious fix is to require containment both
+  // ways, and it is wrong: a provision the Code holds today is regularly LONGER
+  // than what this bill made it, because a later Act added to it. 26 U.S.C.
+  // 25C(b) is the IRA's own rewrite plus the IRA's own later home-audit
+  // paragraph; 30C(c) the same with the census-tract definitions. A symmetric
+  // test at this threshold withdrew 42 claims across the corpus and every one
+  // sampled was that shape, against 0 demonstrated false positives — nothing
+  // textual separates "the bill deleted a clause" from "someone else added
+  // one". Recorded rather than built; see CLAUDE.md.
   // EVERY figure has to be there, and unigram containment cannot see that a
   // figure changed. A rewrite is usually a near-copy with one clause altered,
   // and the clause altered is very often a dollar amount, a percentage or a
@@ -926,7 +946,7 @@ function rewriteInForce(provisionText, block) {
   // rewrite drops, which is the rewrite doing its job.
   const figures = (s) => String(s).match(/\d[\d,.]*/g) || [];
   const held = new Set(figures(provisionText).map((f) => f.replace(/[.,]$/, '')));
-  for (const f of figures(String(block).replace(BLOCK_OPENERS, '$1$2'))) {
+  for (const f of figures(String(body).replace(BLOCK_OPENERS, '$1$2'))) {
     if (!held.has(f.replace(/[.,]$/, ''))) return false;
   }
   return true;
