@@ -301,3 +301,100 @@ Every one of the five campaigns drew from the same 26 enrolled bills plus 4 fixt
 **Runner-up, if the pending corpus is too much work to assemble:** open a browser. Item 11 says the tooling reaches `localhost:8000` and that the first screenshot ever taken found an entire chain of bugs in two minutes. Five campaigns, 27 defects, and every render check ran under linkedom. W5 renders subsection (d) **twice on one screen**, W1 renders a card that contradicts itself, and C1 corrupts a section heading — three defects whose severity is a matter of what the page looks like, verified by nobody looking at the page.
 
 **Not worth doing next:** more mutation fuzzing. C1 ran 2,150 cases across 34 operators and 80 seeds and found zero crashes, zero span-integrity failures and zero correctness bugs from the mutations themselves. That space is covered.
+---
+
+## Status, 2026-08-10 — W5, W1 fixed; W3 measured and scoped
+
+Two of the 27 fixed and pushed today, each with the withdrawal audit this repo
+requires. CLAUDE.md items 67 and 68 carry the reasoning; this section records
+what the next pass needs and, for W3, the measurement so it does not have to be
+re-derived.
+
+### Done
+
+- **W5** — `alreadyIn()` ran against a heading-stripped haystack. Fixed by
+  giving `createRedline` the provision in BOTH renderings, because the heading
+  is on one side or the other: flattening alone missed 877 additions the law
+  contains, heading-inline alone missed 14 the other way. Positive evidence asks
+  every rendering; `stale` asks only the first, because a caption hit destroys
+  negative evidence (22 amendments rescued from staleness, 15 of them captions).
+  Additions already in the law 782 → 1,659. Commit `2a4871cc2`.
+- **A second defect W5 exposed**, found by looking at the screen once W5 was
+  fixed: `appliedNodePaths()` skipped any op whose `scope` was not a string, so
+  256 enacted additions could never mark the provision they created — and
+  lifting that guard alone would have added 451 correct marks and 2,334 wrong
+  ones, because the function read EVERY line-head marker in the block. Only the
+  block's top level is claimed now, via `parseProvision()`. Marks 1,689 → 1,865;
+  all 105 withdrawn are the op's own anchor or an interior cross-reference.
+- **W1** — `at the end of paragraph (N)`. The unit is captured now, in BOTH the
+  named-mark form (`PUNCT_UNIT_TAIL`) and the quoted form (`RE_AT_THE_END`), and
+  composed by `scopeStatedUnits()` the way `scopeReplacements()` composes a
+  stated address. 161 marks withdrawn, every one outside the provision the bill
+  named; 8 moved, every one into it; 0 gained. Commit `4a22f2219`.
+- **A misleading message W1 exposed**: `op.found` is printed as "✓ found in
+  current text" on a strike the redline did NOT draw, and was a substring test
+  against the whole provision. It asks the op's own scope now; 1,267 ticks fall
+  to 390 true ones.
+
+The quoted half of W1 was found by RENDERING the example W1's own report names,
+not by measuring — item 60's rule, and it paid twice today.
+
+### W3, measured and NOT built
+
+`UNIT_WORDS` has no "section", so `RE_NAV` cannot fire on
+`in section 599D (8 U.S.C. 1157 note)--` and everything after it composes onto
+the amendment's target, which is a different section.
+
+Narrowed to the subset that needs no inference — the bill writes the Code
+address itself and the phrase opens a sub-instruction (a dash, or a comma before
+an amendatory verb):
+
+```
+215 sites   of which 22 name a note (not section N) and 10 are already the target
+132 sites with something after them
+    377 navigation steps and 295 references composed on the WRONG section
+  1054 operations sit after such a phrase
+```
+
+Concentrated: hr4173 (Dodd-Frank) 118, hr2617 28, hr3734 23, hr6395 12. The
+shape, from H.R. 748:
+
+```
+Section 292 of the Public Health Service Act … is amended--
+    in section 293 (42 U.S.C. 293)--        <- navigation into a DIFFERENT section
+        (A) in subsection (a), by striking …    <- composed onto 292(a)
+```
+
+**Why it was not built today, and what it needs.** The citation half is clean
+and additive: give a step an optional `secTitle`/`secSection`, reset the running
+path from the parenthetical's own subsection, and have `expandRelativeRefs()`
+override `title`/`section` when the step carries them. 672 addresses move to the
+section the bill named, and nothing is guessed — the address is written down.
+
+The OPERATION half is what makes this bigger than W1 or W5. 1,054 ops sit after
+such a phrase, and an op is drawn on the provision the pane resolved, which is
+the TARGET. An op scoped to a path belonging to another section cannot be drawn
+there and must be refused — which means a fourth flag through `placed()`, the
+invariant this file records as having broken five separate times, plus its own
+withdrawal audit and a `coverage.mjs` bucket so a deliberate refusal is not
+counted as "not on screen". Do the two halves together or the pane will show a
+chip naming 42 U.S.C. 293(a) beside a mark drawn in 292.
+
+Two guards to carry over from today's work:
+
+- **A note is not the section.** 22 of the 215 write `(8 U.S.C. 1157 note)`, and
+  a note is uncodified law printed beneath a section — item 14's rule. Skip
+  them; they keep the Act-relative path they already have.
+- **The phrase must open a sub-instruction.** A bare `in section N` with no
+  parenthetical is 293 further sites, and most are not navigation at all —
+  "as defined in section 1245(a)(3)", "described in section 163(j)(2)" — sitting
+  inside quoted operands and definitions. The dash-or-verb requirement and
+  `isInstructionPosition` together are what separate them.
+
+### Still unfixed
+
+W2, W3, W6–W16, L1–L9, C1 — 25 of the 27. W2 remains the largest by count (550
+citations across a real section boundary) and carries its own trap, recorded in
+its section above: attribute via `viaAmendment` and require the head to sit
+inside a parsed section, because positional attribution overcounts wherever
+`parseBill` misses a bare `Sec. 401.` run-in head.
