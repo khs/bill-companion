@@ -3659,3 +3659,87 @@ LVXXXVI--FEDERAL MARITIME
    is what mis-renders the bill pane.
 
    Run it after any parser change. It is a test, not a report: it exits non-zero.
+
+65. **"Re-ran clean" is not a result. A DIFFERENT sample found 27 defects.**
+   (2026-08-09, from Keller: *"'re-ran clean' is not the point: the point is to
+   do a different random sample and see if it works."*) He is right, and the
+   correction is worth more than the entry it corrects.
+
+   `tools/proptest.mjs` found one bug, that bug was fixed, and it then passed. I
+   reported that as assurance. It is not: the test is a FIXED sample — one base
+   bill (hr1719, the smallest in the corpus), one hard-coded seed, 220 cases, ten
+   mutation operators. Re-running it proves the one bug is fixed and nothing else.
+   **A deterministic test that has been made to pass carries no information about
+   the space it does not cover.**
+
+   Five campaigns, each deliberately a different sample: multi-seed fuzz over
+   every bill including the PDFs; synthetic bills generated with the correct
+   answer recorded alongside; metamorphic transformations that must not change
+   the answer; hand-authored adversarial text aimed at named guards; and a
+   seeded random audit of real output read against the shipped shards. 30 findings
+   reported, each verified independently, 2 rejected as the test being wrong —
+   **27 distinct defects**. The full report with reproductions is in
+   `docs/random-testing-2026-08-09.md`; the five that put a real but wrong
+   provision in front of a reader are:
+
+   - **W1. `at the end of paragraph (N)` is parsed and thrown away.**
+     `PUNCT_UNIT_TAIL` consumes the unit in a non-capturing group, so the strike
+     keeps the instruction head's scope and `atEnd` takes the last position in
+     whatever node it is handed. **201 ops name a unit this way, 170 draw a mark,
+     163 land somewhere else — and none of the 163 is even a DESCENDANT of the
+     unit named.** In 26 U.S.C. 25C(a) one card both labels (a)(3) "added by this
+     bill" and strikes its terminal punctuation.
+   - **W2. An amendment body is not bounded by its own bill SECTION.**
+     `bodyEnd` is `min(nextHead, headEnd + MAX_AMEND_BODY, text.length)` and
+     `extractAmendments` is never passed the section list. **550 relative
+     citations are composed across a real section boundary on 22 of 26 bills; 296
+     answer with a real provision.** The Inflation Reduction Act's SEC. 13101 runs
+     543 characters into SEC. 13102 and composes seven chips about *section 48*
+     onto section 45.
+   - **W3. `in section 207 (12 U.S.C. 3206)` is not navigation.** `UNIT_WORDS`
+     has no "section", so `RE_NAV` cannot fire and every later step keeps the
+     Act-level anchor. **250 composed addresses on 10 bills; 196 would have found
+     a real node at the section the instruction named** — which is already parsed
+     as its own chip one position away.
+   - **W4. A bill's own effective-date clause is composed into a Code address.**
+     "The amendment made by subsection (a) shall apply to taxable years…" is
+     definitionally about the bill. **204 addresses on 21 bills, 156 landing on a
+     subsection that exists, and `internalKept = 0`** — every one displaced the
+     correct internal answer. One fixed token in front of the reference is the
+     tell.
+   - **W5. `alreadyIn()` runs against a heading-stripped haystack.**
+     `render-context.js` builds it with `flattenText`, which drops `node.heading`,
+     while the bill's added block carries the heading inline — and `alreadyIn`
+     matches an 80-character prefix, so it can never match. The sample bill
+     renders 2 U.S.C. 901(d) **twice on one screen**, once as law and once as a
+     pending addition. `subtreeText()` is the haystack it should use, and
+     render-context already passes that to `replacedAt()`.
+
+   The other 22, by title: W6 a paired insert drawn with no already-reads test ·
+   W7 three popular-name entries with no `enactedAs` answering under a false
+   short title · W8 a quoted block opening mid-line invisible to `quotedBlocks()`
+   · W9 a wrapped reference breaking after "and"/"or" admitted as a real marker ·
+   W10 `RE_INSERT`'s 400-character cap re-matching from a later opener · W11
+   `markerDepth()` reading `(cc)`, `(ll)`, `(vv)` as roman · W12 `newSection`
+   still unread for a replace op · W13 a malformed harvested entry making one chip
+   of two Acts · W14 an unbalanced source quote swallowing the next
+   sub-instruction · W15 `rewriteInForce()` one-directional, so a deletion-only
+   rewrite always scores 1.0 · W16 `RE_QUOTE_CLOSE` knowing three conventions of
+   four · L1 one mid-body "table of contents" mention suppressing 338 of
+   hr1865's 897 sections · L2 a navigation LIST scoping to its last member only ·
+   L3 "each place it appears" never crossing a node · L4 `REDESIG_LIST` omitting
+   subclause and subitem · L5 only the first amendment in a rendered paragraph
+   getting a block · L6 a whole-section rewrite essentially never reportable as
+   in force · L7 `RE_USC_LONG` with no hyphen in its section pattern · L8 "each
+   place it appears" read in a fixed 60-character window · L9 a second navigation
+   step after a comma read as a bare reference · C1 a citation overrunning a
+   rendered paragraph spilling body text.
+
+   **What this says about the testing discipline here, and it is the useful
+   part.** Every suite was green. The corpus baseline was clean. `coverage.mjs`
+   and `impact.mjs` both looked healthy. 27 defects were live anyway, five of them
+   at a scale of hundreds of wrong provisions, because **every instrument in this
+   repo measures the shapes it was written for.** What found these was varying the
+   input: different seeds, different bases, generated bills with known answers,
+   and a random sample of real output read by hand against the Code. Vary the
+   sample, not the number of runs.
