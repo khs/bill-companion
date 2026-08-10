@@ -572,6 +572,36 @@ section('redline on the current law');
               'under the State plan and any waiver')),
      'under the State plan[ins:,] and any waiver');
 
+  // A replacement the law has already had made to it. The commonest way a bill
+  // rewrites a phrase is to quote it back with something in front of it, so
+  // once the Code has been amended the OLD operand is still there — inside the
+  // new phrase — and the strike lands on it. `stale` cannot catch that: it asks
+  // whether every strike is gone, and this one demonstrably is not. 42 U.S.C.
+  // 1395w-114(a)(2)(D) rendered "Subject to paragraph (6), [del]the
+  // substitution[/del][ins]Subject to paragraph (6), the substitution[/ins]" —
+  // the same words twice, one of them coloured as a change this bill would make.
+  const already = [
+    { type: 'strike', text: 'The substitution', start: 10, end: 26 },
+    { type: 'insert', text: 'Subject to paragraph (6), the substitution', start: 40, end: 82, replaces: 10 },
+  ];
+  eq('a replacement already made is marked, not drawn twice',
+     show(seg(already, 'Subject to paragraph (6), the substitution for the coinsurance')),
+     '[was:Subject to paragraph (6), the substitution] for the coinsurance');
+  // The same instruction against a provision that has NOT been amended: the
+  // strike lands on its own operand and the replacement is drawn as pending.
+  eq('  and one still pending is drawn as a change',
+     show(seg(already, 'The substitution for the coinsurance')),
+     '[del:The substitution][ins:Subject to paragraph (6), the substitution] for the coinsurance');
+  // The guard is that the new phrase must SPAN the struck words and reach past
+  // them. Sharing a first word is not evidence: "by striking ``paragraph and
+  // in'' and inserting ``paragraph,''" would otherwise report itself already
+  // done while its own operand sits on the screen, and BOTH marks vanish.
+  eq('  sharing a word with the operand is not evidence',
+     show(seg([{ type: 'strike', text: 'paragraph and in', start: 10, end: 26 },
+               { type: 'insert', text: 'paragraph,', start: 40, end: 50, replaces: 10 }],
+              'under paragraph and in the case of')),
+     'under [del:paragraph and in][ins:paragraph,] the case of');
+
   // An operation applies only in the provision the instruction navigated to.
   const scoped = [{ type: 'strike', text: 'or', start: 1, end: 3, atEnd: true, scope: '(d)(2)(A)' }];
   eq('a scoped op marks its own provision', show(createRedline(scoped).apply('apples; or', '(d)(2)(A)')),

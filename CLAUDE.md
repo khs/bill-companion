@@ -4367,3 +4367,66 @@ LVXXXVI--FEDERAL MARITIME
 
    selftest 699 (the house print gains 2 redesignations, both real and both the
    subclause shape), rendertest 453, proptest clean.
+
+75. **A replacement the law has already had made to it was drawn as a pending
+   change, and the words showed up twice.** (2026-08-10, W6 of item 65.) The
+   `op.anchor` branch of `apply()` has tested `alreadyThere` since item 36; the
+   `op.replaces` branch never did. So a paired strike-and-insert drew both marks
+   on a provision that already reads the amended text:
+
+   ```
+   Section 1860D-14(a) ... (B) in subparagraph (D), by striking ``The
+   substitution'' and inserting ``Subject to paragraph (6), the substitution'';
+     -> 42 U.S.C. 1395w-114(a)(2)(D) rendered
+        "Subject to paragraph (6), [del]the substitution[/del]
+         [ins]Subject to paragraph (6), the substitution[/ins] for the ..."
+   ```
+
+   **`stale` cannot catch it, and the reason is the shape of the amendment.** A
+   bill rewrites a phrase by quoting it back with something in front of it, so
+   once the Code has been amended the OLD operand is still there -- inside the
+   new phrase -- and the strike lands on it. Staleness asks whether every strike
+   is gone; this one demonstrably is not. **188 of 302 drawn paired inserts of
+   24+ characters already sat in the node they were drawn into (62%)**, against
+   13 of 169 on the anchored branch that has the guard. That asymmetry named the
+   cause before anything was written.
+
+   **The evidence is geometric, not textual, and the first cut got it wrong.**
+   Testing that the new phrase sits at one end of the struck span fires on any
+   insert sharing a word with the operand -- `by striking ``paragraph and in''
+   and inserting ``paragraph,''` starts with the same word, and the operand
+   still being there is the amendment NOT having happened. It withdrew both
+   marks and drew nothing at all, which is worse than the bug. The new phrase
+   must **span** the struck words and reach past them on at least one side;
+   nothing lying inside the struck span is evidence of anything. That test also
+   names the occurrence to mark, so `enact()` takes the verified hit rather than
+   re-searching -- statutory language repeats and the nearest match is regularly
+   a different sentence.
+
+   The paired strike is withdrawn with the insert. Those words are part of the
+   new phrase, not language on its way out, and a strikethrough drawn through
+   the middle of a `was` mark says the opposite of what happened.
+
+   Audited by where every mark LANDS, before and after, over the whole corpus:
+   **186 pairs withdrawn, 186 `was` marks added, 0 marks gained anywhere else,
+   0 lost.** Every one of the 186 is in an `-enr` bill -- an enrolled, enacted
+   public law -- and not one is in either pending bill, which is the signature
+   this claim needs: "already in force" fires only where the law is in force.
+   Three read against the shipped shards, which say it outright: 42 U.S.C.
+   1395w-114(a)(2)(D) "Subject to paragraph (6), the substitution for the
+   beneficiary coinsurance", 1395w-113(a)(2) "Subject to paragraph (8), the base
+   beneficiary premium", 10 U.S.C. 9781(a)(2) "owned by the Department of the
+   Air Force".
+
+   Coverage, accounted to the unit: drawn as a pending change 1,677 -> 1,307 and
+   marked already in force 1,520 -> 1,892 -- 370 ops moved between those two,
+   plus **2 that moved out of `withheld`**, because the span test now runs ahead
+   of the `stale` guard and a stale amendment whose replacement is visibly in
+   place is marked rather than silently withheld. `shown to the reader` 3,197 ->
+   3,199. Corpus unchanged; this is drawing, not parsing.
+
+   Rendered per item 60: 42 U.S.C. 1395w-114(a)(1)(C) now carries the phrase
+   **once**, in the insertion colour with a dashed underline, titled "Added by
+   this bill -- already in force", with zero `del` and zero `ins` in the pane.
+
+   selftest 699, rendertest 453 -> 456, proptest clean.

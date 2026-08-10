@@ -67,7 +67,7 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 
 ---
 
-**W6. A paired insert is drawn with no test that the law already reads it**
+**W6. A paired insert is drawn with no test that the law already reads it** — FIXED 2026-08-10, CLAUDE.md item 75
 `app/ui/redline.js:457` (the `op.replaces` branch) has no `alreadyThere` test; `:485` (the `op.anchor` branch) does. Confirmed by reading both branches.
 
 - **Repro:** hr5376-117-enr @257339 — `Section 1860D-14(a) … (2) in paragraph (2)-- (B) in subparagraph (D), by striking ``The substitution'' and inserting ``Subject to paragraph (6), the substitution'';`

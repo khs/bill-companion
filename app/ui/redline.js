@@ -502,8 +502,8 @@ export function createRedline(ops, fullText, knownPaths) {
      * occurrence chosen is the one the bill is talking about — statutory
      * language repeats, and the first match is regularly a different sentence.
      */
-    const enact = (op, near) => {
-      const hits = occurrences(folded, op.text);
+    const enact = (op, near, known) => {
+      const hits = known ? [known] : occurrences(folded, op.text);
       if (!hits.length) return false;
       let hit = hits[0];
       if (near != null) {
@@ -527,6 +527,42 @@ export function createRedline(ops, fullText, knownPaths) {
         // Only in the same passage the strike landed in; otherwise wait, the
         // provision may continue in a later node.
         if (where && dels.some((d) => d.start === where.start)) {
+          // The replacement has already been made. A bill most often rewrites a
+          // phrase by quoting it back with something in front of it — strike
+          // "The substitution", insert "Subject to paragraph (6), the
+          // substitution" — so once the Code has been amended the OLD operand is
+          // still there, inside the new phrase, and the strike lands on it.
+          // Nothing above catches that: `stale` asks whether every strike is
+          // gone, and this one demonstrably is not. The positional evidence is
+          // what settles it — the new language already sits across the span the
+          // strike landed on, beginning or ending exactly where the replacement
+          // would have put it. That is the same proof the `op.anchor` branch
+          // below has always had and this one never did.
+          //
+          // The new phrase must SPAN the struck words and reach past them on at
+          // least one side. Testing only that it sits at one end fires on any
+          // insert sharing a word with the operand — "by striking ``paragraph
+          // and in'' and inserting ``paragraph,''" starts with the same word,
+          // and the operand still being there is the amendment NOT having
+          // happened. Nothing that lies inside the struck span is evidence.
+          const spans = occurrences(folded, op.text).find(
+            (h) =>
+              h.start <= where.start &&
+              h.end >= where.end &&
+              (h.start < where.start || h.end > where.end)
+          );
+          if (spans) {
+            // The strike goes with it. Those words are part of the new phrase,
+            // not language on its way out, and a strikethrough drawn through
+            // the middle of a `was` mark says the opposite of what happened.
+            for (let i = dels.length - 1; i >= 0; i--) {
+              if (dels[i].op.start === op.replaces) dels.splice(i, 1);
+            }
+            const struck = work.find((o) => o.start === op.replaces);
+            if (struck) struck.enacted = true;
+            enact(op, null, spans);
+            continue;
+          }
           if (!stale) {
             inss.push({ at: where.end, text: op.text, op });
             op.done = true;
