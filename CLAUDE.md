@@ -3743,3 +3743,23 @@ LVXXXVI--FEDERAL MARITIME
    input: different seeds, different bases, generated bills with known answers,
    and a random sample of real output read by hand against the Code. Vary the
    sample, not the number of runs.
+
+66. **A bill’s own effective-date clause is not a Code address.** (2026-08-09,
+   W4 of item 65.) “The amendment made by subsection (a) shall apply to taxable
+   years beginning after…” is definitionally about the BILL — subsection (a) of
+   this section of this Act, not of the statute being amended. Composed onto the
+   target it gave 26 U.S.C. 5000A(a), 45(h), 172(a), 49 U.S.C. 22907(a): **204
+   addresses across 21 bills, 156 landing on a subsection that really exists**,
+   and  — every one displaced the answer 
+   already had right.
+
+   The tell is one fixed token in front of the reference, so the guard is a
+   lookbehind and nothing else. Note that the amendment body ALSO over-reaches
+   its bill section (W2, ), and fixing that would not fix this:
+   the effective-date clause usually sits inside the same section as the
+   instruction it follows.
+
+   Corpus  and  across the bills, the two differing
+   because 56 of the withdrawn references sit on an amendment with no resolved
+   target and so never became relative citations. selftest 664, rendertest 437,
+   proptest clean.

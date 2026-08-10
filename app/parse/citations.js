@@ -1770,6 +1770,18 @@ function extractSteps(text, from, to, basePath) {
       if (!onThisLine(s)) continue;
       if (claimed.some(([a, b]) => rel(s) < b && rel(s) + rm[0].length > a)) continue;
       if (inQuotedOperand(rel(s), rel(s) + rm[0].length)) continue;
+      // "The amendment made by subsection (a) shall apply to taxable years…" is
+      // a bill's own effective-date clause, and it is definitionally about the
+      // BILL — subsection (a) of this section of this Act, not of the statute
+      // being amended. Composed onto the target it gave 26 U.S.C. 5000A(a),
+      // 45(h), 172(a), 49 U.S.C. 22907(a): 204 addresses across 21 bills, 156 of
+      // them landing on a subsection that really exists, and every single one
+      // displacing the answer locateInternal already had right.
+      //
+      // The amendment body over-reaches its bill section for a separate reason
+      // (MAX_AMEND_BODY), and fixing that does NOT fix this — the effective-date
+      // clause usually sits inside the same section as the instruction.
+      if (RE_AMENDMENT_MADE_BY.test(probe.slice(Math.max(0, s - 44), s))) continue;
       const resolved = resolvePhrase(unitPairs(rm[1]), current);
       if (!resolved) continue;
       emit(refs, resolved, probe, lineStart, s, rm[1], text);
@@ -1943,6 +1955,10 @@ const STYLE_DEPTH = [
 // "such paragraph (16)", "that subparagraph (A)", "said clause (ii)" — a
 // reference pointing back at a provision already named. See blockRefs().
 const RE_ANAPHOR_PREFIX = /\b(?:such|that|said)\s+$/i;
+
+// "The amendment made by subsection (a)" / "the amendments made by paragraphs
+// (1) and (2)" — a bill talking about its own subdivisions. See extractSteps.
+const RE_AMENDMENT_MADE_BY = /\bamendments?\s+made\s+by\s+$/i;
 
 function styleDisagrees(marker, unitDepth) {
   const s = marker.slice(1, -1);
