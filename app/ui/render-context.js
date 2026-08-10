@@ -976,6 +976,14 @@ function effect(eff, handlers) {
         // worst kind of wrong this pane can be.
         f.className = 'found';
         f.textContent = '✓ rewrites this provision’s heading, not its text';
+      } else if (op.newSection) {
+        // Refused, and for the reason the reader needs: the quoted block is a
+        // whole section (or a PART heading), which cannot be the text of a
+        // subparagraph whatever instruction it was read out of. Saying
+        // "rewrites (a)(2)(B), which is not shown here" would blame the pane
+        // for a block that does not belong to this provision at all.
+        f.className = 'notfound';
+        f.textContent = '⚠ the language quoted here is a whole section, not part of this provision';
       } else {
         f.className = 'notfound';
         f.textContent = op.scope

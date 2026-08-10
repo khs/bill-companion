@@ -43,6 +43,27 @@ const UNIT_DEPTH = {
 export function markerDepth(marker) {
   const s = marker.slice(1, -1);
   if (/^\d+$/.test(s)) return UNIT_DEPTH.paragraph;
+  // A DOUBLED c, l or v is the alphabet continuing past (z) — (aa), (bb), (cc)
+  // — and not a roman numeral, whatever the two tests below would make of it.
+  // Ground truth over all 705,678 shipped Code nodes: (cc) appears 639 times,
+  // 594 of them at item depth and ONE at clause depth; (ll) 10 of 10 items;
+  // (vv) 4 of 4; (LL) 2 of 2. Against which (ii) is a clause 30,903 times of
+  // 32,809 and (II) a subclause 10,511 of 11,074 — so i and x keep their roman
+  // reading, and so does every mixed form (iv, vii, xl). (dd) and (mm) never
+  // reached the roman tests at all, because d and m are not in their classes.
+  //
+  // Read as roman, an added block led by (dd) was scoped one level too shallow
+  // and drawn INSIDE item (cc) of 42 U.S.C. 1395w-102(b)(4)(C)(iii)(I), where
+  // the shard has them as siblings.
+  //
+  // Exactly two, which is the population that ground truth covers. A run of
+  // THREE is the alphabet overflowing a second time — 42 U.S.C. 1395x numbers
+  // its SUBSECTIONS (a)…(z), (aa)…(zz), (aaa)…(mmm) — so it can sit at any
+  // depth at all, and moving "(mmm)" to item depth would be a different guess
+  // rather than a better one.
+  if (/^([clv])\1$/i.test(s)) {
+    return s === s.toLowerCase() ? UNIT_DEPTH.item : UNIT_DEPTH.subitem;
+  }
   if (/^[IVXLC]{2,}$/.test(s)) return UNIT_DEPTH.subclause;
   if (/^[ivxlc]{2,}$/.test(s)) return UNIT_DEPTH.clause;
   if (/^[a-z]{2}$/.test(s)) return UNIT_DEPTH.item;

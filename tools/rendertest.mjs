@@ -1548,6 +1548,58 @@ section('additions at the end');
        drawnAway.querySelectorAll('.del').length, 1);
   }
 
+  // ---- a REPLACEMENT whose quoted block is a whole section ----------------
+  // markSectionAdditions() has set `newSection` on a scoped replacement since
+  // item 58 and the replacements filter never tested it — item 33's rule broken
+  // two commits after item 59 restated it, and item 60 fixed the heading half
+  // and left this live. 2 U.S.C. 1382(a)(2)(B) was told it now reads the
+  // Architect of the Capitol's pay section, from a block belonging to an
+  // instruction four lines later against a different Act.
+  {
+    const newSecRes = {
+      source: 'U.S. Code', citation: '2 U.S.C. 1382', links: [],
+      tree: [{
+        marker: '(a)', path: '(a)', heading: '',
+        text: '(a) In general.', children: [{
+          marker: '(2)', path: '(a)(2)', heading: '',
+          text: '(2) Rates.', children: [{
+            marker: '(B)', path: '(a)(2)(B)', heading: '', text: '(B) The old rate.', children: [],
+          }],
+        }],
+      }],
+      focusPath: '',
+      effect: {
+        ops: [{
+          type: 'replace', scope: '(a)(2)(B)', newSection: true,
+          text: 'SEC. 312. PAY OF THE ARCHITECT OF THE CAPITOL.',
+          start: 900, end: 946,
+        }],
+        unmatched: false,
+      },
+    };
+    const nsEl = rc(newSecRes, { onScope: () => {} });
+    eq('a whole-section block does not mark the subparagraph it was scoped to',
+       nsEl.querySelectorAll('.node.replaced').length, 0);
+    const ntxt = nsEl.textContent.replace(/\s+/g, ' ');
+    ok('  and the panel says what the block actually is',
+       /the language quoted here is a whole section, not part of this provision/.test(ntxt),
+       ntxt.slice(0, 300));
+    ok('  not that the provision is off screen, which would blame the pane',
+       !/which is not shown here/.test(ntxt), ntxt.slice(0, 300));
+    ok('  and it is not reported as marked above',
+       !/marked above/.test(ntxt) && !/already in force/.test(ntxt), ntxt.slice(0, 300));
+
+    // The control: without the flag the same block marks the node, which is the
+    // behaviour this refusal exists to remove.
+    const marked = rc(
+      { ...newSecRes,
+        effect: { ops: [{ ...newSecRes.effect.ops[0], newSection: false }], unmatched: false } },
+      { onScope: () => {} }
+    );
+    eq('  and without the flag it marks it as before',
+       marked.querySelectorAll('.node.replaced').length, 1);
+  }
+
   // ---- "by inserting after subparagraph (B) the following" ---------------
   // Same structural job as add-at-end, written with a different verb, and it
   // was drawing NOTHING. apply() only places an insert that either replaces a

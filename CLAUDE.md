@@ -4204,3 +4204,60 @@ LVXXXVI--FEDERAL MARITIME
    RURAL DEVELOPMENT, FOOD AND DRUG ADMINISTRATION, AND RELATED AGENCIES".
 
    selftest 684 → 686, rendertest 448, proptest clean.
+
+72. **(cc) is the alphabet past (z), and a whole section is still not the text
+   of a subparagraph.** (2026-08-10, W11 and W12 of item 65.)
+
+   **`markerDepth()` read a doubled c, l or v as a roman numeral.**
+   `/^[ivxlc]{2,}$/` is tested before `/^[a-z]{2}$/`, so (cc), (ll) and (vv) —
+   which are the alphabet continuing past (z), the same way (aa) and (bb) are —
+   came back at clause depth. An added block led by (dd) was therefore scoped
+   one level too shallow and drawn **inside** item (cc) of 42 U.S.C.
+   1395w-102(b)(4)(C)(iii)(I), where the shard has them as siblings.
+
+   The discrimination is data rather than taste, which is what makes it safe to
+   make at all. Over all 705,678 shipped Code nodes, (cc) appears 639 times, 594
+   of them at item depth and **once** as a clause; (ll) is 10 of 10 items, (vv)
+   4 of 4, (LL) 2 of 2. Against which **(ii) is a clause 30,903 times of 32,809
+   and (II) a subclause 10,511 of 11,074** — so i and x keep the roman reading
+   and must not be touched, and neither must a mixed form (iv, vii, xl). (dd)
+   and (mm) never reached the roman tests at all, because d and m are not in
+   their character classes, which is why the class here is `[clv]` and not the
+   whole roman alphabet: anything wider would be dead.
+
+   Exactly TWO letters. A run of three is the alphabet overflowing a second
+   time — 42 U.S.C. 1395x numbers its SUBSECTIONS (a)…(z), (aa)…(zz), (aaa)…
+   (mmm) — so it can sit at any depth, and the first cut of this fix moved
+   `(mmm)` to item depth and changed a fourth op scope from one wrong answer to
+   a deeper wrong one. Caught by reading the fourth change rather than counting
+   it: hr2617 adds a new SUBSECTION (mmm) to 42 U.S.C. 1395x and the right scope
+   is the section itself.
+
+   Blast radius, measured: **3 op scopes change and 22,590 do not**, and 0
+   composed addresses move. All three verified against the shipped shards —
+   1395w-102(b)(4)(C)(iii)(I) holds (aa)(bb)(cc)(dd), 7 U.S.C. 5939(f)(3)(B)(i)(I)
+   holds (aa)(bb)(cc), and 15 U.S.C. 636(a)(37)(J)(iii)(I) likewise.
+
+   **And `newSection` was still unread for a `replace` op.** Item 60 fixed the
+   heading half of this and left the other half live: `markSectionAdditions()`
+   has set the flag on a scoped replacement since item 58, and `redline.js`'s
+   `replacements` filter never tested it. So 2 U.S.C. 1382(a)(2)(B) was told it
+   now reads "SEC. 312. PAY OF THE ARCHITECT OF THE CAPITOL" — a block belonging
+   to an instruction four lines later against a different Act — with `.node.
+   replaced` drawn on it and "✓ the provision is marked above" beneath. That is
+   item 33's rule broken two commits after item 59 restated it, and item 48's
+   open hazard (a block read forward out of the next instruction) arriving where
+   the guard for it was not wired.
+
+   4 replace ops carry the flag and **2 reached a mark**; both are now refused,
+   by exclusion from the list rather than by a flag inside it, so `placed()` is
+   right for free. The panel says what the block actually is rather than
+   "rewrites (a)(2)(B), which is not shown here", which would blame the pane for
+   a block that does not belong to this provision at all. `coverage.mjs` gained
+   the bucket, because lumping a deliberate refusal in with "not on screen"
+   turns a wrong label into no label — the same note item 60 wrote about the
+   heading bucket.
+
+   Corpus unchanged for both: a scope is invisible to `opSpans`, which keys on
+   `type:start-end`, and a refusal is a flag on an op that already existed.
+   selftest 686 → 697, rendertest 448 → 453, proptest clean.

@@ -362,6 +362,37 @@ section('relative navigation inside amendments');
      JSON.stringify(announced.sections.map((s) => s.num)));
 }
 {
+  // ---- (cc) is the alphabet past (z), not two hundred ----------------------
+  //
+  // markerDepth() tested /^[ivxlc]{2,}$/ before /^[a-z]{2}$/, so (cc), (ll) and
+  // (vv) read as roman numerals at clause depth. An added block led by (dd) was
+  // therefore scoped one level too shallow and drawn INSIDE item (cc) of
+  // 42 U.S.C. 1395w-102(b)(4)(C)(iii)(I), where the shard has them as siblings.
+  //
+  // The discrimination is data, not taste: over all 705,678 shipped Code nodes
+  // (cc) appears 639 times, 594 of them at item depth and once as a clause,
+  // while (ii) is a clause 30,903 times of 32,809 — so i and x keep the roman
+  // reading and must not be touched.
+  const { markerDepth } = await imp('app/resolve/internal.js');
+  eq('(cc) is an item, not roman two hundred', markerDepth('(cc)'), 5);
+  eq('(ll) is an item — it is not a roman numeral at all', markerDepth('(ll)'), 5);
+  eq('(vv) likewise', markerDepth('(vv)'), 5);
+  eq('(CC) is a subitem', markerDepth('(CC)'), 6);
+  // The genuinely ambiguous ones, which the data says to leave alone.
+  eq('(ii) stays a clause', markerDepth('(ii)'), 3);
+  eq('(II) stays a subclause', markerDepth('(II)'), 4);
+  eq('(xx) stays a clause', markerDepth('(xx)'), 3);
+  eq('(iv) stays a clause — a mixed form is unambiguous', markerDepth('(iv)'), 3);
+  // A single letter is not a run, and (c) and (v) must keep their own readings.
+  eq('(c) is still a subsection', markerDepth('(c)'), 0);
+  eq('(v) is still a clause', markerDepth('(v)'), 3);
+  // A run of THREE is the alphabet overflowing a second time — 42 U.S.C. 1395x
+  // numbers its SUBSECTIONS (a)…(z), (aa)…(zz), (aaa)…(mmm) — so it can sit at
+  // any depth and moving it would be a different guess, not a better one. It
+  // falls through to the default, which is where it has always fallen.
+  eq('(mmm) is left where it was', markerDepth('(mmm)'), 2);
+}
+{
   // "Section 55301 of title 46 … is redesignated as section 55123 of such
   // title" says exactly what it does, and the pane said nothing at all: `verb`
   // recorded "redesignated", no op was ever emitted, and attachEffect() returns

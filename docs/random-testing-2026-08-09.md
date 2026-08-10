@@ -118,7 +118,7 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 
 ---
 
-**W11. `markerDepth()` reads `(cc)`, `(ll)`, `(vv)`, `(CC)`, `(LL)`, `(VV)` as roman numerals**
+**W11. `markerDepth()` reads `(cc)`, `(ll)`, `(vv)`, `(CC)`, `(LL)`, `(VV)` as roman numerals** — FIXED 2026-08-10, CLAUDE.md item 72
 `app/resolve/internal.js:46-49` — confirmed: `/^[IVXLC]{2,}$/` (subclause) and `/^[ivxlc]{2,}$/` (clause) are tested **before** `/^[a-z]{2}$/` (item) and `/^[A-Z]{2}$/` (subitem).
 
 - **Repro:** identical instruction, one character different in the block's leading marker: lead `(cc)` → add-at-end scope `(a)(37)(J)`; lead `(dd)` → scope `(a)(37)(J)(iii)(I)` (correct).
@@ -129,7 +129,7 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 
 ---
 
-**W12. `newSection` is unread for a `replace` op**
+**W12. `newSection` is unread for a `replace` op** — FIXED 2026-08-10, CLAUDE.md item 72
 `app/ui/redline.js:335` — `.filter((o) => o.type === 'replace' && … && !o.scopeLost && !o.headingOnly)` (confirmed: no `newSection` test), while `:524` for additions does test `op.rangeEnd || op.newSection`. `replacedAt()` skips the leading-marker identity test because a block headed `SEC. 1.` has no leading `(x)` marker.
 
 - **Repro:** hr1865-116-enr @762061 — instruction (C) amends 2 U.S.C. 1382(a)(2)(B); the block belongs to instruction (D) four lines later, which amends 2 U.S.C. 1802 (a different Act).
@@ -408,7 +408,7 @@ Two guards to carry over from today's work:
 
 ### Still unfixed
 
-W6–W16, L2–L9, C1 — 22 of the 27 (W4, W5, W1, W3, W2 and L1 are done). W2 remains the largest by count (550
+W6–10, W13–W16, L2–L9, C1 — 20 of the 27 (W1–W5, W11, W12, L1 are done). W2 remains the largest by count (550
 citations across a real section boundary) and carries its own trap, recorded in
 its section above: attribute via `viaAmendment` and require the head to sit
 inside a parsed section, because positional attribution overcounts wherever

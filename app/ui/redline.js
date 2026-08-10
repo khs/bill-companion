@@ -388,7 +388,16 @@ export function createRedline(ops, fullText, knownPaths) {
         typeof o.text === 'string' &&
         !o.scopeLost &&
         !o.headingOnly &&
-        !o.otherSection
+        !o.otherSection &&
+        // A whole SECTION, or a PART heading, is never the text of a
+        // subparagraph. markSectionAdditions() has set this flag on a scoped
+        // replacement since item 58 and nothing read it — item 33's rule broken
+        // two commits after item 59 restated it, and item 60 fixed the heading
+        // half and left this live. 4 replace ops carry it and 2 reached a mark:
+        // 2 U.S.C. 1382(a)(2)(B) was told it now reads the Architect of the
+        // Capitol's pay section, from a block belonging to an instruction four
+        // lines later against a different Act.
+        !o.newSection
     )
     .map((o) => ({ ...o, done: false }));
 
