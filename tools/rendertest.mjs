@@ -892,6 +892,62 @@ section('redline on the current law');
   eq('  a block the law does NOT hold is still drawn as new',
      notThere.appliedAdditions().length, 0);
   eq('    and is placed', notThere.additionsAt('(8)').length, 1);
+
+  // A HEADING is the third normalisation, and it cuts both ways — which is why
+  // createRedline takes the provision in more than one rendering rather than
+  // picking the better one. The Code stores a node's heading apart from its
+  // body; a bill writes the two together. So the same provision reads
+  //
+  //   flattened     "(d) It shall not be in order in the Senate…"
+  //   heading inline"(d) Enforcement of Discretionary Spending Limits.--It shall…"
+  //
+  // and alreadyIn() matches the first 80 folded characters, so whichever side
+  // carries the heading, one rendering alone loses the match. Flattening alone
+  // missed 877 additions the law demonstrably contains — 2 U.S.C. 901(d)
+  // rendered twice on one screen, once as law and once as a pending addition of
+  // the same words — and heading-inline alone missed 14 the other way, where the
+  // heading is the OLRC's editorial catchline and the bill never wrote one.
+  const headBlock =
+    '(d) Enforcement of Discretionary Spending Limits.--It shall not be in order in the Senate to consider any bill.';
+  const bodyOnly = '(d) It shall not be in order in the Senate to consider any bill.';
+  const bothWays = (law) =>
+    createRedline(
+      [{ type: 'insert', placement: 'after-unit', text: headBlock, start: 0, end: headBlock.length, scope: '(c)' }],
+      law, new Set(['(c)', '(d)'])
+    ).appliedAdditions().length;
+  eq('a heading the Code holds apart does not hide the addition',
+     bothWays([bodyOnly, headBlock]), 1);
+  eq('  and one rendering alone would have missed it', bothWays(bodyOnly), 0);
+  // The mirror: the bill writes no heading and the Code supplies one
+  // editorially, as it does for 15 U.S.C. 78i(a).
+  const editorial = (law) =>
+    createRedline(
+      [{ type: 'insert', placement: 'after-unit', text: bodyOnly, start: 0, end: bodyOnly.length, scope: '(c)' }],
+      law, new Set(['(c)', '(d)'])
+    ).appliedAdditions().length;
+  eq('an editorial heading the bill never wrote does not hide it either',
+     editorial([bodyOnly, headBlock]), 1);
+  eq('  and heading-inline alone would have missed THAT', editorial(headBlock), 0);
+  // Negative evidence takes the narrowest haystack, and the asymmetry is the
+  // point. Asking every rendering whether a strike's operand survives rescued 22
+  // amendments from staleness and 15 were caption hits — hr2-115 strikes "2018"
+  // from 7 U.S.C. 1932(b)(2) and an unrelated subsection's heading holds the
+  // year. A word that exists only as a caption is not evidence that the
+  // statutory text still says it.
+  const capOnly = createRedline(
+    [{ type: 'strike', text: 'twenty eighteen', start: 0, end: 15 },
+     { type: 'insert', text: 'brand new words here', start: 20, end: 40 }],
+    ['(b) the body says nothing of the kind.',
+     '(b) Deadline of twenty eighteen.--the body says nothing of the kind.']);
+  ok('a caption hit does not rescue an amendment from staleness', capOnly.isStale());
+  // An empty provision is a repealed or transferred stub, and 9,547 shards are
+  // one. It must still read as stale — dropping empty strings from the rendering
+  // list moved 246 operations out of "already happened" on no evidence at all.
+  const stub = createRedline(
+    [{ type: 'strike', text: 'some struck phrase', start: 0, end: 18 },
+     { type: 'insert', text: 'brand new words here', start: 20, end: 40 }],
+    ['', '']);
+  ok('  and an empty stub is still stale', stub.isStale());
 }
 
 // --- additions at the end --------------------------------------------------

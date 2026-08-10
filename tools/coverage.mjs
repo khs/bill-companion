@@ -47,8 +47,9 @@ const { extractCitations, extractAmendments } = await imp('app/parse/citations.j
 const { normalizeText } = await imp('app/parse/bill.js');
 const { unwrapPre } = await imp('tools/measure.mjs');
 const { resolve } = await imp('app/resolve/index.js');
-const { flattenText } = await imp('app/resolve/provision-tree.js');
+
 const { createRedline } = await imp('app/ui/redline.js');
+const { flattenText } = await imp('app/resolve/provision-tree.js');
 const { subtreeText } = await imp('app/ui/render-context.js');
 
 const bold = (s) => `\x1b[1m${s}\x1b[0m`;
@@ -89,7 +90,13 @@ for (const bill of bills) {
     try { res = await resolve(a.target); } catch { continue; }
     if (!res || !res.tree) continue;
 
-    const whole = [res.lead || '', ...res.tree.map(flattenText)].join('\n');
+    // Both renderings, the same pair render-context passes — see the note
+    // there. They differ by a heading, which is inside alreadyIn()'s
+    // 80-character window and is present on one side or the other.
+    const whole = [
+      [res.lead || '', ...res.tree.map(flattenText)].join('\n'),
+      [res.lead || '', ...res.tree.map(subtreeText)].join('\n'),
+    ];
     // Same three arguments render-context passes, or this measures a rendering
     // nobody sees — scopes would go unreconciled here and reconciled on screen.
     const paths = new Set();

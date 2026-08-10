@@ -24,9 +24,19 @@ export function renderContext(res, handlers) {
   // The whole provision goes in too, so the redliner can tell whether this
   // amendment has already been applied to the law we hold before it draws
   // anything. See createRedline().
+  // BOTH renderings, and the difference between them is a heading. The Code
+  // stores a node's heading apart from its body, so flattenText writes
+  // "(d) It shall not be in order…" where a bill writes "(d) Enforcement of
+  // Discretionary Spending Limits.--It shall not be in order…". Whether the
+  // bill's own language carries the heading cuts both ways — some headings are
+  // enacted and some are supplied editorially by the OLRC — so neither
+  // rendering alone is the provision. createRedline() asks all of them.
   if (res.effect) {
     const whole = res.tree
-      ? [res.lead || '', ...res.tree.map(flattenText)].join('\n')
+      ? [
+          [res.lead || '', ...res.tree.map(flattenText)].join('\n'),
+          [res.lead || '', ...res.tree.map(subtreeText)].join('\n'),
+        ]
       : res.sections
       ? res.sections.map((s) => s.paragraphs.join('\n')).join('\n')
       : '';

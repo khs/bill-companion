@@ -21,6 +21,11 @@
 // from the connective the bill used ("and inserting", "after ``Y''"), captured
 // by placeOps() in app/parse/citations.js.
 
+// The one spelling of "what shape does this run of line-head markers have?" —
+// see appliedNodePaths(), which reads an added block's own outline rather than
+// re-deriving one.
+import { parseProvision } from '../parse/outline.js';
+
 /**
  * Fold a passage onto the common ground the two sources share, keeping a map
  * back to the original offsets.
@@ -250,12 +255,57 @@ function reScope(ops, knownPaths) {
 
 /**
  * @param {Array}  ops        the amendment's ops, already carrying placement
- * @param {string} fullText   the whole provision, for the already-happened tests
+ * @param {string|string[]} fullText  the whole provision, for the
+ *                            already-happened tests. An ARRAY where the caller
+ *                            can render the provision more than one way; see
+ *                            `hays` below.
  * @param {Set}    knownPaths every path in the tree being rendered, so an op
  *                            addressed to a level that does not exist can be
  *                            widened to one that does rather than disappearing
  */
 export function createRedline(ops, fullText, knownPaths) {
+  // The provision arrives in as many renderings as the caller can produce, and
+  // every already-happened test below asks all of them. Two exist and they
+  // differ by a HEADING: the Code stores a node's heading apart from its body,
+  // and whether the bill's own language carries one cuts both ways —
+  //
+  //   2 U.S.C. 901(d)  bill: "(d) Enforcement of Discretionary Spending
+  //                           Limits.--It shall not be in order…"
+  //                    Code: heading held apart, body "It shall not be in order…"
+  //   15 U.S.C. 78i(a) bill: "(a) It shall be unlawful for any person…"
+  //                    Code: heading "Transactions relating to purchase or sale
+  //                           of security" — supplied editorially, not enacted
+  //
+  // alreadyIn() matches the first 80 folded characters, so a heading on either
+  // side alone is inside the window and defeats the match. Testing one rendering
+  // trades one blind spot for the other: on the corpus, flattening alone missed
+  // 877 additions the law demonstrably contains — the sample bill drew
+  // 2 U.S.C. 901(d) twice on one screen, once as law and once as a pending
+  // addition of the same words — and heading-inline alone missed 14 the other
+  // way. Both strings are true renderings of the same provision, so a match in
+  // either is evidence and neither is authority.
+  //
+  // The FIRST entry is the provision's own text, and `stale` asks only that one.
+  // The asymmetry is the point and it is not a convenience: "the law contains
+  // this language" is POSITIVE evidence, safe to accept from any true rendering,
+  // while staleness is NEGATIVE — "not one thing this amendment strikes is still
+  // here" — and a single coincidental hit anywhere destroys it. Asking every
+  // rendering rescued 22 amendments from staleness and 15 of them were caption
+  // hits: hr2-115 strikes "2018" from 7 U.S.C. 1932(b)(2), and the heading of an
+  // unrelated subsection (f) contains the year. The 7 genuine ones strike across
+  // the heading/body juncture ("Retroactive Changes in Plan.--A stock bonus")
+  // and stay withheld, which is the conservative direction: withholding shows
+  // nothing, and drawing an insertion the law already carries shows it twice.
+  //
+  // An EMPTY string is kept, and that is not tidiness. 9,547 shards are stubs —
+  // repealed, transferred, omitted — with no text at all, and `stale` is
+  // `hays.length > 0 && …`, standing in for the old `typeof fullText ===
+  // 'string'`. Dropping the empties made hays.length 0 on every stub, which
+  // flipped 246 operations out of "the amendment has already happened" and into
+  // "not found in the provision" with no evidence for the change.
+  const hays = (Array.isArray(fullText) ? fullText : [fullText]).filter(
+    (s) => typeof s === 'string'
+  );
   // An insert placed structurally belongs to `additions` and to nothing else.
   // It used to be in both lists as two separate objects: the additions copy was
   // handled and the work copy was never marked done, so unplaced() reported a
@@ -312,7 +362,7 @@ export function createRedline(ops, fullText, knownPaths) {
     // the renderer happens to be laying out when it asks. Deciding it lazily
     // made appliedNodePaths() depend on walk order, which is the kind of thing
     // that works until a tree is shaped differently.
-    .map((o) => ({ ...o, done: false, inLaw: alreadyIn(fullText, o.text) }));
+    .map((o) => ({ ...o, done: false, inLaw: hays.some((h) => alreadyIn(h, o.text)) }));
 
   // Whole-provision replacements. Excluded from `work` and `additions` by their
   // type alone, so they were being dropped silently; they get their own list
@@ -366,10 +416,12 @@ export function createRedline(ops, fullText, knownPaths) {
   // stale on an empty set.
   const distinctive = (o) => String(o.text).replace(/[^A-Za-z0-9]/g, '').length >= 4;
   const evidence = work.filter((o) => o.type === 'strike' && distinctive(o));
+  // The provision's own text and no alternate rendering — see `hays` above for
+  // why negative evidence takes the narrowest haystack.
   const stale =
-    typeof fullText === 'string' &&
+    hays.length > 0 &&
     evidence.length > 0 &&
-    !evidence.some((o) => occurrences(fold(fullText), o.text).length);
+    !evidence.some((o) => occurrences(fold(hays[0]), o.text).length);
 
   // Where each strike landed, keyed by its offset in the bill, so an insert that
   // replaces it can be placed immediately after.
@@ -615,18 +667,40 @@ export function createRedline(ops, fullText, knownPaths) {
    * scopeAdditions() reads for depth. An add-at-end op is scoped to the parent,
    * so its children hang directly off it; an after-unit op is scoped to the
    * sibling it follows, so they hang off that sibling's parent.
+   *
+   * Only the block's TOP level, and that is the correction. Reading every
+   * line-head marker took the block's own interior — its (1)s, (A)s and (i)s —
+   * and hung each one off the base as though it were a sibling of the block
+   * root. Off a base of `(c)` that is harmless, because `(c)(A)` names nothing;
+   * off an empty base it is not, because `(i)` names subsection (i). Lifting
+   * the scope guard below without this would have added 451 correct marks and
+   * 2,334 wrong ones — "added by this bill" written across provisions the bill
+   * never touched, in 26 U.S.C. 59(i) among others. Children need no mark of
+   * their own: they are drawn inside the parent, which carries the rule.
+   *
+   * parseProvision() answers this rather than a local scan, because it is the
+   * module that owns marker depth and it already steps over a marker that is
+   * only at a line head because the line wrapped.
+   *
+   * A nullish scope is the empty path. An instruction that never navigates —
+   * "Section 251 … is amended by adding at the end the following" — leaves
+   * `scope` undefined, and `typeof op.scope !== 'string'` skipped every one, so
+   * 256 enacted additions could never mark the provision they created. The
+   * Fiscal Responsibility Act's new 2 U.S.C. 901(d) is one: the panel said
+   * "✓ already in the law as it stands" while the subsection it names sat
+   * unmarked a few lines below.
    */
   function appliedNodePaths() {
     const out = new Set();
     for (const op of additions) {
-      if (!op.inLaw || typeof op.scope !== 'string') continue;
+      if (!op.inLaw) continue;
+      const scope = op.scope == null ? '' : String(op.scope);
       const base =
         op.placement === 'after-unit'
-          ? op.scope.replace(/\([A-Za-z0-9]{1,8}\)$/, '')
-          : op.scope;
-      for (const line of String(op.text).split('\n')) {
-        const m = line.match(/^\s*(?:``|‘‘|["“])?\s*(\([A-Za-z0-9]{1,8}\))/);
-        if (m) out.add(base + m[1]);
+          ? scope.replace(/\([A-Za-z0-9]{1,8}\)$/, '')
+          : scope;
+      for (const node of parseProvision(op.text)) {
+        if (node.marker) out.add(base + node.marker);
       }
     }
     return out;
@@ -690,7 +764,7 @@ export function createRedline(ops, fullText, knownPaths) {
       if (!op) return null;
       if (!op.done) {
         op.done = true;
-        op.inLaw = rewriteInForce(fullText, op.text);
+        op.inLaw = hays.some((h) => rewriteInForce(h, op.text));
         // Same refusal as replacedAt(): a range target answers with the section
         // the range begins at, and three of the whole-section cards named a
         // different section from the one on screen.

@@ -3763,3 +3763,93 @@ LVXXXVI--FEDERAL MARITIME
    because 56 of the withdrawn references sit on an amendment with no resolved
    target and so never became relative citations. selftest 664, rendertest 437,
    proptest clean.
+67. **A heading is inside the 80-character window, and it is on one side or the
+   other.** (2026-08-10, W5 of item 65, and a second defect found by looking at
+   the screen after fixing it.) The Code stores a node's heading apart from its
+   body; a bill writes the two together. So the same provision reads
+
+   ```
+   flattened       (d) It shall not be in order in the Senate to consider …
+   heading inline  (d) Enforcement of Discretionary Spending Limits.--It shall …
+   ```
+
+   and `alreadyIn()` matches the first 80 folded characters, so the heading is
+   inside the window. `render-context.js` built the haystack with `flattenText`,
+   which drops it — and the sample bill drew **2 U.S.C. 901(d) twice on one
+   screen**, once as law and once as a pending green insertion of the same words,
+   which is the duplication every guard in this file exists to prevent.
+
+   **Switching to `subtreeText` trades one blind spot for the other, and
+   measuring is what showed it.** Some headings are enacted and some are the
+   OLRC's editorial catchlines, which the bill never wrote: 15 U.S.C. 78i(a)
+   "Transactions relating to purchase or sale of security", 42 U.S.C. 210-1(b)
+   "Limitation", 7 U.S.C. 2009aa(4) "Alabama as participating State". Flattening
+   alone missed 877 additions the law demonstrably contains; heading-inline alone
+   missed 14 the other way. So `createRedline` takes the provision as an ARRAY of
+   renderings and every already-happened test asks all of them. Both strings are
+   true renderings of the same provision, so a match in either is evidence and
+   neither is authority.
+
+   **The FIRST entry is the provision's own text, and `stale` asks only that
+   one.** The asymmetry is the point rather than a convenience: "the law contains
+   this language" is POSITIVE evidence, safe to accept from any true rendering,
+   while staleness is NEGATIVE — "not one thing this amendment strikes is still
+   here" — and a single coincidental hit anywhere destroys it. Asking every
+   rendering rescued 22 amendments from staleness and **15 were caption hits**:
+   hr2-115 strikes "2018" from 7 U.S.C. 1932(b)(2) and the heading of an
+   unrelated subsection (f) holds the year. The 7 genuine ones strike across the
+   heading/body juncture ("Retroactive Changes in Plan.--A stock bonus") and stay
+   withheld, which is the conservative direction — withholding shows nothing, and
+   drawing an insertion the law already carries shows it twice.
+
+   An **empty string is kept** in that array, and the reason is worth stating
+   because tidying it away broke something silently. 9,547 shards are stubs with
+   no text at all (item 47), and `stale` is `hays.length > 0 && …`, standing in
+   for the old `typeof fullText === 'string'`. Filtering empties made
+   `hays.length` 0 on every stub, which flipped **246 operations** out of "the
+   amendment has already happened" and into "not found in the provision" on no
+   evidence whatever. Caught because inline operations were supposed to move by
+   zero and moved by 246.
+
+   Audited the way this file requires — by what the change WITHDRAWS. All 877
+   additions that gained "already in the law" were graded by an independent test
+   (word containment, not the prefix being changed): **838 at ≥0.95, 35 at
+   0.85-0.95, 3 below**, and the 3 were read against the shipped shards and are
+   right — 33 U.S.C. 2310(b), 15 U.S.C. 7219(d)(3) and 16 U.S.C. 3839bb-6(2), all
+   of them present, their scores depressed by later amendments rather than by a
+   wrong match. Nothing moved the other way, which is the whole point of asking
+   both renderings. Inline operations and whole-provision replacements are
+   **byte-identical** to before: 1947 drawn / 1517 in force / 6731 withheld /
+   4889 not found, and 422/105/38/7/278/73.
+
+   **And the second defect, which only the screen could show.** With the panel
+   correctly reading "✓ already in the law as it stands" for the new
+   2 U.S.C. 901(d), the subsection itself sat **unmarked** a few lines below.
+   `appliedNodePaths()` skipped any op whose `scope` was not a string, and an
+   instruction that never navigates — "Section 251 … is amended by adding at the
+   end the following" — leaves it undefined. 256 enacted additions could never
+   mark the provision they created.
+
+   Lifting that guard alone would have been much worse than the bug. The function
+   read EVERY line-head marker in the block and hung each one off the base, so a
+   block adding (h) also claimed the (1)s, (A)s and (i)s inside it. Off a base of
+   `(c)` that is harmless — `(c)(A)` names nothing — but off an EMPTY base `(i)`
+   names subsection (i), and the corpus said the trade was **451 correct marks
+   against 2,334 wrong ones**: "added by this bill" written across 26 U.S.C.
+   45Q(a), 25C(a), 59(i) and 91 others the bill never touched. So only the
+   block's TOP level is claimed, and `parseProvision()` answers what that is
+   rather than a local scan — it owns marker depth and it already steps over a
+   marker that is at a line head only because the line wrapped, which is where
+   most of the false ones came from ("Subject to subparagraphs\n(G) through (I)").
+   Children need no mark: they are drawn inside the parent, which carries the
+   rule.
+
+   Visible node marks **1,689 → 1,865, +281 / -105**, and all 105 withdrawn were
+   classified mechanically rather than sampled: **0** are descendants of a mark
+   that survives, 11 are the op's own anchor, and every one of the other 94 is an
+   interior cross-reference at a line head. Verified on screen: 2 U.S.C. 901(d)
+   and (e) each render once, ruled in the insertion colour and titled "Added by
+   this bill — already in force".
+
+   Corpus unchanged; this is resolution and rendering. selftest 664, rendertest
+   437 -> 443, proptest clean.
