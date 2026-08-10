@@ -413,3 +413,54 @@ citations across a real section boundary) and carries its own trap, recorded in
 its section above: attribute via `viaAmendment` and require the head to sit
 inside a parsed section, because positional attribution overcounts wherever
 `parseBill` misses a bare `Sec. 401.` run-in head.
+
+---
+
+## Status, 2026-08-10 (second pass) — 12 of the 27 closed
+
+Nine defects fixed, one measured and declined, one partly fixed. CLAUDE.md items
+69–74 carry the reasoning and the audits; this is the index.
+
+```
+  W1  fixed  item 68   at the end of paragraph (N)
+  W2  fixed  item 70   an instruction stops at its own bill section
+  W3  fixed  item 69   in section N (T U.S.C. S) is navigation
+  W4  fixed  item 66   an effective-date clause is not a Code address
+  W5  fixed  item 67   the heading is inside the 80-character window
+  W11 fixed  item 72   (cc) is the alphabet past (z)
+  W12 fixed  item 72   newSection unread for a replace op
+  W15 DECLINED item 74 symmetric containment costs 42 true claims for 0 false
+  L1  fixed  item 71   a mention of a table of contents is not an announcement
+  L2  partly item 73   the first list member scopes; scoping to a SET is open
+  L4  fixed  item 74   REDESIG_LIST omitted subclause and subitem
+  L6  fixed  item 74   a whole-section rewrite's caption broke the figure guard
+  L7  fixed  item 74   RE_USC_LONG had no hyphen
+```
+
+**Still open: W6–W10, W13, W14, W16, L3, L5, L8, L9, C1 — 14, plus L2's other
+half.** Nothing in the list above changed their measurements.
+
+Two entangled pairs worth doing together rather than serially:
+
+- **L2's remaining half with L3.** An instruction naming nine subsections still
+  marks one, and `each place it appears` latches `op.done` after the first
+  passage so `all` cannot cross a node either. Both want `inScope()` to take a
+  SET, and `reScope()`, `scopeAdditions()` and the panel's messages all read
+  `op.scope` as a string today.
+- **W16 with the paste path.** Adding `"` to `RE_QUOTE_CLOSE` is not sufficient
+  alone — with a symmetric delimiter the opening line of a multi-paragraph block
+  also closes it, so the state machine has to become pair-aware the way
+  `quotedBlocks()` in outline.js already is. 0 shipped incidence; the exposure is
+  `ingest()`.
+
+**Two things to carry into any of them**, both learned the hard way today:
+
+- **A measurement script that calls `extractAmendments(text, cites)` measures a
+  parse the app does not run.** Two of mine did, and reported "0 changed" for a
+  change that moved 644 addresses. Pass `parsed.divisions, parsed.sections`.
+  `proptest.mjs` P11 catches the same omission in the app: 1,325 violations under
+  the two-argument call.
+- **Render the named example.** It paid twice more today. W3's first cut recorded
+  the section move on the side instead of emitting a step, and twelve of the
+  thirteen rows on screen were right; the thirteenth is what showed it. Every
+  count was green.
