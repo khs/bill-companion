@@ -316,6 +316,50 @@ section('relative navigation inside amendments');
      /DIVISION A/.test(tocBody) && /DIVISION B/.test(tocBody),
      JSON.stringify(tocBody.slice(0, 90)));
   eq('  and none of them is read as a real division', tb.divisions.length, 0);
+
+  // …but a bill that merely MENTIONS a table of contents is not opening one.
+  // A clerical amendment in the middle of the Consolidated Appropriations Act,
+  // 2020 set `inToc` and nothing ever cleared it — `realBodyFollows` says no in
+  // an appropriations division, where the next non-caps line is a lowercase
+  // account heading — so RE_SECTION_LOOSE was gated off for the remaining
+  // 684 KB and 338 of that bill's 897 sections vanished. Worse than missing:
+  // sectionAt() then answered for a paragraph with a section 205 KB earlier,
+  // so every "section N of this Act" in that stretch resolved against it.
+  //
+  // No phrasing test can separate the two — the announce wraps the measure, so
+  // its head is all one line carries, and the clerical amendment wraps onto a
+  // line beginning with the identical words. What separates them is what comes
+  // next: a table is a listing.
+  const clerical = parseBill(
+    'SEC. 1. SHORT TITLE.\n' +
+    '    This Act may be cited as the ``Test Act\'\'.\n' +
+    'SEC. 2. AMENDMENT.\n' +
+    '    Section 4 of that Act is amended, and (2) in\n' +
+    'the table of contents of that Act, by striking the part heading for\n' +
+    'part B of title IV and inserting the following:\n' +
+    '\n' +
+    '    Sec. 101. Notwithstanding any other provision of law, funds are\n' +
+    'appropriated for salaries.\n'
+  );
+  ok('a clerical amendment does not open a table of contents',
+     clerical.sections.some((s) => s.num === '101'),
+     JSON.stringify(clerical.sections.map((s) => s.num)));
+  // The control, and it must stay: the same phrase followed by real entries
+  // still opens the table, or this trades 338 sections for a bill whose whole
+  // contents listing is read as sections.
+  const announced = parseBill(
+    'SEC. 1. SHORT TITLE.\n' +
+    '    This Act may be cited as the ``Test Act\'\'.\n' +
+    'SEC. 2. TABLE OF CONTENTS.\n' +
+    '    The table of contents for this Act is as follows:\n' +
+    'Sec. 1. Short title.\n' +
+    'Sec. 2. Table of contents.\n' +
+    '    Sec. 101. Notwithstanding any other provision of law, funds are\n' +
+    'appropriated for salaries.\n'
+  );
+  ok('  while a real announcement still does',
+     !announced.sections.some((s) => s.num === '101'),
+     JSON.stringify(announced.sections.map((s) => s.num)));
 }
 {
   // "Section 55301 of title 46 … is redesignated as section 55123 of such

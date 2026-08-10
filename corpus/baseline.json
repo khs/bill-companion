@@ -463,8 +463,8 @@
  },
  "hr1865-116-enr": {
   "chars": 2271931,
-  "sections": 559,
-  "divisions": 101,
+  "sections": 897,
+  "divisions": 131,
   "citations": 3934,
   "byKind": {
    "act": 716,
@@ -478,17 +478,17 @@
   "targeted": 302,
   "distributed": 0,
   "steps": 212,
-  "refs": 404,
-  "relative": 547,
+  "refs": 396,
+  "relative": 544,
   "ops": {
-   "strike": 378,
-   "insert": 403,
+   "strike": 374,
+   "insert": 400,
    "replace": 30,
    "add-at-end": 111,
    "repeal": 7,
    "redesignate": 16
   },
-  "opSpans": 922,
+  "opSpans": 915,
   "uncoveredVerbs": 9,
   "badOffsets": 0,
   "overlaps": 0,

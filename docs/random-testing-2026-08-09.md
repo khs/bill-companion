@@ -190,7 +190,7 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 
 ### Tier 3 — lost answers
 
-**L1. One mid-body "table of contents" mention suppresses 338 of hr1865's 897 sections** — *largest single loss; I re-derived this myself*
+**L1. One mid-body "table of contents" mention suppresses 338 of hr1865's 897 sections** — FIXED 2026-08-10, CLAUDE.md item 71 — *largest single loss; I re-derived this myself*
 `app/parse/bill.js:73` `RE_TOC_ANNOUNCE = /table\s+of\s+contents/i`, `:233` sets `inToc` on any line, `:145` then gates `RE_SECTION_LOOSE` on `!inToc`.
 
 - **Repro (offset-preserving, verified this session):** hr1865-116-enr @198407 contains a *clerical amendment* — `…and (2) in the table of contents of that Act, by striking the part heading for part B of title IV…`. Replacing that phrase with an equal-length string: **sections 559 → 897, 338 regained, 0 of them flush-left** (i.e. none is a table-of-contents entry; all 338 are real indented appropriations headings).
@@ -408,7 +408,7 @@ Two guards to carry over from today's work:
 
 ### Still unfixed
 
-W6–W16, L1–L9, C1 — 23 of the 27 (W4, W5, W1, W3 and W2 are done). W2 remains the largest by count (550
+W6–W16, L2–L9, C1 — 22 of the 27 (W4, W5, W1, W3, W2 and L1 are done). W2 remains the largest by count (550
 citations across a real section boundary) and carries its own trap, recorded in
 its section above: attribute via `viaAmendment` and require the head to sit
 inside a parsed section, because positional attribution overcounts wherever

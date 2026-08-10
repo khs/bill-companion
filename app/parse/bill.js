@@ -75,6 +75,51 @@ const RE_TOC_ANNOUNCE = /table\s+of\s+contents/i;
 // heading RE_SECTION matches — "Sec. 101." here, "SEC. 101." there.
 const RE_TOC_ENTRY = /^\s*Sec\.\s+\d/;
 
+// A line that a table of contents could BEGIN with: an entry, or one of the
+// subdivision listings a long table is grouped under.
+const RE_TOC_LISTING = /^\s*(?:Sec\.|SEC\.|TITLE|DIVISION|Subtitle|PART|CHAPTER)\b/;
+
+/**
+ * Does a table of contents actually follow this line?
+ *
+ * `RE_TOC_ANNOUNCE` is the phrase "table of contents", and bills say it for two
+ * completely different reasons. One announces a table. The other amends
+ * somebody else's:
+ *
+ *     …and (2) in the table of contents of that Act, by striking the part
+ *     heading for part B of title IV and inserting the following:
+ *
+ * One of those in the middle of the Consolidated Appropriations Act, 2020 set
+ * `inToc` and **nothing ever cleared it**: the loop only closes the table when a
+ * real body follows, and in an appropriations division the next non-caps line is
+ * a lowercase account heading, so `realBodyFollows` says no. From there to the
+ * end of the bill — 684 KB — `RE_SECTION_LOOSE` was gated off. **338 of hr1865's
+ * 897 sections vanished**, with no section head, no `#sec-N` anchor and no jump
+ * entry, and `sectionAt()` answered for a paragraph with a section 205 KB
+ * earlier, so every "section N of this Act" in that stretch resolved against the
+ * wrong one. 101 mid-body mentions across 20 of 26 bills; this is the one that
+ * lands.
+ *
+ * A phrasing test cannot separate them — the announce wraps the 72-column
+ * measure ("The table of contents for\nthis Act is as follows:"), so its head is
+ * all a single line carries, and a clerical amendment wraps onto a line starting
+ * with the identical words. What separates them is what comes NEXT: a table is a
+ * listing, so entries follow it. Positive, like `realBodyFollows`, but pointing
+ * the other way — ambiguity now keeps us OUT of the table, which is the cheaper
+ * error since a flush-left entry is not matched by `RE_SECTION_LOOSE` anyway.
+ *
+ * The window steps over blank lines and stops after a few, because the entries
+ * begin immediately when they begin at all.
+ */
+function tocFollows(lines, i) {
+  for (let j = i + 1, seen = 0; j < lines.length && seen < 4; j++) {
+    if (!lines[j].trim()) continue;
+    seen++;
+    if (RE_TOC_LISTING.test(lines[j])) return true;
+  }
+  return false;
+}
+
 // "This Act may be cited as the ``Digital Asset Market Clarity Act''".
 //
 // The title is quoted, and the quote style follows the source: govinfo plain
@@ -230,7 +275,7 @@ export function parseBill(text) {
     // "The table of contents for this Act is as follows:" opens the listing.
     // Checked after the two matchers above so that section 1's own heading —
     // "SHORT TITLE; TABLE OF CONTENTS." — is read as the heading it is.
-    if (!inToc && RE_TOC_ANNOUNCE.test(line)) inToc = true;
+    if (!inToc && RE_TOC_ANNOUNCE.test(line) && tocFollows(lines, i)) inToc = true;
   }
 
   return {

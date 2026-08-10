@@ -4147,3 +4147,60 @@ LVXXXVI--FEDERAL MARITIME
    48. Blank beats wrong and this is the right trade today, but the address is
    written down and item 33's `distributed` flag is the half of the machinery
    that already exists.
+
+71. **A bill that MENTIONS a table of contents is not opening one.** (2026-08-10,
+   L1 of item 65 and the largest single loss in it.) `RE_TOC_ANNOUNCE` is the
+   phrase "table of contents", tested against every line, and bills write it for
+   two completely different reasons:
+
+   ```
+   The table of contents for this Act is as follows:      <- opens a table
+   …and (2) in the table of contents of that Act, by      <- amends someone else's
+   striking the part heading for part B of title IV …
+   ```
+
+   One of the second kind in the middle of the Consolidated Appropriations Act,
+   2020 set `inToc`, and **nothing ever cleared it**: the loop closes the table
+   only when a real body follows, and in an appropriations division the next
+   non-caps line is a lowercase account heading, so `realBodyFollows` says no.
+   From there to the end of the bill — 684 KB — `RE_SECTION_LOOSE` was gated off.
+   **338 of hr1865's 897 sections vanished**, with no section head, no `#sec-N`
+   anchor and no jump entry, and 30 divisions with them.
+
+   Worse than missing, and this is the part no count could show: `sectionAt()`
+   answered for a paragraph at offset 403,626 with "Sec. 310 @198,195" —
+   **205 KB earlier** — so every "section N of this Act" in that stretch resolved
+   against the wrong section, and item 21's own rule (prefer a same-number
+   section sharing the citing section's outermost ancestor) was reading the wrong
+   ancestor to begin with.
+
+   **No phrasing test separates the two.** The announce wraps the 72-column
+   measure ("The table of contents for\nthis Act is as follows:"), so its head is
+   all a single line carries — which is exactly why the pattern is loose — and
+   the clerical amendment wraps onto a line beginning with the identical words.
+   Anchoring to a line head still admits 6 of the 173 mentions across the corpus,
+   including this one.
+
+   What separates them is what comes NEXT: a table is a listing, so entries
+   follow it. `tocFollows()` is the same shape as `realBodyFollows()` pointed the
+   other way — ambiguity now keeps us OUT of the table, which is the cheaper
+   error, because a flush-left entry is not matched by `RE_SECTION_LOOSE` anyway.
+   Only the free-text line is gated; a section whose own HEADING is "TABLE OF
+   CONTENTS" is unambiguous and still opens the table by itself.
+
+   Corpus: one bill moved. `sections 559 → 897 (+338)` and `divisions 101 → 131
+   (+30)`. Checked before `--update`, and it is the check the report itself
+   prescribed: of all 822 sections past the old suppression point, **0 are flush
+   left** — none is a table-of-contents entry — 790 are indented run-in
+   appropriations headings and 32 are caps heads. `opSpans -7` / `refs -8` /
+   `relative -3` are item 70's section bound arriving on this bill for the first
+   time: with the sections invisible, those instruction heads sat in no parsed
+   section and kept the old, looser bound. 16 ops on hr1865 are dropped by the
+   bound and all 16 are past their section's edge.
+
+   Rendered, per item 60: the jump menu goes 560 → 898 entries over 89
+   `<optgroup>`s, and Sec. 792 — which used to be part of Sec. 310's body —
+   renders as `.sec-head.run-in` under the breadcrumb "DIVISION B — AGRICULTURE,
+   RURAL DEVELOPMENT, FOOD AND DRUG ADMINISTRATION, AND RELATED AGENCIES".
+
+   selftest 684 → 686, rendertest 448, proptest clean.
