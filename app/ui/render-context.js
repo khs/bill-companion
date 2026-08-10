@@ -878,6 +878,25 @@ function effect(eff, handlers) {
     // operation the redline could not place is the one the reader most needs
     // flagged — it is the case where the panel and the provision disagree.
     const shown = eff.redline ? eff.redline.placed().some((p) => p.start === op.start) : false;
+    // The instruction stepped into a different section to make this change —
+    // "in section 293 (42 U.S.C. 293)--" — so it is not a change to the
+    // provision on screen at all, and drawing it here marked words the bill
+    // never mentions. Asked before `shown`, because a refusal that reads as a
+    // placement is the worst of the three outcomes — and before `lost`, because
+    // an address naming nothing in THIS provision is unsurprising when the bill
+    // was addressing a different one, and reporting the level would send the
+    // reader hunting for a drafting error that is not there.
+    const away = eff.redline && eff.redline.elsewhere
+      ? eff.redline.elsewhere().find((p) => p.start === op.start)
+      : null;
+    if (away) {
+      const f = document.createElement('span');
+      f.className = 'notfound';
+      f.textContent = `⚠ this change is to ${away.otherSection}, not to the provision shown`;
+      row.appendChild(f);
+      c.appendChild(row);
+      continue;
+    }
     // The bill names a level this provision does not have. Almost always the
     // bill's own slip — the Fiscal Responsibility Act cites "7 U.S.C.
     // 2015(6)(o)(3)" for 2015(o)(3) — and it is the one outcome the reader most

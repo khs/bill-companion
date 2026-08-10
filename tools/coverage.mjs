@@ -64,7 +64,7 @@ const zero = () => ({
   drawn: 0, enacted: 0, withheld: 0, missing: 0,
   addDrawn: 0, addApplied: 0, addStranded: 0,
   repMarked: 0, repInForce: 0, repWhole: 0, repHeading: 0, repRange: 0, repStranded: 0,
-  widened: 0, lost: 0,
+  widened: 0, lost: 0, away: 0,
 });
 const total = zero();
 
@@ -136,7 +136,13 @@ for (const bill of bills) {
     s.widened += red.widenedScope().length;
     s.lost += red.lostScope().length;
     const here = (list, o) => list.some((q) => q.start === o.start);
+    const away = red.elsewhere ? red.elsewhere() : [];
     for (const o of a.ops) {
+      // The instruction walked into another section to make this change, so it
+      // is refused rather than stranded — its own bucket for the same reason a
+      // heading rewrite has one: lumping a deliberate refusal in with "not on
+      // screen" turns a wrong label into no label.
+      if (here(away, o)) { s.away++; continue; }
       const structural = o.type === 'add-at-end' || o.placement === 'after-unit';
       if (o.type === 'replace') {
         // Counted in their own bucket rather than dropped. 169 of these were
@@ -202,6 +208,12 @@ console.log(bold('\nadditions'), adds);
 console.log(`  drawn                      : ${total.addDrawn}`);
 console.log(`  already in the law         : ${total.addApplied}`);
 console.log(`  provision not on screen    : ${total.addStranded}`);
+if (total.away)
+  console.log(
+    bold('\noperations in another section'),
+    total.away,
+    dim('(the instruction walked out of the target; refused, not stranded)')
+  );
 
 // Whole-provision replacements. Deliberately not a diff — see replacedAt() in
 // redline.js — so a mark is the success state, and the split that matters is

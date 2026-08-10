@@ -337,7 +337,7 @@ export function createRedline(ops, fullText, knownPaths) {
 
   const work = scoped
     .filter((o) => (o.type === 'strike' || o.type === 'insert') && typeof o.text === 'string')
-    .filter((o) => !structural(o) && !o.scopeLost)
+    .filter((o) => !structural(o) && !o.scopeLost && !o.otherSection)
     .map((o) => ({ ...o, done: false }));
 
   // Additions are placed structurally rather than woven into a run of text.
@@ -356,7 +356,7 @@ export function createRedline(ops, fullText, knownPaths) {
   // so it drew nothing at all. Scoped to (C) itself by scopeUnitInserts(), it
   // lands after (C)'s subtree, which is where the bill puts it.
   const additions = scoped
-    .filter((o) => typeof o.text === 'string' && structural(o) && !o.scopeLost)
+    .filter((o) => typeof o.text === 'string' && structural(o) && !o.scopeLost && !o.otherSection)
     // `inLaw` is decided here rather than inside additionsAt(), because whether
     // the law already contains this language has nothing to do with which node
     // the renderer happens to be laying out when it asks. Deciding it lazily
@@ -382,7 +382,14 @@ export function createRedline(ops, fullText, knownPaths) {
   // Absent from the list, every consumer is right for free.
   const headingRewrites = scoped.filter((o) => o.type === 'replace' && o.headingOnly);
   const replacements = scoped
-    .filter((o) => o.type === 'replace' && typeof o.text === 'string' && !o.scopeLost && !o.headingOnly)
+    .filter(
+      (o) =>
+        o.type === 'replace' &&
+        typeof o.text === 'string' &&
+        !o.scopeLost &&
+        !o.headingOnly &&
+        !o.otherSection
+    )
     .map((o) => ({ ...o, done: false }));
 
   // Has this amendment already happened?
@@ -787,7 +794,22 @@ export function createRedline(ops, fullText, knownPaths) {
      * the reader most needs told, because the bill plainly says it changes
      * something and the page would otherwise be blank about it.
      */
-    lostScope: () => scoped.filter((o) => o.scopeLost),
+    // Excluding the ops refused for belonging to another section, which is the
+    // better reason and the earlier one: an address that names nothing in THIS
+    // provision is unsurprising when the bill was addressing a different
+    // provision, and reporting the level would send the reader looking for a
+    // drafting error that is not there.
+    lostScope: () => scoped.filter((o) => o.scopeLost && !o.otherSection),
+    /**
+     * Operations the instruction walked into ANOTHER section to make.
+     *
+     * Kept out of `work`, `additions` and `replacements` above rather than
+     * flagged inside them, so `placed()` is right without being told — the
+     * same refusal shape as headingRewrites(). Reported so the panel can say
+     * which section, which is a fact the bill wrote down and the reader can
+     * act on.
+     */
+    elsewhere: () => scoped.filter((o) => o.otherSection),
     /** Operations drawn at a shallower level than the bill addressed. */
     widenedScope: () => scoped.filter((o) => o.scopeWidened),
     /**

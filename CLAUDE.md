@@ -3927,3 +3927,121 @@ LVXXXVI--FEDERAL MARITIME
    paragraph (2)'s "and", for an instruction naming paragraph (1).
 
    Corpus unchanged. selftest 664 -> 670, rendertest 443, proptest clean.
+
+69. **"in section 293 (42 U.S.C. 293)--" is navigation, and a section is not a
+   unit.** (2026-08-10, W3 of item 65, both halves shipped together as item 65's
+   own note said they had to be.) `UNIT_WORDS` lists the levels *within* a
+   provision — subsection, paragraph, subparagraph … — and a section is not one
+   of them, so `RE_NAV` could not fire on the commonest way a bill walks from one
+   section of an Act to another:
+
+   ```
+   Title VII of the Public Health Service Act (42 U.S.C. 292 et seq.) is amended--
+       (1) in section 736 (42 U.S.C. 293), by striking subsection (i) …
+       (2) in section 740 (42 U.S.C. 293d)--
+           (A) in subsection (a), by striking ``$51,000,000 for fiscal year 2010'' …
+   ```
+
+   Everything after the phrase composed against the amendment's own target, which
+   for an `et seq.` citation is the section the range BEGINS at. So the CARES
+   Act's § 3401 answered "subsection (a)" with 42 U.S.C. 292(a) — the Public
+   Health Service Act's statement of purpose — and struck the appropriation
+   figures there. **276 composed addresses named the wrong section and 447
+   operations were scoped to a path in a provision the pane never shows.**
+
+   Nothing is inferred: the bill writes the Code address in the parenthetical,
+   which is why this is narrowed to the form that carries one. Three guards, each
+   measured:
+
+   - **It must open a sub-instruction** — a dash, or a comma before the
+     amendatory verb — with `isInstructionPosition()` in front of it. A bare "in
+     section N" is 293 further sites and most are not navigation at all ("as
+     defined in section 1245(a)(3)", "described in section 163(j)(2)"), sitting
+     inside quoted operands and definitions.
+   - **A note is not the section it is printed under.** 22 of the 215 sites write
+     "(8 U.S.C. 1157 note)". Item 14's rule, arriving in a new place; pointing a
+     walk at § 1157 because a note about it is printed there is exactly the
+     confident wrong answer that rule exists to prevent.
+   - **Only where the section named differs from the target.** 10 of the 215
+     spell out an address the head had already given, and flagging those would
+     refuse a change that really is to the provision on screen.
+
+   The cursor is reset to the **codified** path and to nothing where the
+   parenthetical states no subsection — the Act-relative "(a)" in "section
+   2118(a)" is that Act's own numbering, which the codifier may already have
+   folded into the section number (item 35's divergence rule), so carrying it over
+   would be a guess about a provision whose real address is right there.
+
+   **The operation half is what made this bigger than W1 or W5, and it is a
+   refusal.** An op is drawn on the provision the pane RESOLVED, which is the
+   target; an op scoped to a path in another section cannot be drawn there at
+   all. Spelled by keeping it out of `redline.js`'s three lists rather than by a
+   flag inside them, so `placed()` is right without being told — the same shape
+   item 60 arrived at for a heading rewrite, and the invariant this file has
+   watched break five times. The panel names the section, and the citation chip
+   beside it now resolves there, so the refusal has a way out instead of being a
+   dead end.
+
+   **The step must be EMITTED, not merely recorded, and rendering is what showed
+   it.** The first cut kept the move in a local variable and tagged the steps and
+   refs that followed. `scopeOps()` consults *steps*, so an instruction that
+   walked into another section and then changed something without navigating
+   again — "in section 736 (42 U.S.C. 293), by striking subsection (i) and
+   inserting the following:" — kept the head's own base and was drawn on the
+   target anyway. 174 of the 447 operations, and the panel said "⚠ rewrites (i),
+   which is not shown here" when (i) is in another section entirely. Every count
+   was green; twelve of the thirteen rows on screen were right and the thirteenth
+   was not. Emitted as an ordinary step, every consumer is right for free.
+
+   It carries `noCite`, and that is the one thing the step must not do: the bill
+   has WRITTEN the address out — the whole reason this phrase is safe to read —
+   so composing a chip would duplicate the U.S. Code citation inside it, and
+   `expandRelativeRefs()` drops any citation a composed one overlaps, so the real
+   chip would be replaced by a derived copy of itself.
+
+   Audited by where the marks LAND, which is the only audit that can see any of
+   this:
+
+   ```
+     withdrawn   16  every one outside the provision the bill named
+     moved        2  both INTO the provision the bill named
+     gained       0
+   ```
+
+   plus one op reclassified from "pending change" to "already in force" by a
+   corrected scope. All 16 were read against the bill: five RESPA
+   "Secretary"→"Bureau" strikes belonging to §§ 2603 and 2604 were being struck
+   in 12 U.S.C. 2601, the Act's congressional-findings section; four Interlocks
+   Act strikes belonging to § 3206 landed in 12 U.S.C. 3201, *Definitions*; and
+   the USA PATRIOT Act's new subparagraph (C) of 12 U.S.C. 3414(a)(1) was being
+   added to the head of the Right to Financial Privacy Act.
+
+   Address quality, graded against the shipped shards: of the 276 retargeted,
+   **227 reach a real node against 55 before**, and "no such section" falls 105 →
+   18. Four grade lower and all four are the fix working — 12 U.S.C. 3206(6) and
+   3207(5) are absent because *this bill* renumbered them, 7 U.S.C. 27f(c)
+   because Dodd-Frank restructured it, and each replaced a confident answer about
+   a Definitions section the bill never mentions.
+
+   `lostScope()` excludes a refused op and the panel asks the section question
+   BEFORE the level question, or the reader is told "the bill addresses (c)(1),
+   which is not in this provision" about a provision the bill was never
+   addressing. `no such level at all` 275 → 193.
+
+   Corpus: `steps +196` on 12 bills and **nothing else** — not citations, refs,
+   relative, amendments, targeted, opSpans, diffSpans, overlaps or badOffsets.
+   Accounted exactly: 196 accepted phrases, one step each, 186 naming another
+   section and 10 the target itself. Coverage: inline operations 15,084 → 14,682
+   and shown 3,241 → 3,226, the difference being the 447 refusals moving to a
+   bucket of their own. selftest 670 → 679, rendertest 443 → 448, proptest clean.
+
+   `extractSteps` now sorts before returning. Every pass pushes in line order and,
+   within a line, in column order — but that is an accident of which pattern runs
+   first, and `scopeOps()` breaks at the first step past the operation, so one
+   step out of order would silently drop every scope after it. Measured at 0
+   out-of-order steps across the corpus, so it is a guard rather than a change.
+
+   Left open, and it is the natural next step rather than a defect: the pane
+   shows one provision, so a reader following an instruction that walks through
+   six sections of an Act sees six refusals and has to click each chip. Showing
+   the named section beside the target is a feature, not a placement fix.

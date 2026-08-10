@@ -623,10 +623,48 @@ function scopeOps(ops, steps, base = '') {
       // "in the matter preceding (A)" scopes to the parent but excludes its
       // children; every other step includes them.
       if (inForce.exact) op.exact = true;
+      // …and the step may have walked out of the target's own section, in which
+      // case this scope is a path in a provision the pane is not showing. See
+      // markOtherSection().
+      if (inForce.secSection) {
+        op.secTitle = inForce.secTitle;
+        op.secSection = inForce.secSection;
+      }
     } else if (base) {
       op.scope = base;
       op.scopeFromHead = true;
     }
+  }
+}
+
+/**
+ * An operation that belongs to another section cannot be drawn on this one.
+ *
+ * "Section 292 of the Public Health Service Act is amended-- (1) in section 293
+ * (42 U.S.C. 293)-- (A) in subsection (a), by striking …" strikes something in
+ * 293. The pane resolves the amendment's TARGET and draws every operation on it,
+ * so the strike went looking for those words in 292(a) — a real provision, about
+ * something else — and marked them wherever it found them.
+ *
+ * Comparing against the target is the whole of it, because the walk is regularly
+ * a step *back into* the section the instruction started in: 10 of the corpus's
+ * 215 such phrases name the target itself, spelling out an address the head had
+ * already given. Those need no flag and must not get one.
+ *
+ * Refusal is spelled by being kept OUT of redline.js's lists rather than by a
+ * flag inside them — see the note on headingRewrites there. `placed()` is then
+ * right for free, which is the invariant this file has now watched break five
+ * times.
+ */
+function markOtherSection(ops, target) {
+  for (const op of ops) {
+    if (!op.secSection) continue;
+    const same =
+      target &&
+      target.kind === 'usc' &&
+      String(target.title) === String(op.secTitle) &&
+      String(target.section) === String(op.secSection);
+    if (!same) op.otherSection = `${op.secTitle} U.S.C. ${op.secSection}`;
   }
 }
 
@@ -1386,6 +1424,46 @@ const RE_NAV_MATTER = new RegExp(
 );
 const RE_REF = new RegExp(`\\b(${UNIT_PHRASE})`, 'gi');
 
+// Navigation into a different SECTION.
+//
+//   Section 292 of the Public Health Service Act … is amended--
+//       (1) in section 293 (42 U.S.C. 293)--          <- a DIFFERENT section
+//           (A) in subsection (a), by striking …      <- composed onto 292(a)
+//
+// UNIT_WORDS has no "section" — a section is not a level *within* a provision —
+// so RE_NAV cannot fire and every later step kept the amendment's own target.
+// 215 sites across the corpus, of which 132 have something after them: 377
+// navigation steps and 295 references composed on the wrong section, and 1,054
+// operations scoped to a path in a provision the pane is not showing.
+//
+// Nothing here is inferred. The bill writes the Code address itself, in the
+// parenthetical, which is why this is narrowed to the form that carries one: a
+// bare "in section 293" is 293 further sites and most are not navigation at all
+// ("as defined in section 1245(a)(3)", "described in section 163(j)(2)"), living
+// inside quoted operands and definitions where no dash follows.
+//
+// Two guards, and the trailing group is one of them:
+//
+//   - **It must open a sub-instruction.** A dash, or a comma before the
+//     amendatory verb that follows. Together with isInstructionPosition() on the
+//     text in front, that is what separates an instruction from a mention.
+//   - **A note is not the section.** 22 of the 215 write "(8 U.S.C. 1157 note)",
+//     and a note is uncodified law printed *beneath* a section — item 14's rule,
+//     and pointing a walk at section 1157 because a note about it is printed
+//     there is exactly the confident wrong answer that rule exists to prevent.
+//     Captured so the caller can decline; those keep the Act-relative path they
+//     already have.
+const RE_NAV_SECTION = new RegExp(
+  '\\bin\\s+section\\s+(\\d+[A-Za-z]*)' +
+    `(${SUBSEC})` +
+    '\\s*\\(\\s*(\\d{1,2}[A-Z]?)\\s*U\\.?\\s?S\\.?\\s?C\\.?\\s*(?:§§?\\s*)?' +
+    '(\\d+[A-Za-z]*(?:[–—-]\\s*\\d+[A-Za-z]*)?)' +
+    `(${SUBSEC})` +
+    '(\\s*note)?\\s*\\)' +
+    '\\s*(?:--|[—–]|,\\s*(?:by|in)\\b)',
+  'gi'
+);
+
 // "by amending subsection (d)(2) to read as follows:" — the instruction naming
 // the provision it rewrites. Read by markReplacements(), which sits far above
 // this line; the definition lives HERE because it is built from UNIT_WORDS and a
@@ -1702,6 +1780,10 @@ function extractSteps(text, from, to, basePath) {
   let current = (basePath.match(MARKER_RE) || []).map((marker, i) => ({ marker, depth: i }));
   let off = from;
   let inQuotedBlock = false;
+  // The section the walk is currently inside, once an instruction has stepped
+  // out of the one its target names. Null until then, which is every
+  // instruction that stays where it started.
+  let curSec = null;
   // Spans a navigation phrase has claimed, in absolute offsets, for the whole
   // instruction rather than one line. See the note at pass 1.
   const claimed = [];
@@ -1788,6 +1870,52 @@ function extractSteps(text, from, to, basePath) {
     // surviving in exactly the wrapped case nobody could see.
     const rel = (i) => lineStart + i;
 
+    // Pass 0: navigation into a different SECTION, which has to run before
+    // pass 1 — "in section 293 (42 U.S.C. 293), in subsection (a)" puts both on
+    // one line, and (a) is a subsection of 293 only if the section moved first.
+    //
+    // The cursor is reset to the CODIFIED path, and to nothing where the
+    // parenthetical states no subsection. The Act-relative "(a)" in "section
+    // 2118(a)" is that Act's own numbering, which the codifier may already have
+    // folded into the section number — item 35's divergence rule — so carrying it
+    // over would be a guess about a provision we can see the real address of.
+    RE_NAV_SECTION.lastIndex = 0;
+    let sm;
+    while ((sm = RE_NAV_SECTION.exec(probe))) {
+      if (!onThisLine(sm.index)) continue;
+      if (inQuotedOperand(rel(sm.index), rel(sm.index + sm[0].length))) continue;
+      if (!isInstructionPosition(probe.slice(0, sm.index))) continue;
+      // A note is not the section it is printed under. Claim the span anyway, so
+      // nothing downstream reads the markers inside a citation we have declined.
+      claimed.push([rel(sm.index), rel(sm.index + sm[0].length)]);
+      if (sm[6]) continue;
+      curSec = { secTitle: sm[3], secSection: sm[4].replace(/\s+/g, '') };
+      current = pathLevels(sm[5]);
+      // Emitted as a STEP, not merely recorded, because an instruction of this
+      // shape regularly makes its change without navigating again — "in section
+      // 736 (42 U.S.C. 293), by striking subsection (i) and inserting the
+      // following:" — and scopeOps() only consults steps. Recorded on the side
+      // instead, that operation kept the head's own base, was drawn on the
+      // target, and the panel said "rewrites (i), which is not shown here" when
+      // the truth is that (i) is in another section entirely. Found by rendering
+      // it; every count was green.
+      steps.push({
+        start: rel(sm.index),
+        end: rel(sm.index + sm[0].length),
+        text: text.slice(rel(sm.index), rel(sm.index + sm[0].length)),
+        unit: 'section',
+        markers: sm[5] || '',
+        path: current.map((l) => l.marker).join(''),
+        // The bill has WRITTEN the address out — that is the whole reason this
+        // phrase is safe to read — so composing a chip for it would duplicate
+        // the U.S. Code citation already sitting inside it, and worse:
+        // expandRelativeRefs drops any citation a composed one overlaps, so the
+        // real chip would be replaced by a derived copy of itself.
+        noCite: true,
+        ...curSec,
+      });
+    }
+
     RE_NAV.lastIndex = 0;
     let nm;
     while ((nm = RE_NAV.exec(probe))) {
@@ -1798,7 +1926,7 @@ function extractSteps(text, from, to, basePath) {
       const resolved = resolvePhrase(unitPairs(nm[1]), current);
       if (!resolved) continue;
       claimed.push([rel(phraseStart), rel(nm.index + nm[0].length)]);
-      emit(steps, resolved, probe, lineStart, phraseStart, nm[1], text);
+      emit(steps, resolved, probe, lineStart, phraseStart, nm[1], text, curSec);
       // Only the first address of a list advances the cursor.
       current = resolved.addresses[0].levels;
     }
@@ -1839,6 +1967,7 @@ function extractSteps(text, from, to, basePath) {
         // and NOT to its children — "preceding subparagraph (A)" excludes (A)
         // by name. See inScope() in app/ui/redline.js.
         exact: true,
+        ...(curSec || {}),
       });
       current = parent;
     }
@@ -1869,9 +1998,14 @@ function extractSteps(text, from, to, basePath) {
       if (RE_AMENDMENT_MADE_BY.test(probe.slice(Math.max(0, s - 44), s))) continue;
       const resolved = resolvePhrase(unitPairs(rm[1]), current);
       if (!resolved) continue;
-      emit(refs, resolved, probe, lineStart, s, rm[1], text);
+      emit(refs, resolved, probe, lineStart, s, rm[1], text, curSec);
     }
   }
+  // scopeOps() walks this list assuming ascending offsets and breaks at the
+  // first step past the operation. Every pass pushes in line order and, within
+  // a line, in column order today — but that is an accident of which pattern
+  // runs first, and one step out of order silently drops every scope after it.
+  steps.sort((a, b) => a.start - b.start);
   return { steps, refs };
 }
 
@@ -1917,7 +2051,7 @@ function stealsMarker(text, at, end) {
  * that wrapped carries a run of spaces where its line break was, and every
  * consumer that re-wraps it (inline() in render-bill.js) sees nothing to fix.
  */
-function emit(out, resolved, line, lineStart, phraseStart, phrase, source) {
+function emit(out, resolved, line, lineStart, phraseStart, phrase, source, sec) {
   const { subject, addresses } = resolved;
   let cursor = 0;
   addresses.forEach((addr, i) => {
@@ -1941,6 +2075,9 @@ function emit(out, resolved, line, lineStart, phraseStart, phrase, source) {
       markers: addr.item,
       path: addr.levels.map((l) => l.marker).join(''),
       ...(subject.range ? { range: subject.range } : {}),
+      // The instruction walked into a different section before this step; the
+      // path is relative to THAT, not to the amendment's target.
+      ...(sec || {}),
     });
   });
 }
@@ -2345,11 +2482,18 @@ function quotedRefs(text, ops, target, steps, headBase, from, to) {
     // The last step written before the phrase is where the walk had got to —
     // the same test scopeOps() applies to an operation, and for the same reason.
     let walked = headBase || '';
+    let sec = null;
     for (const st of steps || []) {
       if (st.start > pm.index) break;
       walked = st.path;
+      if (st.secSection) sec = { secTitle: st.secTitle, secSection: st.secSection };
     }
+    const before = out.length;
     blockRefs(text, block.start, block.end, text.slice(block.start, block.end), walked, out);
+    // The walk stepped into another section before this block, so the levels
+    // above the block's own marker are that section's — the same reason the
+    // steps and refs beside it carry the move.
+    if (sec) for (let i = before; i < out.length; i++) Object.assign(out[i], sec);
   }
 
   for (const op of ops) {
@@ -2369,7 +2513,11 @@ function quotedRefs(text, ops, target, steps, headBase, from, to) {
       (op.type === 'add-at-end' && !op.rangeEnd) ||
       (op.type === 'insert' && op.placement === 'after-unit');
     if (!isBlock || !op.text || op.start == null) continue;
+    const before = out.length;
     blockRefs(text, op.start, op.end, op.text, op.scope, out);
+    if (op.secSection)
+      for (let i = before; i < out.length; i++)
+        Object.assign(out[i], { secTitle: op.secTitle, secSection: op.secSection });
   }
   return out;
 }
@@ -2393,8 +2541,34 @@ export function expandRelativeRefs(citations, amendments) {
     // it against the section it names. See dropHeadLevel().
     const headBase = !t.subsection && am.subsection ? am.subsection : '';
     for (const st of [...(am.steps || []), ...(am.refs || [])]) {
+      // A step into another section: the bill wrote the address out, so the
+      // chip is already there. See `noCite` where it is set.
+      if (st.noCite) continue;
+      // The instruction stepped into a section of its own naming — "in section
+      // 293 (42 U.S.C. 293)--" — so this address is relative to that, and the
+      // target's title and section are simply the wrong ones to spread. Only
+      // usc targets can be overridden this way, because the parenthetical the
+      // step read is a U.S.C. cite; a cfr target keeps its own.
+      const moved = st.secSection && t.kind === 'usc';
       extra.push({
         ...t,
+        ...(moved
+          ? {
+              title: st.secTitle,
+              section: st.secSection,
+              // Whatever the target carried about ITS section cannot survive the
+              // move: a note flag, an et seq. range, an Act-relative number and a
+              // repaired head level are all claims about the provision we have
+              // just stepped out of.
+              note: undefined,
+              etSeq: undefined,
+              isRangeStart: undefined,
+              actSection: undefined,
+              // Shown by the pane: the address was composed against a section
+              // the instruction named, not against the amendment's own target.
+              viaSection: `${st.secTitle} U.S.C. ${st.secSection}`,
+            }
+          : {}),
         id: `r${extra.length}`,
         text: st.text,
         start: st.start,
@@ -2408,7 +2582,12 @@ export function expandRelativeRefs(citations, amendments) {
         relMarkers: st.markers,
         viaAmendment: am.id,
         viaTarget: t.text,
-        ...(headBase && String(st.path).startsWith(headBase) ? { subFromHead: headBase } : {}),
+        // The head's own subsection is a claim about the TARGET's section. Once
+        // the walk has stepped into another one, dropHeadLevel() would be
+        // testing that claim against a provision it was never made about.
+        ...(!moved && headBase && String(st.path).startsWith(headBase)
+          ? { subFromHead: headBase }
+          : {}),
         // Composed from inside language the bill is INSERTING, not from an
         // instruction's navigation. The reader is looking at words that are not
         // law yet, pointing at a provision that is — worth saying, and the pane
@@ -3515,6 +3694,7 @@ export function extractAmendments(text, citations, divisions = []) {
     scopeStatedUnits(ops);
     markRangeAdditions(ops, target);
     markSectionAdditions(ops);
+    markOtherSection(ops, target);
     // After the scoping passes, because the composition rests on the scope each
     // block ended up with, and after markRangeAdditions so a block bound for the
     // end of an Act — where nothing knows which section it lands in — is left

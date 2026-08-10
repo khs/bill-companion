@@ -1494,6 +1494,60 @@ section('additions at the end');
        !/shown above/.test(stxt), stxt.slice(0, 300));
   }
 
+  // ---- an operation the instruction walked into ANOTHER section to make ----
+  // "The Widget Act (15 U.S.C. 2601 et seq.) is amended-- (1) in section 4
+  // (15 U.S.C. 2603)-- (A) in subsection (a), by striking ``Secretary''" strikes
+  // a word in 2603. The pane resolves the amendment's TARGET, which for an
+  // et seq. range is the section the range begins at, and drew the strike there:
+  // five "Secretary"→"Bureau" strikes belonging to RESPA §§ 2603 and 2604 were
+  // struck in 12 U.S.C. 2601, the Act's congressional-findings section.
+  {
+    const awayRes = {
+      source: 'U.S. Code', citation: '15 U.S.C. 2601', links: [],
+      tree: [{
+        marker: '(a)', path: '(a)', heading: '',
+        text: '(a) The Secretary shall publish a report.', children: [],
+      }],
+      focusPath: '',
+      effect: {
+        ops: [{
+          type: 'strike', scope: '(a)', otherSection: '15 U.S.C. 2603',
+          text: 'Secretary', start: 700, end: 709,
+        }],
+        unmatched: false,
+      },
+    };
+    const awayEl = rc(awayRes, { onScope: () => {} });
+    eq('an operation belonging to another section is not drawn here',
+       awayEl.querySelectorAll('.del').length, 0);
+    const atxt = awayEl.textContent.replace(/\s+/g, ' ');
+    ok('  and the panel names the section it belongs to',
+       /this change is to 15 U\.S\.C\. 2603, not to the provision shown/.test(atxt),
+       atxt.slice(0, 300));
+    // Refused, not placed. The refusal is spelled by keeping the op OUT of
+    // redline's lists rather than by a flag inside them, so placed() is right
+    // without being told — the invariant this file has watched break five times.
+    ok('  and it is not reported as struck above',
+       !/struck above/.test(atxt) && !/shown above/.test(atxt), atxt.slice(0, 300));
+    ok('  nor as missing from the text, which would blame the Code',
+       !/not found verbatim/.test(atxt), atxt.slice(0, 300));
+
+    // The control: the same op without the flag IS drawn, so the assertions
+    // above are about the refusal and not about a fixture that renders nothing.
+    const drawnAway = rc(
+      {
+        ...awayRes,
+        effect: {
+          ops: [{ ...awayRes.effect.ops[0], otherSection: undefined }],
+          unmatched: false,
+        },
+      },
+      { onScope: () => {} }
+    );
+    eq('  and without the flag it is struck as before',
+       drawnAway.querySelectorAll('.del').length, 1);
+  }
+
   // ---- "by inserting after subparagraph (B) the following" ---------------
   // Same structural job as add-at-end, written with a different verb, and it
   // was drawing NOTHING. apply() only places an insert that either replaces a

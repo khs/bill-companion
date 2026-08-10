@@ -668,6 +668,89 @@ section('relative navigation inside amendments');
   ok('  marked as derived rather than written down', relC[0].relative === true);
 }
 {
+  // ---- navigation into a different SECTION --------------------------------
+  //
+  // "in section 293 (42 U.S.C. 293)--" is a step, and UNIT_WORDS has no
+  // "section" — a section is not a level within a provision — so RE_NAV could
+  // not fire and every later address composed onto the amendment's own target.
+  // 276 composed addresses across the corpus named the wrong section, and 289
+  // operations were scoped to a path in a provision the pane never shows.
+  const secNav = (body) => {
+    const t = normalizeText(
+      'The Widget Act (15 U.S.C. 2601 et seq.) is amended--\n' + body
+    );
+    const ams = extractAmendments(t, extractCitations(t));
+    return {
+      ops: ams[0].ops,
+      rel: expandRelativeRefs(extractCitations(t), ams).filter((c) => c.relative),
+    };
+  };
+
+  const moved = secNav(
+    '    (1) in section 4 (15 U.S.C. 2603)--\n' +
+    "        (A) in subsection (a), by striking ``old'';\n"
+  );
+  const ma = moved.rel.find((c) => c.subsection === '(a)');
+  ok('a step into another section retargets the addresses after it',
+     ma && ma.section === '2603', JSON.stringify(moved.rel.map((c) => `${c.section}${c.subsection}`)));
+  eq('  and says so, rather than looking written down', ma && ma.viaSection, '15 U.S.C. 2603');
+  // The whole point of the operation half: the pane resolves the TARGET and
+  // draws every op on it, so a strike scoped to (a) of another section went
+  // looking for those words in 2601(a) — a real provision, about something
+  // else. Every one of the 13 marks this withdrew was in the Act's own first
+  // section, which the instruction does not mention.
+  eq('  the operation is refused, naming the section it belongs to',
+     moved.ops.find((o) => o.type === 'strike').otherSection, '15 U.S.C. 2603');
+
+  // A note is not the section it is printed under — item 14's rule, arriving in
+  // a new place. 22 of the corpus's 215 such phrases write one.
+  const note = secNav(
+    '    (1) in section 4 (15 U.S.C. 2603 note)--\n' +
+    "        (A) in subsection (a), by striking ``old'';\n"
+  );
+  // Bounded on both sides: "every address stayed put" is vacuously true of no
+  // addresses at all, which is how a fixture comes to cover nothing.
+  ok('a note parenthetical does not move the walk',
+     note.rel.length > 0 && note.rel.every((c) => c.section === '2601'),
+     JSON.stringify(note.rel.map((c) => `${c.section}${c.subsection}`)));
+  ok('  and its operation stays where it was',
+     !note.ops.some((o) => o.otherSection),
+     JSON.stringify(note.ops.map((o) => o.otherSection)));
+
+  // It must OPEN a sub-instruction. A bare mention — "as defined in section 4
+  // (15 U.S.C. 2603) of that Act" — is 293 further sites across the corpus and
+  // most are not navigation at all.
+  const mention = secNav(
+    "    (1) in subsection (b), by striking ``a term defined in section 4 " +
+    "(15 U.S.C. 2603) of the Act'';\n"
+  );
+  ok('a mention of a section is not navigation',
+     mention.ops.some((o) => o.type === 'strike') && !mention.ops.some((o) => o.otherSection),
+     JSON.stringify(mention.ops.map((o) => `${o.type}:${o.otherSection}`)));
+
+  // The codified path in the parenthetical RESETS the cursor, so a following
+  // step composes under it.
+  const under = secNav(
+    '    (1) in section 4 (15 U.S.C. 2603(a))--\n' +
+    "        (A) in paragraph (2), by striking ``old'';\n"
+  );
+  eq('  the codified path resets the cursor',
+     under.ops.find((o) => o.type === 'strike').scope, '(a)(2)');
+
+  // Where the section named IS the target, nothing has moved and nothing may be
+  // refused. 10 of the corpus's 215 phrases spell out an address the head had
+  // already given.
+  const same = normalizeText(
+    'Section 4 of the Widget Act (15 U.S.C. 2603) is amended--\n' +
+    '    (1) in section 4 (15 U.S.C. 2603)--\n' +
+    "        (A) in subsection (a), by striking ``old'';\n"
+  );
+  const sameOps = extractAmendments(same, extractCitations(same))[0].ops;
+  ok('a step back into the target section is not refused',
+     sameOps.some((o) => o.type === 'strike') && !sameOps.some((o) => o.otherSection),
+     JSON.stringify(sameOps.map((o) => o.otherSection)));
+}
+{
   // A cross-reference inside quoted text must not hijack the cursor.
   const t =
     'Section 5 of the Widget Act (15 U.S.C. 2605) is amended—\n' +
@@ -3169,7 +3252,17 @@ if (existsSync(substitutePath)) {
   // across the 72-column measure ("in the \n   matter following subparagraph
   // (L)") and every pattern here ran against one physical line, so they matched
   // nothing and their "(L)" sat inert. Steps +2, refs -2, the same trade.
-  eq('substitute: composes the navigation steps', ams.reduce((n, a) => n + a.steps.length, 0), 25);
+  //
+  // 28, not 25, for a different reason: a step into another SECTION is a step,
+  // and this bill writes three — "in section 9(a) (15 U.S.C. 78fff-3(a))--",
+  // "in section 10(g) (15 U.S.C. 78fff-4(g)), by", "in section 16 (15 U.S.C.
+  // 78lll)--", all of them SIPA provisions the instruction walks into from an
+  // et seq. target. Unlike the two above this trades nothing: they carry
+  // `noCite`, because the bill has written the address out and composing a chip
+  // for it would displace the real one.
+  eq('substitute: composes the navigation steps', ams.reduce((n, a) => n + a.steps.length, 0), 28);
+  eq('  three of which step into another section and compose no chip of their own',
+     ams.reduce((n, a) => n + a.steps.filter((s) => s.noCite).length, 0), 3);
   // 29, not 34. Five unit phrases sit inside quoted law the bill is *inserting*
   // — "…identified in clauses (i) through (vi) of subparagraph (A) of this
   // paragraph" says outright that it means the new provision — and composing

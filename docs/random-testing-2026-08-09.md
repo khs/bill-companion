@@ -339,7 +339,22 @@ re-derived.
 The quoted half of W1 was found by RENDERING the example W1's own report names,
 not by measuring — item 60's rule, and it paid twice today.
 
-### W3, measured and NOT built
+### W3, BUILT 2026-08-10 — see CLAUDE.md item 69
+
+Both halves shipped together, as the note below said they had to be. 276
+composed addresses retargeted (227 of them now reaching a real node against 55
+before) and 447 operations refused rather than drawn on the wrong provision:
+16 marks withdrawn, every one outside the provision the bill named, 2 moved
+into it, 0 gained. The measurement that follows is what the build was sized
+from; it is kept because the *shape* of it is the reusable part.
+
+One thing it got wrong, worth keeping visible: the plan was to record the
+section move on the side and tag the steps after it. `scopeOps()` consults
+steps, so an instruction that walks into a section and then changes something
+without navigating again kept the head's base — 174 of the 447 — and only
+rendering the panel showed it. The move is emitted as a step now.
+
+#### The measurement
 
 `UNIT_WORDS` has no "section", so `RE_NAV` cannot fire on
 `in section 599D (8 U.S.C. 1157 note)--` and everything after it composes onto
@@ -393,7 +408,7 @@ Two guards to carry over from today's work:
 
 ### Still unfixed
 
-W2, W3, W6–W16, L1–L9, C1 — 25 of the 27. W2 remains the largest by count (550
+W2, W6–W16, L1–L9, C1 — 24 of the 27 (W4, W5, W1 and W3 are done). W2 remains the largest by count (550
 citations across a real section boundary) and carries its own trap, recorded in
 its section above: attribute via `viaAmendment` and require the head to sit
 inside a parsed section, because positional attribution overcounts wherever
