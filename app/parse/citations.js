@@ -554,7 +554,16 @@ function listedProvisions(text, from, to) {
 // replacement the bill never wrote.
 const RE_REPLACES = /^\s*(?:''|’’|["”])?\s*(?:,\s*)?(?:each\s+place\s+(?:it|they)\s+(?:appears?|occurs?)\s*)?(?:,\s*)?and\s+insert(?:ing)?(?:\s+in\s+lieu\s+thereof)?\s*(?:``|‘‘|["“])?\s*$/i;
 const RE_EACH_PLACE = /each\s+place\s+(?:it|they)\s+(?:appears?|occurs?)/i;
-const RE_AT_THE_END = /^\s*(?:''|’’|["”])?\s*,?\s*at\s+the\s+end\b/i;
+// "at the end", and the unit it may go on to name.
+//
+// The tail is the same one PUNCT_UNIT_TAIL reads, and it is here for the same
+// reason: "by striking ``and'' at the end of paragraph (1)" says which
+// paragraph, and without reading it `atEnd` takes the last occurrence in
+// whatever node the walk's scope admits. 26 U.S.C. 25C(a) currently reads
+// (1) …, (2) …, and (3) …, so the "and" the bill struck from (1) is gone and
+// the last one in the subsection closes (2) — which is where the mark landed.
+const RE_AT_THE_END =
+  /^\s*(?:''|’’|["”])?\s*,?\s*at\s+the\s+end\b(?:\s+(?:of|in)\s+(?:such\s+)?(subsection|paragraph|subparagraph|clause|subclause|item|subitem)s?\s*((?:\([A-Za-z0-9]{1,8}\))*))?/i;
 const RE_ANCHORED = /^\s*(?:''|’’|["”])?\s*(after|before)\s+(?:``|‘‘|["“])([\s\S]{1,200}?)(?:''|’’|["”])/i;
 
 
@@ -661,6 +670,53 @@ function scopeAdditions(ops) {
     const depth = markerDepth(lead[1]);
     const kept = pathLevels(op.scope).filter((l) => l.depth < depth);
     op.scope = kept.map((l) => l.marker).join('');
+  }
+}
+
+/**
+ * "at the end of paragraph (2)" says which paragraph.
+ *
+ * The walk does not. An instruction of this shape normally never navigates —
+ * the position is written into the strike phrase itself — so scopeOps() leaves
+ * the op on the head's own address and `atEnd` then takes the last position in
+ * whatever node it is handed. That is the LAST child under the scope whose text
+ * ends in the operand, and 73 of 81 across the corpus landed on a real
+ * provision that is not the one named.
+ *
+ * Both spellings, and the second was found by rendering the first's own named
+ * example rather than by measuring. 26 U.S.C. 25C(f) writes them side by side:
+ *
+ *   by striking ``and'' at the end of paragraph (1),           <- quoted
+ *   by striking the period at the end of paragraph (2) and …   <- named
+ *
+ * and the pane drew one card that labelled (a)(3) "added by this bill", struck
+ * the terminal punctuation of the wrong paragraph, and struck the "and" that
+ * closes (2) for an instruction naming (1). The Code reads (1) …, (2) …, and
+ * (3) … — so the "and" this bill removed from (1) is gone and the last one in
+ * the subsection is (2)'s.
+ *
+ * Composed exactly as scopeReplacements() composes a stated address — the
+ * markers replace the walked path from the unit word's own depth down, so
+ * "in subsection (c) … the period at the end of paragraph (2)" gives (c)(2) and
+ * never (c)(paragraph-of-c)(2) — and it is a CLAIM rather than an assertion.
+ * Where the composed path names nothing the op falls back to where it applied
+ * before the phrase was read, which is what `scopeFallback` is for: 4 of the 81
+ * name a level the Code does not have, usually one this very bill adds.
+ */
+function scopeStatedUnits(ops) {
+  for (const op of ops) {
+    if (op.type !== 'strike') continue;
+    if (!op.statedPath || UNIT_DEPTH[op.statedUnit] === undefined) continue;
+    const scope = String(op.scope || '');
+    const composed =
+      pathLevels(scope)
+        .filter((l) => l.depth < UNIT_DEPTH[op.statedUnit])
+        .map((l) => l.marker)
+        .join('') + op.statedPath;
+    if (composed === scope) continue;
+    op.scopeFallback = scope;
+    op.scopeFromPhrase = true;
+    op.scope = composed;
   }
 }
 
@@ -872,7 +928,18 @@ function placeOps(text, ops) {
       // over the provision, and the one meant is the last. Without this the
       // strike lands in the first sentence of the subsection instead of on the
       // semicolon-and that closes it.
-      if (RE_AT_THE_END.test(after)) op.atEnd = true;
+      //
+      // …and where the phrase goes on to name the unit, that is the address.
+      // "at the end" alone means the end of whatever the walk reached; "at the
+      // end of paragraph (1)" means paragraph (1), and taking the last
+      // occurrence anywhere under the walk puts the mark in a sibling. Read
+      // here rather than at the strike scan because that scan stops at the
+      // closing quote, and the unit is written after it.
+      const end = RE_AT_THE_END.exec(after);
+      if (end) {
+        op.atEnd = true;
+        if (end[2]) { op.statedUnit = end[1].toLowerCase(); op.statedPath = end[2]; }
+      }
       continue;
     }
     if (op.type !== 'insert') continue;
@@ -1017,18 +1084,36 @@ const PUNCT_WORD = { period: '.', semicolon: ';', comma: ',', colon: ':' };
 // `type:start-end` keys, so moving an `end` changes every key and no count;
 // the same blind spot TODO 12 records. Measured directly instead.
 //
-// The unit is consumed rather than captured. The step machinery has already
-// scoped the op to the provision the instruction walked to, so a second opinion
-// here could only disagree with it.
+// The unit is CAPTURED, and the note that used to sit here said the opposite:
+// "the step machinery has already scoped the op to the provision the instruction
+// walked to, so a second opinion here could only disagree with it." It does
+// disagree, and the bill is the one that is right. Measured over the corpus, 81
+// of 82 of these disagree with the walk, and in 73 of the 81 the walked scope is
+// a real provision — an ANCESTOR of the one named — so the mark lands in a real
+// but wrong place rather than nowhere:
+//
+//   Section 25C(a) … by striking the period at the end of paragraph (2)
+//     walked to (a); `atEnd` then takes the last period in the FIRST paragraph
+//     of (a) whose text ends in one, which is (a)(1)
+//
+// The composition is scopeReplacements()'s: the stated markers replace the
+// walked path from the unit word's own depth down, and the result is a CLAIM —
+// where it names nothing, `scopeFallback` puts the op back where it applied
+// before the phrase was read.
 //
 // The units are spelled out rather than sharing `UNIT_WORDS`, which is declared
 // below this line: a `const` referenced above its declaration is a temporal dead
 // zone, and at module top level that throws on import rather than failing a
 // test. `RE_UNIT_ANCHOR` spells them out for the same reason.
+//
+// Two capture groups, and the tail appears TWICE in the pattern below, so the
+// numbering runs 2/3 for the "at the end" form and 4/5 for the bare one. The
+// markers are `*` rather than `+` because "at the end of such paragraph" names
+// a unit with no number of its own and there is nothing to compose from it.
 const PUNCT_UNIT_TAIL =
   '(?:\\s+(?:of|in)\\s+(?:such\\s+)?' +
-  '(?:subsection|paragraph|subparagraph|clause|subclause|item|subitem)s?' +
-  '\\s*(?:\\([A-Za-z0-9]{1,8}\\))*)?';
+  '(subsection|paragraph|subparagraph|clause|subclause|item|subitem)s?' +
+  '\\s*((?:\\([A-Za-z0-9]{1,8}\\))*))?';
 
 // Two forms, and the second is why "at the end" is not required.
 //
@@ -3172,6 +3257,11 @@ export function extractAmendments(text, citations, divisions = []) {
         start: h.headEnd + pm.index,
         end: h.headEnd + pm.index + pm[0].length,
         punctuation: true,
+        // The unit the phrase names, if it named one. Groups 2/3 belong to the
+        // "at the end of …" form and 4/5 to the bare one; only one can match.
+        // Read by scopeStatedUnits().
+        statedUnit: (pm[2] || pm[4] || '').toLowerCase(),
+        statedPath: pm[3] || pm[5] || '',
       });
     }
 
@@ -3422,6 +3512,7 @@ export function extractAmendments(text, citations, divisions = []) {
     scopeAdditions(ops);
     scopeUnitInserts(ops);
     scopeReplacements(ops);
+    scopeStatedUnits(ops);
     markRangeAdditions(ops, target);
     markSectionAdditions(ops);
     // After the scoping passes, because the composition rests on the scope each

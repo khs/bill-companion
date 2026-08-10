@@ -1254,6 +1254,52 @@ section('operand placement');
      ns.text.startsWith('striking the period at the end'), ns.text);
   eq('a named mark is inserted by operand too', ni.operand, ';');
   eq('  paired to the strike it replaces', ni.replaces, ns.start);
+  // The phrase says WHICH paragraph, and the tail used to be consumed and
+  // thrown away on the reasoning that "the step machinery has already scoped
+  // the op". It has not: an instruction of this shape normally never navigates,
+  // so the op sat on the head's address and `atEnd` took the last position in
+  // the first child ending in the mark. 71 marks across the corpus landed on a
+  // real provision, and all 71 were outside the one the bill named.
+  eq('the unit the phrase names becomes the scope', ns.scope, '(2)');
+  ok('  and it is a claim, so a level the Code lacks falls back', ns.scopeFromPhrase);
+  // Composed the way scopeReplacements() composes a stated address: the markers
+  // replace the walked path from the unit word's own depth down, so a walk into
+  // (c) gives (c)(2) and never (c) plus a paragraph of (c) plus (2).
+  const walked = p(
+    'Section 2 of the Widget Act (15 U.S.C. 2601) is amended in subsection (c) by striking ' +
+    'the period at the end of paragraph (2) and inserting a semicolon.\n'
+  );
+  eq('  over a walk, it replaces from the unit\'s own depth',
+     walked.find((o) => o.type === 'strike').scope, '(c)(2)');
+  // A named unit with no number of its own — "at the end of such paragraph" —
+  // states nothing to compose, and the walk stands.
+  const vague = p(
+    'Section 2 of the Widget Act (15 U.S.C. 2601) is amended in paragraph (4) by striking ' +
+    'the period at the end of such paragraph and inserting a semicolon.\n'
+  );
+  eq('  and a unit with no number leaves the walk alone',
+     vague.find((o) => o.type === 'strike').scope, '(4)');
+
+  // The QUOTED form says it too, and it is the same defect. 26 U.S.C. 25C(f)
+  // writes the two side by side, and the pane struck the "and" closing
+  // paragraph (2) for an instruction that names paragraph (1) — the Code now
+  // reads (1) …, (2) …, and (3) …, so the "and" this bill removed from (1) is
+  // gone and `atEnd` took the last one under the walk.
+  const quotedEnd = p(
+    'Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking ``and\'\' ' +
+    'at the end of paragraph (1).\n'
+  );
+  eq('a quoted strike reads the unit after "at the end" too',
+     quotedEnd.find((o) => o.type === 'strike').scope, '(1)');
+  // "at the end" with nothing after it still means the end of the walk, which
+  // is the case this flag was added for and must not change.
+  const bareEnd = p(
+    'Section 2 of the Widget Act (15 U.S.C. 2601) is amended in paragraph (4) by striking ' +
+    '``and\'\' at the end.\n'
+  );
+  const be = bareEnd.find((o) => o.type === 'strike');
+  ok('  and a bare "at the end" still means the walk', be.atEnd && be.scope === '(4)',
+     `${be.atEnd} ${be.scope}`);
 
   // The pairing has to cross a closing quote, because the strike replaced is
   // often the quoted kind. RE_REPLACES cannot see this pairing at all: a named

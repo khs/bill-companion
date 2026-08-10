@@ -6,7 +6,7 @@ import { extractCitations, extractAmendments, expandRelativeRefs, amendmentFor }
 import { resolve, resolveCfrPart } from './resolve/index.js';
 import { renderBill } from './ui/render-bill.js';
 import { renderContext } from './ui/render-context.js';
-import { flattenText } from './resolve/provision-tree.js';
+import { flattenText, findNode } from './resolve/provision-tree.js';
 import { locateInternal } from './resolve/internal.js';
 import { buildShareUrl, readSharedBill, SAFE_URL_LENGTH } from './share.js';
 import { buildExport } from './export.js';
@@ -326,10 +326,29 @@ function attachEffect(res, amend) {
     s.replace(/``|''|‘‘|’’|[“”]/g, '"').replace(/\s+/g, ' ').trim().toLowerCase();
   const hay = norm(haystack);
 
+  // …but an op that names its own scope is asked about THAT, not about the
+  // whole provision. `found` is printed to the reader as "✓ found in current
+  // text" on a strike the redline did not draw, so a whole-provision substring
+  // test answers a question nobody asked: of course the word "and" is somewhere
+  // in the section. 1,267 undrawn strikes carried that tick, and after the
+  // strike phrase started naming its own unit — "by striking ``and'' at the end
+  // of paragraph (1)" — it became the commonest thing the panel said about a
+  // mark it had deliberately not drawn.
+  const scopedHay = new Map();
+  const hayFor = (op) => {
+    const scope = op && op.scope ? String(op.scope) : '';
+    if (!scope || !res.tree) return hay;
+    if (!scopedHay.has(scope)) {
+      const node = findNode(res.tree, scope);
+      scopedHay.set(scope, node ? norm(flattenText(node)) : hay);
+    }
+    return scopedHay.get(scope);
+  };
+
   let unmatched = false;
   const ops = amend.ops.map((op) => {
     if (op.type !== 'strike') return op;
-    const found = hay.includes(norm(op.text));
+    const found = hayFor(op).includes(norm(op.text));
     if (!found) unmatched = true;
     return { ...op, found };
   });

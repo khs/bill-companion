@@ -3853,3 +3853,77 @@ LVXXXVI--FEDERAL MARITIME
 
    Corpus unchanged; this is resolution and rendering. selftest 664, rendertest
    437 -> 443, proptest clean.
+68. **"at the end of paragraph (2)" says which paragraph, and the phrase was
+   parsed and thrown away.** (2026-08-10, W1 of item 65, plus the sibling it
+   turned out to have and a message that only became visible once both were
+   fixed.) The note that sat on `PUNCT_UNIT_TAIL` said the quiet part outright:
+
+   > The unit is consumed rather than captured. The step machinery has already
+   > scoped the op to the provision the instruction walked to, so a second
+   > opinion here could only disagree with it.
+
+   It does disagree, and the bill is the one that is right. An instruction of
+   this shape normally never navigates — the position is written into the strike
+   phrase itself — so `scopeOps()` leaves the op on the head's own address and
+   `atEnd` takes the last occurrence anywhere under it. Measured: **81 of 82
+   punctuation strikes disagree with the walk, and in 73 the walked scope is a
+   real provision — an ANCESTOR of the one named** — so the mark lands somewhere
+   real and wrong rather than nowhere.
+
+   **The quoted form has the identical defect, and rendering the fix's own named
+   example is what found it.** 26 U.S.C. 25C(f) writes the two side by side:
+
+   ```
+   by striking ``and'' at the end of paragraph (1), by
+   striking the period at the end of paragraph (2) and inserting ``, and'',
+   and by adding at the end the following new paragraph: ``(3) …''
+   ```
+
+   `RE_AT_THE_END` set `atEnd` and read no further, so the "and" struck from
+   paragraph (1) was drawn through the "and" that closes paragraph (2). The Code
+   now reads (1) …, (2) …, and (3) … — this bill removed (1)'s "and", so the
+   last one under the walk is (2)'s. One card, three wrong claims, and the
+   corpus could not see any of it: `opSpans` keys on `type:start-end` and a
+   scope has no span.
+
+   `scopeStatedUnits()` composes the stated address the way `scopeReplacements()`
+   already does — the markers replace the walked path from the unit word's own
+   depth down, so "in subsection (c) … at the end of paragraph (2)" gives (c)(2)
+   — and it is a CLAIM, carrying `scopeFallback` so a level the Code does not
+   have puts the op back where it applied before the phrase was read. The tail
+   is read in `placeOps()` for the quoted form because the strike scan stops at
+   the closing quote and the unit is written after it.
+
+   Audited by where the marks LAND, walking the provision as render-context
+   does, keyed by bill *and target* because a distributed amendment gives one op
+   offset several provisions:
+
+   ```
+     withdrawn   161  every one of them outside the provision the bill named
+     moved         8  every one of them INTO the provision the bill named
+     gained        0
+     elsewhere     0
+   ```
+
+   plus 62 inserts that replace one of those strikes and cannot be drawn without
+   it. Coverage 3,464 -> 3,241 (23% -> 21%), the third time in this file a fix
+   has shown up as a fall — read the marks before believing the metric.
+
+   **And the message underneath, which the fix made common.** `op.found` in
+   `main.js` is printed as "✓ found in current text" on a strike the redline did
+   NOT draw, and it was a substring test against the whole provision: of course
+   the word "and" is somewhere in the section. 1,267 undrawn strikes carried
+   that tick. It asks the op's own scope now, and the population falls to 390,
+   every one of which genuinely has its operand inside the provision it names
+   (the redline declined for the `atEnd` test, not for absence). Of the 877 that
+   stop claiming it, 376 move to "✓ already struck from the law" — the
+   amendment having worked — and 501 to "⚠ not found verbatim", which is what
+   they are.
+
+   Verified on screen, per the rule item 60 wrote after making exactly this
+   mistake: 26 U.S.C. 25C(a) now renders with **zero** marks, (3) ruled in the
+   insertion colour as "Added by this bill — already in force", and both strikes
+   reported "✓ already struck from the law". Before: a strikethrough through
+   paragraph (2)'s "and", for an instruction naming paragraph (1).
+
+   Corpus unchanged. selftest 664 -> 670, rendertest 443, proptest clean.
