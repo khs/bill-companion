@@ -49,7 +49,11 @@ for (const bill of bills) {
   if (!existsSync(path) || /\.pdf$/i.test(path)) continue;
   const text = normalizeText(unwrapPre(readFileSync(path, 'utf8')));
   const cites = extractCitations(text);
-  const ams = extractAmendments(text, cites);
+  // The same four arguments main.js passes. A property checked against a looser
+  // parse than the app runs is a property about nothing — and the bound below
+  // exists precisely because a call site can forget the last one.
+  const b = parseBill(text);
+  const ams = extractAmendments(text, cites, b.divisions, b.sections);
   const expanded = expandRelativeRefs(cites, ams);
 
   // P1 every citation span round-trips to its recorded text.
@@ -100,8 +104,34 @@ for (const bill of bills) {
     if (blocks[i].end <= blocks[i].start) fail('P8 empty/inverted block', `${bill.id} @${blocks[i].start}`);
     if (i && blocks[i].start < blocks[i - 1].end) fail('P8 overlapping blocks', `${bill.id} @${blocks[i].start}`);
   }
+  // P11 an instruction never reaches past the end of the bill section it is
+  // written in. A bill's own section heading is an absolute boundary — no
+  // instruction spans one — so an op, step or ref beyond it belongs to a
+  // different instruction against a different provision. 550 relative
+  // citations were composed across one, 296 of them answering with a real
+  // provision, which is the worst category this app has.
+  //
+  // Written as a property rather than a fixture because it is the guard on a
+  // parameter a caller can forget: extractAmendments() takes the sections and
+  // does nothing without them, so a call site that omits them fails here
+  // rather than quietly reverting to the old bound.
+  //
+  // Only where the head sits INSIDE a parsed section. parseBill misses a
+  // run-in appropriations head written as a bare "Sec. 401." line, parking
+  // later text in the previous section, and attributing by position rather
+  // than containment is what made the first measurement of this overcount.
+  for (const am of ams) {
+    const sec = b.sections.find((s) => am.start >= s.start && am.start < s.end);
+    if (!sec) continue;
+    for (const o of am.ops || [])
+      if (o.start != null && o.start >= sec.end)
+        fail('P11 op past its section', `${bill.id} #${sec.num} ${o.type}@${o.start} >= ${sec.end}`);
+    for (const st of [...(am.steps || []), ...(am.refs || [])])
+      if (st.start >= sec.end)
+        fail('P11 address past its section', `${bill.id} #${sec.num} @${st.start} >= ${sec.end}`);
+  }
+
   // P9 sections are ordered, non-overlapping and inside the text.
-  const b = parseBill(text);
   let prev = -1;
   for (const s of b.sections) {
     bump('sections');
@@ -116,7 +146,10 @@ for (const bill of bills.slice(0, 12)) {
   const path = bill.local ? join(R, bill.local) : join(R, 'corpus/files', `${bill.id}.htm`);
   if (!existsSync(path) || /\.pdf$/i.test(path)) continue;
   const text = normalizeText(unwrapPre(readFileSync(path, 'utf8')));
-  for (const am of extractAmendments(text, extractCitations(text))) {
+  const parsed = parseBill(text);
+  for (const am of extractAmendments(
+    text, extractCitations(text), parsed.divisions, parsed.sections
+  )) {
     if (!am.target || !(am.ops || []).length) continue;
     let res; try { res = await resolve(am.target); } catch { continue; }
     if (!res || !res.tree) continue;

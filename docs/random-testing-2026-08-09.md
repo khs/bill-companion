@@ -25,7 +25,7 @@ Ranked by severity-per-instance × measured frequency. Every one of these puts a
 
 ---
 
-**W2. An amendment body is not bounded by the end of its own bill SECTION**
+**W2. An amendment body is not bounded by the end of its own bill SECTION** — FIXED 2026-08-10, CLAUDE.md item 70
 `app/parse/citations.js:3074-3075` — `const bodyEnd = Math.min(nextHead, h.headEnd + MAX_AMEND_BODY, text.length)`. `extractAmendments(text, citations, divisions = [])` is never passed sections.
 
 - **Repro:** hr5376-117-enr, last amendment of SEC. 13101 (target 26 U.S.C. 45) has `start` 308682, `end` 310595 against a section end of 310052 — 543 characters into SEC. 13102, which reads *"The following provisions of **section 48** are each amended…"*.
@@ -408,7 +408,7 @@ Two guards to carry over from today's work:
 
 ### Still unfixed
 
-W2, W6–W16, L1–L9, C1 — 24 of the 27 (W4, W5, W1 and W3 are done). W2 remains the largest by count (550
+W6–W16, L1–L9, C1 — 23 of the 27 (W4, W5, W1, W3 and W2 are done). W2 remains the largest by count (550
 citations across a real section boundary) and carries its own trap, recorded in
 its section above: attribute via `viaAmendment` and require the head to sit
 inside a parsed section, because positional attribution overcounts wherever

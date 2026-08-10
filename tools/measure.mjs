@@ -71,7 +71,7 @@ export function measure(raw) {
   const text = normalizeText(raw);
   const bill = parseBill(text);
   const cites = extractCitations(text);
-  const ams = extractAmendments(text, cites, bill.divisions);
+  const ams = extractAmendments(text, cites, bill.divisions, bill.sections);
   const expanded = expandRelativeRefs(cites, ams);
 
   const byKind = {};

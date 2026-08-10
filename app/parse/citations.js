@@ -3242,8 +3242,12 @@ function ircScopes(text, divisions) {
  *
  * @param {Array} divisions  from parseBill(), used only to scope the Internal
  *                           Revenue Code declaration above. Optional.
+ * @param {Array} sections   from parseBill(). An instruction cannot reach past
+ *                           the end of the bill section it is written in — see
+ *                           bodyEnd below. Optional, and a bill parsed without
+ *                           it simply gets the old, looser bound.
  */
-export function extractAmendments(text, citations, divisions = []) {
+export function extractAmendments(text, citations, divisions = [], sections = []) {
   const ircRanges = ircScopes(text, divisions);
   const heads = [];
   let m;
@@ -3350,9 +3354,37 @@ export function extractAmendments(text, citations, divisions = []) {
   // just talking about — see impliedSuchUnit().
   let lastTarget = null;
 
+  // An instruction cannot reach past the end of the bill section it is written
+  // in. That boundary was never consulted: the body ran to the next amendment
+  // head or 2,500 characters, whichever came first, and a section whose own
+  // first amendment sits a paragraph below its heading leaves the previous
+  // body running straight through the heading into it.
+  //
+  //   SEC. 13101 … (the last instruction's body runs 543 characters on)
+  //   SEC. 13102. EXTENSION AND MODIFICATION OF ENERGY CREDIT.
+  //       The following provisions of section 48 are each amended--
+  //
+  // Seven chips about 26 U.S.C. 48 were composed onto 26 U.S.C. 45, and
+  // 45(c)(1)(D) renders "geothermal energy," where 48(c)(1)(D) is the linear
+  // generator definition the bill is talking about. **550 relative citations
+  // across a real section boundary on 22 of 26 bills, 296 of them answering
+  // with a real provision** — both sections existing is what makes this the
+  // worst category rather than a blank.
+  //
+  // Attributed by containment and never by proximity, which is the trap: the
+  // measurement that found this had to discard positional attribution because
+  // `parseBill` misses a run-in appropriations head written as a bare
+  // "Sec. 401." line, parking later text in the previous section. A head that
+  // sits in no parsed section is left unbounded, so a missed heading costs the
+  // old behaviour rather than a wrong boundary.
+  const secEnd = (offset) => {
+    for (const s of sections || []) if (offset >= s.start && offset < s.end) return s.end;
+    return Infinity;
+  };
+
   const out = merged.flatMap((h, i) => {
     const nextHead = i + 1 < merged.length ? merged[i + 1].start : text.length;
-    const bodyEnd = Math.min(nextHead, h.headEnd + MAX_AMEND_BODY, text.length);
+    const bodyEnd = Math.min(nextHead, h.headEnd + MAX_AMEND_BODY, secEnd(h.start), text.length);
     const body = text.slice(h.headEnd, bodyEnd);
 
     // Prefer an explicit code citation inside the head — "(42 U.S.C. 1395x(s)(2))"

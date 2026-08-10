@@ -97,7 +97,7 @@ function ingest(raw) {
   status('Parsing…', true);
   const bill = parseBill(text);
   const rawCitations = extractCitations(text);
-  const amendments = extractAmendments(text, rawCitations, bill.divisions);
+  const amendments = extractAmendments(text, rawCitations, bill.divisions, bill.sections);
   // Must run after amendments: a step like "in clause (iv)" only has an address
   // once we know which provision the enclosing instruction is amending.
   const citations = expandRelativeRefs(rawCitations, amendments);

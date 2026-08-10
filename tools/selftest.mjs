@@ -751,6 +751,55 @@ section('relative navigation inside amendments');
      JSON.stringify(sameOps.map((o) => o.otherSection)));
 }
 {
+  // ---- an instruction stops at the end of its own bill section -------------
+  //
+  // The body was bounded at the next amendment head or 2,500 characters,
+  // whichever came first, and never at the bill's own section heading. A
+  // section whose first amendment sits a paragraph below its heading therefore
+  // leaves the previous body running straight through into it: the Inflation
+  // Reduction Act's SEC. 13101 ran 543 characters into SEC. 13102 and composed
+  // seven chips about 26 U.S.C. 48 onto 26 U.S.C. 45, where (c)(1)(D) reads
+  // "geothermal energy," rather than the linear-generator definition the bill
+  // is talking about. Both sections exist, which is what makes this the worst
+  // category rather than a blank.
+  const t = normalizeText(
+    'SEC. 101. FIRST.\n' +
+    '    Section 2 of the Widget Act (15 U.S.C. 2601) is amended in subsection (a) ' +
+    "by striking ``old''.\n" +
+    '\n' +
+    'SEC. 102. SECOND.\n' +
+    "    (a) In general.--The following are each amended by striking ``x'':\n" +
+    '        (1) Subsection (b)(3).\n' +
+    "        (2) Paragraph (c)(4), by striking ``y''.\n"
+  );
+  const bill = parseBill(t);
+  const cites = extractCitations(t);
+  const loose = extractAmendments(t, cites, bill.divisions);
+  const tight = extractAmendments(t, cites, bill.divisions, bill.sections);
+  const edge = bill.sections.find((s) => s.num === '101').end;
+  ok('without the sections the body runs past the section heading',
+     loose[0].end > edge, `${loose[0].end} vs ${edge}`);
+  eq('with them it stops at the heading', tight[0].end, edge);
+  // Bounded on both sides. "Nothing past the edge" is vacuously true of an
+  // instruction that reached nothing at all, so assert the loose parse really
+  // did compose the wrong addresses and the tight one really does compose the
+  // right one.
+  const rel = (ams) =>
+    expandRelativeRefs(cites, ams).filter((c) => c.relative).map((c) => c.subsection);
+  ok('  and the addresses from the next section go with it',
+     rel(loose).includes('(b)(3)') && !rel(tight).includes('(b)(3)'),
+     `${JSON.stringify(rel(loose))} -> ${JSON.stringify(rel(tight))}`);
+  ok('  while its own address is untouched',
+     rel(tight).length > 0 && tight[0].ops.some((o) => o.scope === '(a)'),
+     JSON.stringify(tight[0].ops.map((o) => `${o.type}:${o.scope}`)));
+  // A head that sits in no parsed section keeps the old, looser bound. That is
+  // the trap the measurement had to work around: parseBill misses a run-in
+  // appropriations head written as a bare "Sec. 401." line, and attributing by
+  // position rather than containment overcounts wherever it does.
+  const noSecs = extractAmendments(t, cites, bill.divisions, []);
+  eq('a bill with no parsed sections is bounded as before', noSecs[0].end, loose[0].end);
+}
+{
   // A cross-reference inside quoted text must not hijack the cursor.
   const t =
     'Section 5 of the Widget Act (15 U.S.C. 2605) is amended—\n' +

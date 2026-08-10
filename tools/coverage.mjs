@@ -44,7 +44,7 @@ globalThis.fetch = async (url, opts) => {
 
 globalThis.DOMMatrix ??= class { constructor() {} };
 const { extractCitations, extractAmendments } = await imp('app/parse/citations.js');
-const { normalizeText } = await imp('app/parse/bill.js');
+const { normalizeText, parseBill } = await imp('app/parse/bill.js');
 const { unwrapPre } = await imp('tools/measure.mjs');
 const { resolve } = await imp('app/resolve/index.js');
 
@@ -81,7 +81,11 @@ for (const bill of bills) {
   const path = bill.local ? join(ROOT, bill.local) : join(ROOT, 'corpus/files', `${bill.id}.htm`);
   if (!existsSync(path)) continue;
   const text = normalizeText(await textOf(path));
-  const ams = extractAmendments(text, extractCitations(text));
+  // The same four arguments main.js passes, or this measures a parse nobody
+  // sees: without the sections an instruction's body runs through the heading
+  // below it and scopes operations onto a provision from the next section.
+  const parsed = parseBill(text);
+  const ams = extractAmendments(text, extractCitations(text), parsed.divisions, parsed.sections);
   const s = zero();
 
   for (const a of ams) {

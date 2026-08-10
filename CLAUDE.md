@@ -4045,3 +4045,105 @@ LVXXXVI--FEDERAL MARITIME
    shows one provision, so a reader following an instruction that walks through
    six sections of an Act sees six refusals and has to click each chip. Showing
    the named section beside the target is a feature, not a placement fix.
+
+70. **An instruction cannot reach past the end of its own bill section.**
+   (2026-08-10, W2 of item 65 and the largest of the 27 by count.) The body was
+   bounded at the next amendment head or `MAX_AMEND_BODY`, whichever came first,
+   and never at the bill's own section heading — `extractAmendments()` was never
+   passed the sections. A section whose first amendment sits a paragraph below
+   its heading therefore leaves the previous body running straight through into
+   it:
+
+   ```
+   SEC. 13101 …          (the last instruction's body runs 543 characters on)
+   SEC. 13102. EXTENSION AND MODIFICATION OF ENERGY CREDIT.
+       (a) Extension of Credit.--The following provisions of section 48
+   are each amended by striking ``January 1, 2024'' …
+           (1) Subsection (a)(2)(A)(i)(II).
+   ```
+
+   Seven chips about 26 U.S.C. 48 were composed onto 26 U.S.C. 45, and
+   45(c)(1)(D) renders "geothermal energy," where 48(c)(1)(D) is the linear
+   generator definition the bill is talking about. **Both sections existing is
+   what makes this the worst category rather than a blank.** 2,853 amendment
+   bodies ended past their section.
+
+   A bill's own section heading is an absolute boundary — no instruction spans
+   one — so this is a structural fact rather than a heuristic, and the audit is
+   correspondingly strong: of everything the bound removes, **975 of 975
+   references, 72 of 72 steps and 282 of 282 spanned operations lie past the
+   edge**, and **0 kept operations changed scope**. The other 6 removed ops are
+   item 39's spanless redesignations, each produced by a "redesignat…" phrase
+   that exists only in the removed tail.
+
+   **Attributed by containment, never by proximity**, and that is the trap the
+   measurement had to work around first: `parseBill` misses a run-in
+   appropriations head written as a bare `Sec. 401.` line, parking later text in
+   the previous section, so a head that sits in no parsed section keeps the old,
+   looser bound. A missed heading costs the old behaviour rather than a wrong
+   boundary.
+
+   Of the 644 addresses withdrawn, **358 resolved to a real node** — 358
+   confident wrong answers. 32 moved and 0 were added:
+
+   - 3 to **38 U.S.C. 902**, "Enforcement and arrest authority of Department
+     police officers", which is what "Section 902 of title 38, United States
+     Code" means. The target had been taken from a citation past the edge and
+     was 26 U.S.C. 902, which does not exist.
+   - 29 off **26 U.S.C. 119**, "Meals or lodging furnished for the convenience
+     of the employer", for instructions reading "Additional funding for area
+     agencies on aging". "Such section 119" is MIPPA's, uncodified, printed as a
+     note under 42 U.S.C. 1395b-3 — so the new address resolves to nothing, on
+     purpose, and a real-but-wrong provision is replaced by an honest blank.
+
+   Marks: **56 withdrawn, 4 gained, 0 moved.** 36 of the withdrawals are
+   operations no longer parsed, 19 are the 26 U.S.C. 119 target moving, and 1 is
+   the 38 U.S.C. 902 target moving (it reappears among the gains).
+
+   **The gains are the interesting half, and they name a second-order fault this
+   fixes.** An over-reaching body poisoned the STALENESS verdict: `stale` asks
+   whether every strike the amendment makes is already gone, and a strike
+   belonging to a *different* instruction against a *different* provision can
+   never be found, so the amendment was declared live and its own insertions
+   withheld. Withheld operations fall 6,457 → 6,364 and three of the four gained
+   marks are that — 42 U.S.C. 1397gg(e)(1)(J), 7 U.S.C. 2023(a) and an insert in
+   10 U.S.C. 2688(d)(2), each on an instruction whose head names that provision
+   outright.
+
+   Corpus, accounted to the unit: `refs -975`, `relative -642` (the 1,047 refs
+   and steps removed, less the 405 sitting on an amendment with no resolved
+   usc/cfr target), `steps -72`, `opSpans -282`, `ops.strike -100`,
+   `ops.insert -115`, `ops.add-at-end -54`, `ops.replace -13`,
+   `ops.redesignate -6`, and **`uncoveredVerbs +84`**. That last one is the cost
+   and it is the honest one: 84 amendatory verbs were inside an over-reaching
+   body and are now outside any parsed instruction. They were never covered —
+   they were attributed to the wrong section's target — and `uncoveredVerbs`
+   exists precisely so a gap is visible instead of hiding as a wrong answer.
+
+   **The parameter is optional, so it can be forgotten, so it has a property.**
+   `extractAmendments(text, citations, divisions, sections)` — every real
+   consumer passes it (`main.js`, `measure.mjs`, `impact.mjs`, `coverage.mjs`,
+   `proptest.mjs`), and `proptest.mjs` asserts P11: no operation, step or
+   reference of an instruction lies past the end of the bill section the
+   instruction is written in. **1,325 violations under the old two-argument
+   call**, so a call site that omits the sections fails loudly rather than
+   quietly reverting. Two of my own measurement scripts had exactly that hole
+   and reported "0 changed" until they were fixed — which is the same
+   measuring-a-parse-nobody-sees mistake `coverage.mjs` has now made twice.
+
+   Coverage: inline operations 14,819 → 14,514, shown 3,226 → 3,196, additions
+   3,034 → 2,983. selftest 679 → 684, rendertest 448, corpus updated.
+
+   Rendered, per item 60's rule, on both examples the report names: the IRA's
+   SEC. 13102 chips now decline with "no (c)(1)(D) appears at the head of a line
+   anywhere in this section of the bill … that usually means the provision it
+   refers to lives in the U.S. Code", and the TCJA's SEC. 13102 composes onto
+   26 U.S.C. 448 and 447 with no trace of the 179 the previous section leaked.
+
+   **Left open, and it is what the IRA example now asks for.** "The following
+   provisions of section 48 are each amended by striking …:" is a distributed
+   head — `RE_AMEND_HEAD` wants "Section N … is amended" — so those seven
+   subsections reach nothing at all where the bill has plainly named 26 U.S.C.
+   48. Blank beats wrong and this is the right trade today, but the address is
+   written down and item 33's `distributed` flag is the half of the machinery
+   that already exists.
