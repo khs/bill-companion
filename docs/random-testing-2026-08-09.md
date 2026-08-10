@@ -87,7 +87,7 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 
 ---
 
-**W8. A quoted block whose opener sits mid-line is invisible to `quotedBlocks()`**
+**W8. A quoted block whose opener sits mid-line is invisible to `quotedBlocks()`** — FIXED 2026-08-10, CLAUDE.md item 76
 `app/parse/outline.js:116` — `RE_BLOCK_OPEN = /^[ \t]*(``|‘‘|[“"])/` requires the opener to start the line. `readAddedBlock` on the op side has no such requirement, so the two spellings of "where new law begins" disagree.
 
 - **Repro:** `(C) by adding at the end the following: ``The Secretary may waive subparagraph (A) if…''`. Moving the opener to the head of the next line (the control) makes the block visible and the reference correctly declines.
@@ -97,7 +97,7 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 
 ---
 
-**W9. A wrapped cross-reference breaking after "and"/"or" is admitted as a real outline marker**
+**W9. A wrapped cross-reference breaking after "and"/"or" is admitted as a real outline marker** — FIXED 2026-08-10, CLAUDE.md item 76
 `isWrappedMarkerLine` asks only whether the previous line ends in a unit word; a list separator at the break leaves it ending in "and", which the module reads as evidence of a *real* marker (item 53 states that premise outright).
 
 - **Repro:** `…the requirements of paragraphs (3) and\n(4) of subsection (b) of section 9 of the Small Business Act.` → `outline()` reports a paragraph-level marker mid-sentence.

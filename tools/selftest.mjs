@@ -2646,6 +2646,51 @@ section('internal cross-references');
        JSON.stringify(at && at.why));
   }
 
+  // The second tell, and the one the trailing-unit test cannot see: the break
+  // may fall at a LIST separator or a range word instead of the unit word, so
+  // the line above ends in "and", "or" or "through" — which is exactly how a
+  // line that ends a thought looks. What separates them is the tail: a real
+  // outline marker introduces its own text and is never followed by the rest of
+  // somebody's address. 118 across the corpus, every one read, none a provision.
+  const t5b = normalizeText(
+    'SEC. 4. TREATMENT.\n' +
+    '    (a) In general.--An activity shall not be treated as a trade or\n' +
+    '    business under paragraph (5) or\n' +
+    '    (6) of section 469(c) of the Internal Revenue Code of 1986.\n' +
+    '    (b) Rule.--The Secretary shall prescribe regulations.\n'
+  );
+  {
+    // Asserted through outline(), which is what both consumers ask — a citation
+    // fixture cannot reach this, because item 20 correctly drops "paragraph (5)
+    // or (6) of section 469(c)" as a phrase naming its own section, so there is
+    // no internal citation left to locate. The phantom still splits the
+    // paragraph in the left pane and still steals later references in a bill
+    // where the same shape is written without the tail.
+    const { outline } = await imp('app/resolve/internal.js');
+    const heads = outline(t5b, 0, t5b.length).map((n) => n.marker);
+    ok('a marker followed by "of section" is not an outline marker',
+       !heads.includes('(6)'), JSON.stringify(heads));
+    ok('  and the real markers around it survive',
+       heads.includes('(a)') && heads.includes('(b)'), JSON.stringify(heads));
+  }
+  // And the negative, or the tell would be swallowing real markers: the same
+  // marker introducing its own text is untouched.
+  const t5c = normalizeText(
+    'SEC. 4. TREATMENT.\n' +
+    '    (a) In general.--The following apply, and\n' +
+    '    (6) of the amounts described in subsection (b) shall be paid.\n' +
+    '    (b) Rule.--Regulations apply. See paragraph (6) for details.\n'
+  );
+  {
+    const { isWrappedMarkerLine } = await imp('app/parse/outline.js');
+    ok('  a marker followed by "of the amounts" is left alone',
+       !isWrappedMarkerLine('    (a) In general.--The following apply, and',
+                            '    (6) of the amounts described in subsection (b) shall be paid.'));
+    ok('  and one followed by "of subsection" is not',
+       isWrappedMarkerLine('    described in paragraphs (3) and',
+                           '    (4) of subsection (b) of section 9.'));
+  }
+
   // The one shape that must survive the guard: a run-in heading is a real
   // marker even where the line above happens to end in a unit word. Exactly one
   // case in the 1,093 — H.R. 2617 writes "(a) Definitions.--In this section"
@@ -2795,6 +2840,34 @@ section('references inside quoted inserted law');
     ok('  the first block keeps its whole definition',
        /covered entity/.test(t.slice(blocks[0].start, blocks[0].end)),
        t.slice(blocks[0].start, blocks[0].end));
+  }
+
+  {
+    // The opener need not begin the line. A drafter as often writes the
+    // introducing phrase and the first line of the new law together, and
+    // readAddedBlock() on the op side has never required a line head — so the
+    // two spellings of "where new law begins" disagreed and the reference was
+    // answered from the bill's own drafting instruction.
+    const t = normalizeText(
+      'SEC. 2. X.\n' +
+      '    Section 408A(e)(1) is amended--\n' +
+      '        (A) by striking the period at the end of subparagraph (B); and\n' +
+      `        (C) by adding at the end the following: ${Q('The Secretary may waive subparagraph (A) if the applicant shows cause.')}.\n`
+    );
+    const blocks = quotedBlocks(t);
+    eq('an opener behind "the following:" opens a block', blocks.length, 1);
+    ok('  and the reference inside it is bounded',
+       !!quotedBlockAt(t, t.indexOf('subparagraph (A) if')));
+    ok('  while the drafting instruction above stays outside',
+       !quotedBlockAt(t, t.indexOf('by striking the period')));
+    // The guard: only behind the phrase that introduces new law. A strike's
+    // operand is a quotation too, and claiming every mid-line quote would bound
+    // thousands of references on nothing.
+    const t2 = normalizeText(
+      'SEC. 2. X.\n' +
+      `    Section 5 is amended by striking ${Q('under subparagraph (A)')} and inserting ${Q('under subparagraph (B)')}.\n`
+    );
+    eq('  a mid-line operand does not', quotedBlocks(t2).length, 0);
   }
 
   // --- a quotation is not always a BLOCK of new law -----------------------

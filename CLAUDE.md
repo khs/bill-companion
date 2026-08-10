@@ -4430,3 +4430,91 @@ LVXXXVI--FEDERAL MARITIME
    this bill -- already in force", with zero `del` and zero `ins` in the pane.
 
    selftest 699, rendertest 453 -> 456, proptest clean.
+
+76. **Two ways a line lies about what it is, and both put the bill's own
+   drafting instructions in front of a reader asking about the statute.**
+   (2026-08-10, W8 and W9 of item 65. Both live in `app/parse/outline.js`, and
+   both are the same mistake seen from opposite ends: a line-head marker that is
+   not a marker, and a block of new law that does not begin at a line head.)
+
+   **A marker followed by "of section" is not a provision.** `isWrappedMarkerLine`
+   asks only whether the line above ends in a unit word -- the tell for
+   "paragraph
+(4)". A LIST separator or a range word can fall at the break
+   instead, so the line above ends in "and", "or" or "through", which is exactly
+   how a line that ends a thought looks:
+
+   ```
+   ...treated as a trade or business under paragraph (5) or
+   (6) of section 469(c) (determined without regard to the ...
+   ```
+
+   Both consumers then read the phantom as a real sibling. `locateInternal`
+   answered hr5376's "paragraph (6)" with that offset, unhedged, mid-sentence;
+   `render-bill.js` split the sentence and dressed the back half up as an
+   enumerated provision.
+
+   What separates them is the TAIL, not the head. A real outline marker
+   introduces its own provision's text and is never followed by the rest of
+   somebody's address -- a provision reading "(6) of section 469(c) (determined
+   without regard to..." would be a fragment. **118 across the corpus against
+   150,177 line-head markers admitted as real, and every one of the 118 read:
+   not one is a provision.** 93 break after a list separator and 25 after
+   "through", which is why the tell has to be the tail: requiring the previous
+   line to end a list as well would have kept a quarter of the phantoms.
+
+   **A block of new law need not begin at a line head.** `RE_BLOCK_OPEN` is
+   `^[ 	]*(``|...)`, because GPO opens every quoted paragraph that way -- but a
+   drafter as often writes the introducing phrase and the first line of the new
+   law together, and `readAddedBlock()` on the op side has never required a line
+   head. So the two spellings of "where new law begins" disagreed, and a
+   reference inside the block was answered from the bill's own instruction:
+
+   ```
+   (B) by inserting before the period at the end the following: ``, and (DD)
+   with respect to a ... service described in paragraph (1) of subsection (cc)
+   ```
+
+   -> "paragraph (1)" answered with "(1) in subsection (a)(1)-- (A) by
+   striking...", under the heading "The only (1) inside the enclosing
+   provision." Item 41's bug reached through a formatting door.
+
+   Only behind the phrase that INTRODUCES new law -- "following" or "follows",
+   then a colon within a unit word's worth of characters. An arbitrary mid-line
+   quote is not admitted, because the operand of a strike is a quotation too and
+   claiming every one of those would bound thousands of references on nothing.
+
+   Audited by where every internal cross-reference LANDS, over 42,739 of them:
+
+   ```
+     the marker tell   26 moved · 6 withdrawn · 2 gained · 41 hedge improved
+     the block tell     0 moved · 58 withdrawn · 0 gained
+   ```
+
+   All six of the marker withdrawals were read against the bill and every one
+   had been landing inside a wrapped reference -- "under paragraph (5) or
+(6)
+   of section 469(c)", "``subsections (d) and
+(f) of this section''", "in
+   clauses (v) and
+(vii) of paragraph (3)(A)". Four are the exact citations
+   the report names as live unhedged wrong answers.
+
+   The 58 block withdrawals were classified rather than sampled: **31 had been
+   answered from the bill's own drafting instructions** ("(A) by striking the
+   period at the end of subparagraph (B)", "(2) in subsection (b), in the first
+   sentence--"), 44 of the 58 with no hedge at all. The other **27 had landed
+   inside a DIFFERENT quoted block of the same bill section** -- the sibling
+   case item 61 measured and declined to build. Those were reached by accident,
+   by taking the nearest match in the whole bill section, and the sentence they
+   carried ("the only (20) inside the enclosing provision") was false about a
+   reference in inserted law whether or not the offset happened to be lucky.
+   Losing them is the cost of the boundary being honest, and it is recorded here
+   rather than papered over: **the sibling gap is now the largest thing standing
+   between these references and an answer.**
+
+   Corpus does not move for either -- both are resolution and layout, which the
+   corpus is deliberately blind to. Rendered per item 60 on hr6201 SEC. 6002:
+   all three references in the mid-line block now read "This sits inside language
+   the bill is inserting, so (1) refers to the law being amended rather than to
+   anything in the bill". selftest 699 -> 707, rendertest 456, proptest clean.

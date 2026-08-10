@@ -65,6 +65,34 @@ const RE_RUN_IN_HEAD = new RegExp(
 const RE_LEAD_ONLY = new RegExp(`^${LEAD}$`);
 
 /**
+ * The second tell, and the one the trailing-unit test cannot see.
+ *
+ * A reference broken across the measure does not always leave the unit word
+ * behind it. A LIST separator can fall at the break instead — "the requirements
+ * of paragraphs (3) and\n(4) of subsection (b)" — and so can a range word, so
+ * the previous line ends in "and", "or" or "through", which is exactly how a
+ * line ending a thought looks. Both consumers then read the phantom as a real
+ * sibling: `locateInternal` picks the nearest match and answers mid-sentence,
+ * and `render-bill.js` splits the sentence in half and dresses the back half up
+ * as an enumerated provision.
+ *
+ * What separates them is what FOLLOWS. A real outline marker introduces its own
+ * provision's text; it is never followed by the rest of somebody's address. A
+ * provision that read "(4) of section 469(c) (determined without regard to…)"
+ * would be a fragment, not a provision.
+ *
+ * 118 across the corpus against 150,177 line-head markers admitted as real, and
+ * every one read: not one is a provision. 93 break after a list separator and
+ * 25 after "through", which is why the tell is the tail rather than the head —
+ * requiring both would have kept a quarter of the phantoms.
+ */
+const RE_ADDRESS_TAIL = new RegExp(
+  `^${LEAD}\\([A-Za-z0-9]{1,8}\\)\\s+of\\s+(?:the\\s+|this\\s+|such\\s+|that\\s+)*` +
+    '(?:sub)?(?:section|paragraph|clause|item|chapter|title|part|subtitle|division|Act|Code)\\b',
+  'i'
+);
+
+/**
  * Does the marker at the head of `line` merely continue a reference that ran
  * off the end of `prevLine`?
  *
@@ -75,7 +103,8 @@ const RE_LEAD_ONLY = new RegExp(`^${LEAD}$`);
 export function isWrappedMarkerLine(prevLine, line) {
   if (prevLine == null) return false;
   if (RE_RUN_IN_HEAD.test(line)) return false;
-  return RE_TRAILING_UNIT.test(prevLine.trimEnd());
+  if (RE_TRAILING_UNIT.test(prevLine.trimEnd())) return true;
+  return RE_ADDRESS_TAIL.test(line);
 }
 
 /**
@@ -114,6 +143,17 @@ const QUOTE_PAIRS = [
 
 /** A line whose first non-blank characters open a block of quoted law. */
 const RE_BLOCK_OPEN = /^[ \t]*(``|‘‘|[“"])/;
+
+/**
+ * The same opener, sitting mid-line behind the phrase that introduces new law.
+ *
+ * "…the following new subparagraph: ``(D) a contract of sale…". The colon must
+ * follow "following" or "follows" within a unit word's worth of characters, so
+ * this can only fire where the bill has said outright that what comes next is
+ * the language being added. An arbitrary mid-line quote is not admitted: the
+ * operand of a strike is a quotation too.
+ */
+const RE_BLOCK_OPEN_MID = /(?:following|follows)[^:\n]{0,40}:[ \t]*(``|‘‘|[“"])/;
 
 // A runaway guard, not a judgement about length: added blocks legitimately run
 // to tens of thousands of characters when a bill adds a whole chapter. The same
@@ -163,10 +203,28 @@ export function quotedBlocks(text) {
     const lineStart = off;
     off += line.length + 1;
     if (lineStart < openTo) continue;
-    const m = line.match(RE_BLOCK_OPEN);
+    // The opener normally begins the line, because GPO opens every quoted
+    // paragraph that way. It need not: a drafter as often writes the
+    // introducing phrase and the first line of the new law together —
+    //
+    //     (C) by adding at the end the following: ``The Secretary may waive
+    //     subparagraph (A) if the applicant …''
+    //
+    // and `readAddedBlock()` on the op side has never required a line head, so
+    // the two spellings of "where new law begins" disagreed. The reference in
+    // that block was unbounded, `locateInternal` widened to the whole bill
+    // section, and 26 U.S.C. 408A(e)(1)(A) was answered with the bill's own
+    // drafting instruction "(A) by striking the period at the end of
+    // subparagraph (B)" — under the unhedged heading "The only (A) inside the
+    // enclosing provision". Item 41's bug reached through a formatting door.
+    //
+    // Only after the phrase that INTRODUCES new law, never after an arbitrary
+    // mid-line quote: the operand of a strike is a quotation too, and claiming
+    // every one of those would bound thousands of references on a guess.
+    const m = line.match(RE_BLOCK_OPEN) || line.match(RE_BLOCK_OPEN_MID);
     if (!m) continue;
     const pair = QUOTE_PAIRS.find(([open]) => open === m[1]);
-    const openAt = lineStart + m[0].length - m[1].length;
+    const openAt = lineStart + m.index + m[0].length - m[1].length;
     const close = text.indexOf(pair[1], openAt + m[1].length);
     // No closer anywhere: a stray opener, and claiming from here to the end of
     // the bill would suppress every later reference in it. Nothing is claimed
