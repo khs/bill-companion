@@ -3750,16 +3750,16 @@ LVXXXVI--FEDERAL MARITIME
    this section of this Act, not of the statute being amended. Composed onto the
    target it gave 26 U.S.C. 5000A(a), 45(h), 172(a), 49 U.S.C. 22907(a): **204
    addresses across 21 bills, 156 landing on a subsection that really exists**,
-   and  — every one displaced the answer 
+   and `internalKept = 0` — every one displaced the answer `locateInternal`
    already had right.
 
    The tell is one fixed token in front of the reference, so the guard is a
    lookbehind and nothing else. Note that the amendment body ALSO over-reaches
-   its bill section (W2, ), and fixing that would not fix this:
+   its bill section (W2, `MAX_AMEND_BODY`), and fixing that would not fix this:
    the effective-date clause usually sits inside the same section as the
    instruction it follows.
 
-   Corpus  and  across the bills, the two differing
+   Corpus `refs -259` and `relative -203` across the bills, the two differing
    because 56 of the withdrawn references sit on an amendment with no resolved
    target and so never became relative citations. selftest 664, rendertest 437,
    proptest clean.
