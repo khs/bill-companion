@@ -1174,6 +1174,58 @@ function markHeadingOps(text, ops) {
   }
 }
 
+// "in the first sentence, by striking ``2018''" — a bill scopes an operation to
+// a SENTENCE as readily as to a paragraph, and a sentence is an ordinary span of
+// the provision's text.
+//
+// 550 phrases across the corpus and 326 operations scoped by one. Without it the
+// op keeps the scope the walk reached and the strike takes the first occurrence
+// anywhere under it: 49 U.S.C. 31104(b)(2) is struck three times — "in the third
+// sentence", "in the second sentence", "in the first sentence", each inserting a
+// different subparagraph designation — and all three landed on the same words.
+//
+// Read in the same three directions as a heading phrase, and for the same
+// reason: the bill writes it before the verb ("in the first sentence, by
+// striking …"), after the operand ("by striking ``X'' in the last sentence and
+// inserting …"), and on one half of a pair only.
+const SENT_ORD = {
+  first: 1, second: 2, third: 3, fourth: 4, fifth: 5,
+  sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10, last: -1,
+};
+const SENT_WORDS = Object.keys(SENT_ORD).join('|');
+const RE_SENTENCE_BEFORE = new RegExp(
+  `\\bin\\s+the\\s+(${SENT_WORDS})\\s+sentence\\b` +
+    '\\s*,?\\s*(?:as\\s+so\\s+[a-z]+\\s*,?\\s*)?(?:by\\s+)?[^;.,(]{0,30}$',
+  'i'
+);
+const RE_SENTENCE_AFTER = new RegExp(
+  `^(?:''|’’|["”])?[^;.,(]{0,30}?\\bin\\s+the\\s+(${SENT_WORDS})\\s+sentence\\b`,
+  'i'
+);
+
+/** Flag every operation the instruction scopes to one sentence of its target. */
+function markSentenceOps(text, ops) {
+  const flagged = new Map();
+  for (const op of ops) {
+    if (op.start == null || (op.type !== 'strike' && op.type !== 'insert')) continue;
+    const back = text.slice(Math.max(0, op.start - 200), op.start).replace(/\s+/g, ' ');
+    const fwd = text.slice(op.end, op.end + 160).replace(/\s+/g, ' ');
+    const m = RE_SENTENCE_BEFORE.exec(back) || RE_SENTENCE_AFTER.exec(fwd);
+    if (!m) continue;
+    op.sentence = SENT_ORD[m[1].toLowerCase()];
+    flagged.set(op.start, op.sentence);
+  }
+  if (!flagged.size) return;
+  for (const op of ops) {
+    if (op.replaces == null) continue;
+    if (flagged.has(op.replaces)) op.sentence = flagged.get(op.replaces);
+    else if (op.sentence !== undefined) {
+      const partner = ops.find((o) => o.start === op.replaces);
+      if (partner) partner.sentence = op.sentence;
+    }
+  }
+}
+
 function placeOps(text, ops) {
   const spans = ops.filter((o) => o.start != null).sort((a, b) => a.start - b.start);
   for (let i = 0; i < spans.length; i++) {
@@ -3948,6 +4000,7 @@ export function extractAmendments(text, citations, divisions = [], sections = []
     dropRunawayOperands(ops);
     placeOps(text, ops);
     markHeadingOps(text, ops);
+    markSentenceOps(text, ops);
 
     RE_REDESIG.lastIndex = 0;
     let rm;

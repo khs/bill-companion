@@ -734,6 +734,38 @@ section('redline on the current law');
        'the term means the old amount');
   }
 
+  // A SENTENCE is a locatable span of the provision, and a bill scopes an
+  // operation to one 326 times across the corpus. 49 U.S.C. 31104(b)(2) is the
+  // shape of it: three instructions strike "The Secretary" in the third, second
+  // and first sentences to designate three new subparagraphs, and all three used
+  // to land on the same words.
+  {
+    const law = 'The Secretary may act. The Secretary shall report. The Secretary may waive.';
+    const at = (n) =>
+      show(seg([{ type: 'strike', text: 'The Secretary', start: 1, end: 14, sentence: n }], law));
+    eq('a strike scoped to the first sentence marks that one',
+       at(1), '[del:The Secretary] may act. The Secretary shall report. The Secretary may waive.');
+    eq('  the second, the second',
+       at(2), 'The Secretary may act. [del:The Secretary] shall report. The Secretary may waive.');
+    eq('  and "the last sentence" the last',
+       at(-1), 'The Secretary may act. The Secretary shall report. [del:The Secretary] may waive.');
+    // A sentence the passage does not have draws nothing — the same refusal
+    // `atEnd` makes when the passage does not end where the bill says it does.
+    eq('  while a sentence the passage has not draws nothing', at(9), law);
+    // …and without an ordinal the first occurrence still wins, so this cannot
+    // have narrowed the ordinary case.
+    eq('  and an unscoped strike still takes the first',
+       show(seg([{ type: 'strike', text: 'The Secretary', start: 1, end: 14 }], law)),
+       '[del:The Secretary] may act. The Secretary shall report. The Secretary may waive.');
+    // The splitter must not cut a citation in half. Statutory prose is full of
+    // "42 U.S.C. 1758" and "Pub. L. 115-141", and an over-split names a shorter
+    // span than the drafter meant.
+    eq('an abbreviation does not end a sentence',
+       show(seg([{ type: 'strike', text: 'fee', start: 1, end: 4, sentence: 2 }],
+                'Under 42 U.S.C. 1758 the Secretary acts. The fee applies.')),
+       'Under 42 U.S.C. 1758 the Secretary acts. The [del:fee] applies.');
+  }
+
   // A HEADING is not the provision's text, and the Code stores the two apart —
   // so an operand aimed at a heading can only ever match in the BODY, and where
   // it does the mark is false. 112 across the corpus, e.g. "Manufacturer" struck

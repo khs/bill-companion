@@ -125,6 +125,50 @@ function occurrences(folded, needle) {
 }
 
 /**
+ * The spans of a passage's sentences, as [start, end) pairs over the original.
+ *
+ * A bill scopes an operation to a sentence — "in the first sentence, by striking
+ * ``2018''" — 326 times across the corpus, and until this existed the op kept
+ * whatever scope the walk reached and struck the first occurrence anywhere under
+ * it. 49 U.S.C. 31104(b)(2) is the shape of it: three instructions strike "The
+ * Secretary" in the third, second and first sentences to designate three new
+ * subparagraphs, and all three landed on the same words.
+ *
+ * A sentence ends at a full stop followed by whitespace and the start of another
+ * one. What makes that unsafe in statutory prose is the abbreviations, and they
+ * are a closed set here: a citation ("42 U.S.C. 1758", "Pub. L. 115-141", "et
+ * seq."), an initial, and the handful of forms the OLRC prints. Anything the
+ * list does not know is a sentence boundary, which is the direction that fails
+ * safely — an over-split names a shorter span than the drafter meant and the
+ * operand is simply not found there, where an under-split hands back a span
+ * containing a neighbour's words.
+ *
+ * A trailing quote or bracket belongs to the sentence it closes.
+ */
+const SENT_ABBREV =
+  /(?:^|[\s(“"'])(?:[A-Z]|U\.?S\.?C|Pub|L|Sec|Secs|No|Nos|Stat|Cong|Doc|Rept|art|para|subpara|cl|seq|etc|Inc|Corp|Co|Jr|Sr|St|Mr|Mrs|Ms|Dr|approx|Fed|Reg|Cir|Ct|ed|vol|pt|Ch|Div|Subch|Art)\.$/;
+export function sentenceSpans(text) {
+  const out = [];
+  const re = /[.!?](?:['"’”]|'')?(?=\s)/g;
+  let from = 0;
+  let m;
+  while ((m = re.exec(text))) {
+    const end = m.index + m[0].length;
+    // The next non-space has to look like the start of a sentence, or this is a
+    // decimal point, a numbered item, or a citation running on.
+    const rest = text.slice(end);
+    const nextAt = rest.search(/\S/);
+    if (nextAt < 0) break;
+    if (!/[A-Z(“"`‘]/.test(rest[nextAt])) continue;
+    if (SENT_ABBREV.test(text.slice(Math.max(0, m.index - 12), m.index + 1))) continue;
+    out.push([from, end]);
+    from = end + nextAt;
+  }
+  if (from < text.length && text.slice(from).trim()) out.push([from, text.length]);
+  return out;
+}
+
+/**
  * A redliner for one amendment, applied across the provision in document order.
  *
  * Stateful on purpose. A struck phrase is struck once, in the first node that
@@ -597,6 +641,27 @@ export function createRedline(ops, fullText, knownPaths) {
     };
     const inScope = (op) => scopeHit(op) !== null;
     const folded = fold(text);
+
+    /**
+     * The occurrences of an op's operand that lie in the sentence it names.
+     *
+     * An op with no `sentence` gets all of them, which is every op but 326. A
+     * sentence the passage does not have — because the amendment has already
+     * been made and the sentences renumbered, or because this is the wrong node
+     * — yields none, and the op then draws nothing and is reported. That is the
+     * same refusal `atEnd` makes when the passage does not end where the bill
+     * says it does.
+     */
+    const sentences = () => (sentenceCache ??= sentenceSpans(text));
+    let sentenceCache = null;
+    const inSentence = (op, hits) => {
+      if (op.sentence === undefined || !hits.length) return hits;
+      const spans = sentences();
+      if (!spans.length) return [];
+      const span = op.sentence === -1 ? spans[spans.length - 1] : spans[op.sentence - 1];
+      if (!span) return [];
+      return hits.filter((h) => h.start >= span[0] && h.end <= span[1]);
+    };
     const dels = [];
     const inss = [];
 
@@ -647,7 +712,7 @@ export function createRedline(ops, fullText, knownPaths) {
       if (op.caseOnly) continue;
       const hit = scopeHit(op);
       if (hit === null || !mayFire(op, hit)) continue;
-      const hits = occurrences(folded, op.text);
+      const hits = inSentence(op, occurrences(folded, op.text));
       if (!hits.length) continue;
       // "each place it appears" is the bill saying so outright. Otherwise one
       // occurrence is struck: "by striking ``and'' at the end" means the last
@@ -829,7 +894,7 @@ export function createRedline(ops, fullText, knownPaths) {
         continue;
       }
       if (op.anchor) {
-        const found = occurrences(folded, op.anchor)[0];
+        const found = inSentence(op, occurrences(folded, op.anchor))[0];
         if (found) {
           const at = op.relation === 'before' ? found.start : found.end;
           // The words already sit against the anchor the instruction names.

@@ -9,8 +9,9 @@ and is written for a user; this file is for changing it. Read both.
 
 ```bash
 python tools/serve.py                     # http://localhost:8000  (NOT file://)
-node tools/selftest.mjs                   # 645 checks, no dependencies
-node tools/rendertest.mjs                 # 405 checks, needs `npm i -D linkedom`
+node tools/selftest.mjs                   # 744 checks, no dependencies
+node tools/rendertest.mjs                 # 513 checks, needs `npm i -D linkedom`
+node tools/paneltest.mjs                  # 19,102 panel sentences vs the marks
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 node tools/coverage.mjs                   # not a test — what the redline actually draws
@@ -1899,7 +1900,7 @@ app/resolve/          cfr.js (live eCFR) · usc.js (local shards) ·
 app/ui/               render-bill.js · render-context.js · redline.js · style.css
 app/resolve/bundle.js one shard out of a bundle, by HTTP Range
 tools/                ingest_usc.py · ingest_plaw.mjs · bundle.mjs · make-library.mjs ·
-                      serve.py · selftest.mjs · rendertest.mjs ·
+                      serve.py · selftest.mjs · rendertest.mjs · paneltest.mjs ·
                       measure.mjs (shared metrics) · impact.mjs · corpus.mjs
 corpus/               corpus.json + baseline.json · files/ — all tracked
 data/usc/             tN.idx.json + tN.N.jsonl — 60,436 sections in 54 parts
@@ -5310,3 +5311,107 @@ LVXXXVI--FEDERAL MARITIME
    shows zero of each and one `was` mark over the whole 112-character sentence,
    with both op rows reading `✓ already in the law — marked above` — the case
    item 86 could not recognise and item 87 recorded as the reason.
+
+89. **A sentence is a provision too, and "in the first sentence" was going
+   unread.** (2026-08-11, from Keller: *"I don't think that this should be beyond
+   the model? It sounds like language people use."* He was right, and the claim
+   he was correcting was mine.)
+
+   ```
+   (2) in subsection (b)(2)--
+       (A) in the third sentence, by striking ``The Secretary'' and inserting
+           ``(C) In-kind contributions.--The Secretary'';
+       (B) in the second sentence, by striking ``The Secretary'' and inserting
+           ``(B) Limitation.--The Secretary'';
+       (C) in the first sentence-- … by striking ``The Secretary'' and inserting
+           ``(A) Reimbursement percentage.--…''
+   ```
+
+   Three strikes of the same phrase in one subsection, distinguished only by
+   which sentence they sit in. Nothing read the phrase, so all three kept the
+   scope the walk reached — `(b)(2)` — and each took the first occurrence under
+   it. **550 phrases across the corpus, 326 operations scoped by one, on 23
+   bills.**
+
+   I had recorded this as "beyond the model" and cited item 83 for it. That was
+   wrong twice over: item 83 declined *comma-separated unit* navigation ("in
+   subsection (l), in paragraph (3)"), not sentences, and a sentence is an
+   ordinary span of the passage the redline already holds.
+
+   `markSentenceOps()` reads the ordinal in the same three directions
+   `markHeadingOps()` reads a heading phrase — before the verb, after the operand
+   ("by striking ``X'' in the last sentence and inserting …", which the pairing
+   cannot reach because a gap holding that phrase is not one `RE_REPLACES`
+   admits), and along `replaces` for the half of a pair behind neither.
+   `sentenceSpans()` in `redline.js` cuts the passage.
+
+   **The abbreviations are the whole difficulty, and they are a closed set.**
+   Statutory prose is made of "42 U.S.C. 1758", "Pub. L. 115-141", "et seq.",
+   and an over-split names a shorter span than the drafter meant. A period
+   counts as a boundary only where the next non-space starts a sentence and the
+   token before it is not one of the forms the OLRC prints. Over-splitting fails
+   safely — the operand is simply not found in the span — where under-splitting
+   hands back a span holding a neighbour's words.
+
+   Validated against the shipped shards rather than by eye, over the 194
+   sentence-scoped strikes whose target resolves: **128 operands are absent
+   altogether** (the amendment is in force), 20 have no node at the scope, **24
+   sit in the sentence the bill names** and 22 sit in a different one. Of those
+   22, **17 are in a node with ONE sentence** — the Code has since split that
+   provision into subparagraphs, which is precisely what these amendments did, so
+   the sentence numbering they used no longer exists. The remaining 5 were read
+   against the shards and the split is right in each: 15 U.S.C. 78u(d)(3)(B)(i)
+   really does say "The amount of a civil penalty … shall be determined by the
+   court" first and "the amount of the penalty shall not exceed" second.
+
+   Marks: **32 withdrawn, 4 added, 0 extended.** Every withdrawal is a mark that
+   was in the wrong sentence; 12 U.S.C. 2251's "Such advances", "The powers" and
+   "The plans" were each struck in (c)(1) for instructions naming the second,
+   third and fourth sentences of a subsection the Code no longer divides that
+   way.
+
+   Corpus unchanged — a scope is not a span. selftest 739 → 744, rendertest
+   507 → 513, proptest clean.
+
+90. **The panel says one thing and the provision shows another, and nothing had
+   ever compared them.** (2026-08-11.) Every instrument here samples MARKS or
+   CITATIONS. `tools/paneltest.mjs` samples the SENTENCES — for all 19,102
+   operation rows the corpus produces, it renders the real panel through
+   `render-context.js` in linkedom, reads each status sentence back out of the
+   DOM, and checks it against the marks that same render put on the provision.
+
+   That population was structurally invisible before. `coverage.mjs` decides an
+   op's bucket with `here(placed, o)`, which is the same call the panel's `shown`
+   makes — so the report and the panel agree by construction, and this file
+   already says twice that the report "could not have detected its own bug". The
+   invariant behind it is the one that has broken five times: every "dealt with
+   but deliberately not drawn" flag has to be named in BOTH the decliner and
+   `placed()`, and each of those breaks was a sentence contradicting a mark.
+
+   **294 distinct sentences. 0 contradictions.** Which is the answer only after
+   four rounds in which the INSTRUMENT was wrong and the app was not — worth
+   recording, because each is a way to write this kind of test badly:
+
+   - `segments()` does not attach the op to a mark, so the first version's
+     "which op drew this?" set was always empty and every "✓ shown above" read as
+     a lie. Matched on folded TEXT instead.
+   - Containment in both directions let a one-word mark belonging to another op
+     vouch for any long operand: 1,196 false contradictions. Equality, except
+     that a claim of "drawn" may also be satisfied by a mark CONTAINING the
+     operand — a strike enacted through its paired insert has no mark of its own.
+   - **A redline is stateful and single-use.** Walking it and then letting
+     `renderContext()` walk it again reported 612 additions as "the provision it
+     follows is not shown", because `additionsAt()` had already handed them out.
+     One render, every fact read out of it — which also makes this a test of the
+     pane rather than of a reconstruction of it.
+   - Counted per op, two operations that enact the same phrase at the same offset
+     read as one lie: `segments()` keeps one mark by design, so a strikethrough
+     is never drawn through the middle of a `was` mark. Counted per SCOPE, the
+     question survives the collapse.
+
+   It is a test, not a report: it exits non-zero, and `--list` prints every
+   sentence the corpus produces with counts, which is the fastest way to see what
+   the app actually says to a reader.
+
+   **And it earned itself on the first run**, before any of that: 49 U.S.C.
+   31104 promised two marks for one, which is what turned up item 89.

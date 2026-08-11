@@ -1705,6 +1705,37 @@ section('operand placement');
   const atEnd = p('Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking ``and\'\' at the end.\n');
   ok('"at the end" marks the strike', atEnd.find((o) => o.type === 'strike').atEnd === true);
 
+  // "in the first sentence, by striking ``2018''" — a bill scopes an operation
+  // to a SENTENCE as readily as to a paragraph. 550 phrases across the corpus
+  // and 326 operations scoped by one; without it the op keeps whatever scope the
+  // walk reached and the strike takes the first occurrence anywhere under it.
+  {
+    const sent = (phrase) =>
+      p(`Section 2 of the Widget Act (15 U.S.C. 2601) is amended ${phrase}
+`)
+        .filter((o) => o.type === 'strike' || o.type === 'insert');
+    const nth = (ops) => ops.map((o) => o.sentence);
+    eq('a sentence-scoped strike carries the ordinal',
+       JSON.stringify(nth(sent("in the first sentence by striking ``fee''."))), JSON.stringify([1]));
+    eq('  and the pairing carries it to the replacement',
+       JSON.stringify(nth(sent("in the third sentence, by striking ``fee'' and inserting ``charge''."))),
+       JSON.stringify([3, 3]));
+    // Written AFTER the operand, which the pairing cannot reach: a gap holding
+    // "in the last sentence" is not one RE_REPLACES admits.
+    eq('  and reads it written after the operand',
+       JSON.stringify(nth(sent("by striking ``fee'' in the last sentence and inserting ``charge''."))),
+       JSON.stringify([-1, -1]));
+    // The negative that keeps it narrow: a sub-instruction past the semicolon is
+    // a different operation and must not inherit the ordinal.
+    const two = sent(
+      "in the first sentence, by striking ``fee''; and by striking ``levy''."
+    );
+    eq('  while an operation past the semicolon is untouched',
+       JSON.stringify(nth(two)), JSON.stringify([1, undefined]));
+    eq('  and a plain amendment carries none',
+       JSON.stringify(nth(sent("by striking ``fee''."))), JSON.stringify([undefined]));
+  }
+
   // A HEADING is not the provision's text. The Code stores the two apart, so an
   // operand aimed at a heading can only ever match in the body — 501 ops across
   // the corpus sit behind one of these phrases and 112 drew a mark there.
