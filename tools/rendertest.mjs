@@ -1872,7 +1872,7 @@ section('additions at the end');
     ok('  not that the provision is off screen, which would blame the pane',
        !/which is not shown here/.test(ntxt), ntxt.slice(0, 300));
     ok('  and it is not reported as marked above',
-       !/marked above/.test(ntxt) && !/already in force/.test(ntxt), ntxt.slice(0, 300));
+       !/marked above/.test(ntxt) && !/already in the law/.test(ntxt), ntxt.slice(0, 300));
 
     // The control: without the flag the same block marks the node, which is the
     // behaviour this refusal exists to remove.
@@ -2032,7 +2032,18 @@ section('additions at the end');
     eq('  the provision it created is marked in the law', wasAdded.length, 1);
     ok('  and it is the right one',
        /for fiscal year 2024/.test(wasAdded[0].textContent), wasAdded[0].textContent.slice(0, 60));
-    ok('  labelled as this bill\'s work', /already in force/i.test(wasAdded[0].getAttribute('title') || ''),
+    // Labelled with what is KNOWN, and not with why. "Added by this bill" is an
+    // attribution the evidence does not carry: all `inLaw` says is that the law
+    // contains the language. On a seeded sample of 14 introduced and reported
+    // bills every one of the 13 marks named a bill that never passed — 40 U.S.C.
+    // 15301(a)(5) is in the Code and S. 3891 of the 118th is not what put it
+    // there. Both halves asserted, because the positive alone would pass against
+    // any wording at all.
+    ok('  labelled with what the law contains',
+       /already in the law/i.test(wasAdded[0].getAttribute('title') || ''),
+       wasAdded[0].getAttribute('title'));
+    ok('    and not with a claim about which bill put it there',
+       !/by this bill/i.test(wasAdded[0].getAttribute('title') || ''),
        wasAdded[0].getAttribute('title'));
 
     // And the panel says so, positively, in both rows.

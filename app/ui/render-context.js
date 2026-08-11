@@ -534,7 +534,7 @@ function provision(res, scope) {
     c.className = 'card warn';
     const h = document.createElement('h4');
     h.textContent = wholeRewrite.inLaw
-      ? 'Rewritten by this bill — already in force'
+      ? 'Already reads this way — this is the rewrite the bill makes'
       : 'This bill rewrites this section in full';
     c.appendChild(h);
     const p = document.createElement('p');
@@ -656,13 +656,26 @@ function nodeEl(node, focusPath, red) {
     hd.textContent = node.heading;
     body.appendChild(hd);
   }
-  // A provision this bill added, already in force. There is nothing to draw
-  // into it — the law reads this way *because* of the bill — but leaving it
-  // unmarked is why an enacted bill looked like it did nothing: the reader sees
-  // the provision and has no way to tell it apart from law that predates it.
+  // A provision this bill adds that the law already contains. There is nothing
+  // to draw into it — drawing it would show the provision twice, once coloured
+  // as new — but leaving it unmarked is why an enacted bill looked like it did
+  // nothing: the reader sees the provision and has no way to tell it apart from
+  // law that predates it.
+  //
+  // The label says what is KNOWN and stops short of WHY. "Added by this bill"
+  // is an attribution, and nothing here establishes it: the evidence is only
+  // that the law contains the language. On an enacted bill the inference is
+  // usually sound; on a pending one it is false by construction, and nothing
+  // here can tell the two apart. Measured on a seeded sample of 14 introduced
+  // and reported bills — 13 marks, every one attributing a provision to a bill
+  // that never passed. 40 U.S.C. 15301(a)(5), "The Mid-Atlantic Regional
+  // Commission", is in the Code and S. 3891 of the 118th Congress is not the
+  // law that put it there. The comment fifteen lines below already refuses to
+  // colour a whole-provision rewrite for exactly this reason; this is the same
+  // refusal, one claim smaller.
   if (red && red.appliedNodePaths && red.appliedNodePaths().has(node.path)) {
     el.classList.add('was-added');
-    el.title = 'Added by this bill — already in force';
+    el.title = 'Already in the law — this is the language the bill adds here';
   }
   // …and a provision this bill rewrites from end to end. Deliberately a mark and
   // not a diff: for a pending bill the text below is what the provision says
@@ -677,7 +690,7 @@ function nodeEl(node, focusPath, red) {
     el.classList.add('replaced');
     if (rep.inLaw) el.classList.add('in-force');
     el.title = rep.inLaw
-      ? 'Rewritten by this bill — already in force'
+      ? 'Already reads this way — this is the rewrite the bill makes'
       : 'This bill rewrites this provision in full';
   }
   appendMarked(body, node.text, red, node.path);
@@ -750,7 +763,7 @@ function appendMarked(parent, text, red, path) {
       seg.type === 'ins'
         ? 'Language this bill inserts'
         : seg.type === 'was'
-        ? 'Added by this bill — already in force'
+        ? 'Already in the law — this is the language the bill adds here'
         : 'Language this bill strikes';
     s.textContent = seg.text;
     parent.appendChild(s);
@@ -938,7 +951,7 @@ function effect(eff, handlers) {
         ? eff.redline.enactedInserts().some((p) => p.start === op.start)
         : false;
       f.textContent = enacted
-        ? '✓ already in force — marked above'
+        ? '✓ already in the law — marked above'
         : op.type === 'strike'
         ? '✓ struck above'
         : op.type === 'replace'
@@ -949,7 +962,7 @@ function effect(eff, handlers) {
         // what the reader is looking at: the provision as it stands, or the
         // provision as this bill made it.
         ? (op.inLaw
-            ? '✓ already in force — the provision above is the rewrite'
+            ? '✓ the provision above already reads as the rewrite'
             : '✓ the provision is marked above')
         : '✓ shown above';
       row.appendChild(f);
