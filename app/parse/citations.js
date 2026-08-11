@@ -833,18 +833,23 @@ function scopeAdditions(ops) {
  */
 function scopeStatedUnits(ops) {
   for (const op of ops) {
-    if (op.type !== 'strike') continue;
+    if (op.type !== 'strike' && op.type !== 'insert') continue;
     if (!op.statedPath || UNIT_DEPTH[op.statedUnit] === undefined) continue;
     const scope = String(op.scope || '');
-    const composed =
-      pathLevels(scope)
-        .filter((l) => l.depth < UNIT_DEPTH[op.statedUnit])
-        .map((l) => l.marker)
-        .join('') + op.statedPath;
-    if (composed === scope) continue;
+    const above = pathLevels(scope)
+      .filter((l) => l.depth < UNIT_DEPTH[op.statedUnit])
+      .map((l) => l.marker)
+      .join('');
+    const composed = above + op.statedPath;
+    if (composed === scope && !op.statedAlso) continue;
     op.scopeFallback = scope;
     op.scopeFromPhrase = true;
     op.scope = composed;
+    // "in subsections (a)(1) and (b)" names both, and an operation belongs to
+    // every member — item 82's rule, reached from the phrase instead of from a
+    // navigation step. `scope` stays the first, because reScope() and every
+    // panel message read it as a string.
+    if (op.statedAlso) op.scopes = op.statedAlso.map((p) => above + p);
   }
 }
 
@@ -1143,22 +1148,34 @@ const RE_HEADING_AFTER = new RegExp(
   'i'
 );
 
+// …and the same thing with the heading as the SUBJECT of the sentence: "The
+// heading of section 1031 is amended by striking ``property'' and inserting
+// ``real property''". Neither pattern above reads it — one wants "in|amending
+// the heading" in front of the verb and the other wants the phrase behind the
+// operand — so 22 operations were treated as amendments to the text.
+//
+// The subject is bounded and may not cross a sentence, the same guard the other
+// two carry, so "…is amended. Paragraph (2) is amended by striking" is not read
+// as a heading instruction.
+const RE_HEADING_SUBJECT =
+  /\bheadings?\s+(?:of|for)\s+[^;.]{0,90}?\b(?:is|are)\s+(?:further\s+|so\s+)?amended\b[^;.]{0,60}$/i;
+
 /**
  * Flag every operation an instruction aims at a provision's HEADING.
  *
  * Read in three directions, because the phrase sits in three places. Before the
- * verb ("in the heading, by striking ``X''"), after the operand ("by striking
- * ``X'' in the heading and inserting ``Y''"), and — for the half of a pair that
- * is behind neither — along the `replaces` link, which is why this runs after
- * placeOps().
+ * verb ("in the heading, by striking ``X''" and "The heading of section N is
+ * amended by striking ``X''"), after the operand ("by striking ``X'' in the
+ * heading and inserting ``Y''"), and — for the half of a pair that is behind
+ * neither — along the `replaces` link, which is why this runs after placeOps().
  */
 function markHeadingOps(text, ops) {
   const flagged = new Set();
   for (const op of ops) {
     if (op.start == null || (op.type !== 'strike' && op.type !== 'insert')) continue;
-    const back = text.slice(Math.max(0, op.start - 200), op.start).replace(/\s+/g, ' ');
+    const back = text.slice(Math.max(0, op.start - 220), op.start).replace(/\s+/g, ' ');
     const fwd = text.slice(op.end, op.end + 200).replace(/\s+/g, ' ');
-    if (RE_HEADING_OP.test(back) || RE_HEADING_AFTER.test(fwd)) {
+    if (RE_HEADING_OP.test(back) || RE_HEADING_SUBJECT.test(back) || RE_HEADING_AFTER.test(fwd)) {
       op.headingOnly = true;
       flagged.add(op.start);
     }
@@ -1407,6 +1424,121 @@ function looseHeadEnd(text, from, limit) {
     RE_LOOSE_HEAD.lastIndex = at + 1;
   }
   return limit;
+}
+
+// "by inserting ``, fire,'' after ``disaster'' each place it appears in
+// subsections (a)(1) and (b)" — the position stated AFTER the operand.
+//
+// The same fact `at the end of paragraph (N)` states (item 68), written as an
+// ordinary prepositional phrase, and nothing was reading it: the op kept
+// whatever scope the walk reached and searched the whole provision. In
+// 26 U.S.C. 7508A the insert landed in the chapeau of (a), where the words
+// after "disaster" are "(as defined in section 165(i)(5)(A))" and not the
+// comma the bill is talking about. **133 operations across the corpus, and not
+// one of them agrees with the scope it carries.**
+//
+// Three exclusions in the gap, each of which was measured rather than reasoned
+// about. Widening any of them is how this becomes a wrong answer:
+//
+//   , and (             the next SUB-INSTRUCTION. "…``6 percent'', and (ii) in
+//                       clause (ii)" — 178 of 392 candidates under a gap that
+//                       merely forbade `;` and `.`, which is item 55's theft
+//                       and item 88's comma guard arriving a third time.
+//   `` ‘‘ " “          the next OPERAND. "…and inserting ``described in
+//                       subparagraphs (A) through (G) of section 6503(c)(1)''"
+//                       states a scope inside the language being inserted.
+//   of section …        somebody else's address, so the markers are theirs.
+//   all that follows     the far END of a RUN, not the place it applies.
+//                        "in subparagraph (B) by striking ``shortage; and'' and
+//                        all that follows through ``Secretary of'' in
+//                        subparagraph (C)" starts in (B) and stops in (C), and
+//                        reading past the run phrase moves the op to the wrong
+//                        one. A run written the other way — "by striking
+//                        ``Senate.'' in subsection (b) and all that follows
+//                        through …" — states its START right after the operand
+//                        and is kept, which is why this tempers the gap rather
+//                        than refusing a run outright.
+//
+// Only the op the phrase sits directly behind is read; the other half of a pair
+// gets it through `replaces`, exactly as markHeadingOps() does, which is what
+// covers both writing orders ("striking ``X'' in subsection (b) and inserting
+// ``Y''" and "striking ``X'' and inserting ``Y'' in subsection (b)").
+const RE_TAIL_SCOPE = new RegExp(
+  `^(?:${QC})?((?:(?!\\ball\\s+that\\s+follows\\b|\\bthrough\\b)[^;.,(]){0,60}?)\\bin\\s+` +
+    '(subsections?|paragraphs?|subparagraphs?|clauses?|subclauses?|items?|subitems?)\\s+' +
+    '(\\([A-Za-z0-9]{1,8}\\)(?:\\([A-Za-z0-9]{1,8}\\))*' +
+    '(?:\\s*(?:,\\s*(?:and|or)?|and|or|through)\\s*' +
+    '\\([A-Za-z0-9]{1,8}\\)(?:\\([A-Za-z0-9]{1,8}\\))*)*)' +
+    '(?!\\s*(?:of|in)\\s+(?:such\\s+|that\\s+|this\\s+)?' +
+    '(?:section|title|chapter|subchapter|part|the\\b))',
+  'i'
+);
+
+/** Every quotation opened in this run of text is also closed in it. */
+function balancedQuotes(s) {
+  const n = (re) => (s.match(re) || []).length;
+  return (
+    n(/``/g) === n(/''/g) &&
+    n(/‘‘/g) === n(/’’/g) &&
+    n(/“/g) === n(/”/g) &&
+    n(/"/g) % 2 === 0
+  );
+}
+
+/**
+ * Read a scope stated after the operand onto the op, for scopeStatedUnits().
+ *
+ * Runs after placeOps() so `replaces` is in hand, and leaves alone any op that
+ * already states a unit — "at the end of paragraph (2)" is the same field read
+ * by the same composer, and the phrase nearest the verb is the one that means
+ * this operation.
+ */
+function markTailScopes(text, ops) {
+  const stated = new Map();
+  for (const op of ops) {
+    if (op.start == null || (op.type !== 'strike' && op.type !== 'insert')) continue;
+    if (op.statedPath || op.headingOnly) continue;
+    const fwd = text.slice(op.end, op.end + 220).replace(/\s+/g, ' ');
+    const m = RE_TAIL_SCOPE.exec(fwd);
+    if (!m) continue;
+    // The gap may cross a CLOSED quotation — "after ``disaster'' each place it
+    // appears in subsections (a)(1) and (b)" states the anchor and then the
+    // scope, all of it the instruction's own prose — but it may not END inside
+    // one, or the scope is being read out of the next operand: "and inserting
+    // ``described in subparagraphs (A) through (G) of section 6503(c)(1)''"
+    // names a provision in the language being inserted, not the place to put it.
+    if (!balancedQuotes(m[1])) continue;
+    const unit = m[2].replace(/s$/, '').toLowerCase();
+    // Item 55's two guards, because a list that runs to the end of the phrase
+    // may have absorbed the NEXT sub-instruction's marker. Siblings share a
+    // numbering style — "(B), and (ii) by adding at the end" is refused by
+    // sameStyle — and where the styles agree, what FOLLOWS separates them:
+    // "…in item (B), and (II) by striking ``(D)…" reads (B) and (II) as one
+    // uppercase-letter list, and only the verb behind (II) says otherwise.
+    const all = sameStyle(m[3].match(/\((?:[A-Za-z0-9]{1,8})\)(?:\([A-Za-z0-9]{1,8}\))*/g) || []);
+    if (all.length > 1 && /^\s*by\s+(?:strik|insert|redesignat|add|amend)/i.test(fwd.slice(m[0].length))) {
+      all.pop();
+    }
+    if (!all.length) continue;
+    op.statedUnit = unit;
+    op.statedPath = all[0];
+    if (all.length > 1) op.statedAlso = all;
+    stated.set(op.start, op);
+  }
+  if (!stated.size) return;
+  // The other half of a pair. A phrase written behind the insert governs the
+  // strike it replaces and the other way round; neither can see the other's.
+  for (const op of ops) {
+    if (op.replaces == null) continue;
+    const mine = stated.get(op.start);
+    const src = mine || stated.get(op.replaces);
+    if (!src) continue;
+    const dst = mine ? ops.find((o) => o.start === op.replaces) : op;
+    if (!dst || dst.statedPath || dst.headingOnly) continue;
+    dst.statedUnit = src.statedUnit;
+    dst.statedPath = src.statedPath;
+    if (src.statedAlso) dst.statedAlso = src.statedAlso;
+  }
 }
 
 // The connective between verb and operand varies a lot ("striking out",
@@ -4056,6 +4188,7 @@ export function extractAmendments(text, citations, divisions = [], sections = []
     dropRunawayOperands(ops);
     placeOps(text, ops);
     markHeadingOps(text, ops);
+    markTailScopes(text, ops);
     markSentenceOps(text, ops);
 
     RE_REDESIG.lastIndex = 0;

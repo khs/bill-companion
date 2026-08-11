@@ -1751,6 +1751,53 @@ section('operand placement');
   const atEnd = p('Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking ``and\'\' at the end.\n');
   ok('"at the end" marks the strike', atEnd.find((o) => o.type === 'strike').atEnd === true);
 
+  // "by striking ``fee'' in paragraph (3)" — the scope stated AFTER the
+  // operand. The same fact "at the end of paragraph (N)" states, written as an
+  // ordinary prepositional phrase; 134 operations across the corpus, and
+  // without it the op keeps the walk's scope and searches the whole provision.
+  {
+    const scoped = (phrase) =>
+      p(`Section 2 of the Widget Act (15 U.S.C. 2601) is amended ${phrase}\n`)
+        .filter((o) => o.type === 'strike' || o.type === 'insert')
+        .map((o) => `${o.type}:${o.scope ?? ''}`);
+    eq('a scope stated after the operand is read',
+       JSON.stringify(scoped("in subsection (c) by striking ``fee'' in paragraph (3).")),
+       JSON.stringify(['strike:(c)(3)']));
+    // …and reaches the other half of the pair, in both writing orders.
+    eq('  and travels to the operand it replaces',
+       JSON.stringify(scoped("by striking ``fee'' and inserting ``charge'' in paragraph (3).")),
+       JSON.stringify(['strike:(3)', 'insert:(3)']));
+    // Written the other way round the pairing cannot see across the phrase —
+    // a gap holding "in paragraph (3)" is not one RE_REPLACES admits, the same
+    // rule item 88 hit with "in the heading" — so `replaces` is null and the
+    // scope has nothing to travel along. The insert is undrawable either way:
+    // with no paired strike and no anchor it falls through both branches of
+    // apply(). Asserted as it is rather than as it should be.
+    eq('  written the other way round, the strike alone carries it',
+       JSON.stringify(scoped("by striking ``fee'' in paragraph (3) and inserting ``charge''.")),
+       JSON.stringify(['strike:(3)', 'insert:']));
+    // A list names every member. `scope` stays the first, because reScope() and
+    // every panel message read it as a string.
+    const list = p('Section 2 of the Widget Act (15 U.S.C. 2601) is amended by ' +
+      "striking ``fee'' each place it appears in paragraphs (1) and (4).\n")
+      .filter((o) => o.type === 'strike');
+    eq('  a list scopes to every member',
+       JSON.stringify([list[0].scope, list[0].scopes]), JSON.stringify(['(1)', ['(1)', '(4)']]));
+    // The three exclusions, each of which was a wrong answer before it was
+    // added: the next sub-instruction, the next operand, and somebody else's
+    // address. Each must leave the op on the scope the walk reached.
+    eq('  the next sub-instruction is not a scope',
+       JSON.stringify(scoped("in subsection (c) by striking ``fee'', and (2) in paragraph (3).")),
+       JSON.stringify(['strike:(c)']));
+    eq('  nor a scope named inside the next operand',
+       JSON.stringify(scoped("in subsection (c) by striking ``fee'' and inserting " +
+         "``the levy described in paragraph (3)''.")),
+       JSON.stringify(['strike:(c)', 'insert:(c)']));
+    eq('  nor one belonging to another section',
+       JSON.stringify(scoped("in subsection (c) by striking ``fee'' in paragraph (3) of section 9.")),
+       JSON.stringify(['strike:(c)']));
+  }
+
   // "in the first sentence, by striking ``2018''" — a bill scopes an operation
   // to a SENTENCE as readily as to a paragraph. 550 phrases across the corpus
   // and 326 operations scoped by one; without it the op keeps whatever scope the

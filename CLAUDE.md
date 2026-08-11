@@ -5555,3 +5555,105 @@ LVXXXVI--FEDERAL MARITIME
    is item 65's `\b`-in-a-heredoc gotcha in a new wrapper. **Write the script
    with the Write tool and run the file** — the environment notes already say
    this about `python -c`, and it is just as true of `node -e`.
+
+93. **A scope stated AFTER the operand, and the heading-subject phrase it was
+   blocking.** (2026-08-11, item 92's two open items, shipped together because
+   the second is unsafe without the first.)
+
+   ```
+   by inserting ``, fire,'' after ``disaster'' each place it appears in
+   subsections (a)(1) and (b)
+   by striking ``In the case of'' in paragraph (4) and inserting …
+   by inserting ``or in respect of any erroneous refund'' after ``any tax''
+   in subparagraph (J)
+   ```
+
+   The same fact `at the end of paragraph (N)` states (item 68), written as an
+   ordinary prepositional phrase. Nothing read it, so the op kept whatever scope
+   the walk reached and searched the whole provision: 26 U.S.C. 151(d) had "In
+   the case of" struck in paragraph (2) for an instruction naming (4), and
+   26 U.S.C. 7508(a)(1)'s erroneous-refund language was drawn as a pending green
+   insert in subparagraph (D) when the bill names (J) and (J) already reads that
+   way. **139 op scopes across 13 bills** — 91 deeper than the walk, 44 where
+   the op had no scope at all, 4 naming a sibling, 22 carrying a list.
+
+   `markTailScopes()` sets `statedUnit`/`statedPath`, which `scopeStatedUnits()`
+   already knows how to compose and already guards with `scopeFallback` for a
+   path the Code does not have. What is new is the gap, and **every exclusion in
+   it was measured rather than reasoned about** — each was a wrong answer first:
+
+   - **`, and (`** — the next SUB-INSTRUCTION. "…``6 percent'', and (ii) in
+     clause (ii)" was 178 of 392 candidates under a gap that merely forbade `;`
+     and `.`. Item 55's theft and item 88's comma guard, arriving a third time.
+   - **A quotation that is opened and not closed** — the next OPERAND. "…and
+     inserting ``described in subparagraphs (A) through (G) of section
+     6503(c)(1)''" states a scope inside the language being inserted. The gap
+     may CROSS a closed quotation, because "after ``disaster'' each place it
+     appears in subsections (a)(1) and (b)" is the instruction's own prose and
+     that is the commonest shape there is — so the test is `balancedQuotes()`
+     and not a ban on quote characters. Banning them outright cost 15 real
+     scopes including the 7508 one.
+   - **`all that follows` / `through`** — the far END of a RUN. "in subparagraph
+     (B) by striking ``shortage; and'' and all that follows through ``Secretary
+     of'' in subparagraph (C)" starts in (B) and stops in (C); reading past the
+     run phrase moved the op to the wrong one. A run written the other way
+     states its START right after the operand ("by striking ``Senate.'' in
+     subsection (b) and all that follows through …") and is kept — which is why
+     this tempers the gap rather than refusing a run outright. 1 of the 5
+     sibling re-scopes was this, and it is the only one of the 6 originally
+     found that was wrong.
+   - **`of section …`** — somebody else's address, so the markers are theirs.
+
+   And item 55's two list guards, because a list running to the end of the
+   phrase may have absorbed the next sub-instruction's marker. `sameStyle()`
+   refuses "(B), and (ii) by adding at the end"; where the styles AGREE it
+   cannot help — "…in item (B), and (II) by striking ``(D)…" reads (B) and (II)
+   as one uppercase-letter list — so what FOLLOWS separates them, exactly as
+   `stealsMarker()` does.
+
+   All four surviving sibling re-scopes were read against the bill and all four
+   are right; three of them replace a scope that had leaked from an earlier
+   instruction ("Section 2366c … is transferred …, redesignated as section 4253,
+   and amended by striking ``section 2334(a)(6)'' in subsection (a)(2)" was
+   scoped to (g)(5)).
+
+   **The heading as the SUBJECT of the sentence** goes in on top: "The heading
+   of section 1031 is amended by striking ``property'' and inserting ``real
+   property''", which `markHeadingOps()` could not read in either of its two
+   directions. 22 operations. Item 92 recorded this as measured-and-not-built
+   because shipping it alone traded a right mark for a wrong one on
+   26 U.S.C. 7508A — flagging an op takes it out of `work`, `stale` is computed
+   over `work`, and the (accidental) evidence that the amendment had happened
+   went with it, leaving an unscoped ", fire," insert to draw green in the
+   chapeau of (a). With the tail scope in, that op is scoped where the bill says
+   and the trade is gone. **Two changes that are each safe only with the other
+   is a shape worth naming**: measure the interaction, do not ship the half that
+   reads better in isolation.
+
+   Marks 2,884 -> 2,881, **9 withdrawn and 6 added**, every one read:
+   **all 9 withdrawals are outside the provision the bill names and all 6
+   additions are inside it.** Two are a straight upgrade in kind as well as
+   position — 26 U.S.C. 7508(a)(1) goes from a green pending insert in (D) to
+   "already in the law" in (J). The 3 with no replacement are provisions the
+   amendment has already been made to, so the right answer is a blank: 26 U.S.C.
+   87's "and" was struck in paragraph (2) for an instruction naming (1), and
+   this bill is what removed (1)'s "and".
+
+   Corpus does not move at all — a scope is invisible to `opSpans`, which keys
+   on `type:start-end`, which is exactly why this needed a mark-level diff.
+   Coverage: shown to the reader 2,996 -> 2,994, `no such level at all`
+   unchanged at 190. selftest 748 -> 755, rendertest 513, proptest clean,
+   paneltest clean at 292 sentences.
+
+   Rendered per item 60: 26 U.S.C. 151(d) draws the strike inside "(4) Inflation
+   adjustment.--Except as provided in paragraph (5), in the case of …" against
+   paragraph (2) before.
+
+   **Left open, and it is small.** Written as "by striking ``fee'' in paragraph
+   (3) and inserting ``charge''", the pairing cannot see across the phrase — a
+   gap holding "in paragraph (3)" is not one `RE_REPLACES` admits, the same rule
+   item 88 hit with "in the heading" — so `replaces` is null and the scope has
+   nothing to travel along. The insert is undrawable either way (no paired
+   strike, no anchor), so this costs a panel message and not a mark. Widening
+   `RE_REPLACES` changes pairing, which moves the redline, and wants its own
+   measured pass. Asserted as it is rather than as it should be.
