@@ -4787,3 +4787,54 @@ LVXXXVI--FEDERAL MARITIME
    et seq.` tag it did not have before.
 
    selftest 713, rendertest 478, proptest clean.
+
+81. **"Each place it appears" now crosses a node, and it was entangled with
+   nothing.** (2026-08-10, L3 of item 65.) The pane draws a provision one node
+   at a time — `nodeEl()` calls `apply()` once per node over a shared op list —
+   and the strike loop latched `op.done` after the first passage. So the one
+   phrase a bill uses to say "everywhere" could only ever widen WITHIN a node:
+
+   ```
+   Section 461(l)(1) is amended by striking ``January 1, 2027'' each place it
+   appears and inserting ``January 1, 2029''.
+     -> 26 U.S.C. 461(l)(1)(A) marked, (B) not, both reading "before January 1, 2027"
+   ```
+
+   **12 strikes corpus-wide, 41 unmarked passages**, the worst being 7 U.S.C.
+   136w-8, whose operand sits in ten nodes.
+
+   **The paired insert has to repeat with it**, and that is the half worth
+   knowing: un-latching only the strike leaves a later node with a
+   strikethrough and no replacement beside it, which is a worse rendering than
+   the bug. `done` is still set either way, because `placed()` reads it — the
+   guard is `op.done && !repeats(op)` rather than dropping the flag.
+
+   **Nothing else repeats, and both negatives are asserted.** `atEnd` stays
+   latched, because a provision has one end; a plain strike means one
+   occurrence, which is the whole reason `all` has to be written down at all.
+
+   Audited by where every mark LANDS across the corpus: **2,987 -> 3,071, 84
+   added and 0 withdrawn.** One hazard was checked rather than assumed — a
+   later node reaching the positional evidence for "already in force" while an
+   earlier one had drawn a pending change would have the same op contradicting
+   itself on one screen. 0 ops draw both kinds, before or after. The two ops
+   that move from "drawn as a pending change" to "already in force" had all
+   their passages in later nodes.
+
+   **`coverage.mjs` barely moves and cannot see this**: 1307/1892 -> 1305/1894
+   with `shown to the reader` 3,199 both ways, because its counters are per OP
+   and an op drawn in two nodes is still one op. Same blindness as `opSpans`
+   keying on `type:start-end`, and the reason the mark-level diff is the
+   measurement rather than the report.
+
+   Corpus unchanged. selftest 713, rendertest 478 -> 483, proptest clean.
+   Rendered per item 60: 461(l)(1)(A) and (B) each carry the strike and its
+   replacement, where before only (A) did.
+
+   **The index called L3 entangled with L2's other half. It is not.** L2's
+   remainder is an operation scoped to a SET of provisions — "in subsections
+   (a) through (i), by striking ``X''" names nine and marks one — and that
+   really does want `inScope()` to take a set, with `reScope()`,
+   `scopeAdditions()` and every panel message reading `op.scope` as a string
+   today. L3 needed none of it: one scope, applied in every node under it.
+   Doing the cheap one first is what showed that.
