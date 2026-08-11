@@ -182,7 +182,16 @@ const ENACTED_MIN = 24;
 function reScope(ops, knownPaths) {
   const paths = [...knownPaths];
   const exists = (s) => paths.some((p) => String(p).startsWith(s));
-  return ops.map((o) => {
+  // A repaired scope drops its sibling list. `scopes` is the members the bill
+  // named as a list, and a first member the provision does not have means the
+  // list was read against a structure this provision does not share — so the
+  // other members are no more trustworthy than the one being repaired. The
+  // members that DO exist are simply left undrawn, which is where they were.
+  const fix = (o) => {
+    const r = repair(o);
+    return r === o || !o.scopes ? r : { ...r, scopes: undefined };
+  };
+  const repair = (o) => {
     const scope = String(o.scope || '');
     if (!scope || exists(scope)) return o;
     const marks = scope.match(/\([A-Za-z0-9]{1,8}\)/g) || [];
@@ -250,7 +259,45 @@ function reScope(ops, knownPaths) {
     // one-word operand lands in a sentence the instruction never mentions.
     if (o.scopeFromHead) return { ...o, scope: '', scopeWidened: scope };
     return { ...o, scopeLost: scope };
-  });
+  };
+  return ops.map(fix);
+}
+
+/**
+ * "(a) through (i)" names nine subsections and parses to two.
+ *
+ * A range is written as its ends, so `MARKER_LIST` gives the two and the
+ * provisions between are named only by implication — which is why the citation
+ * card refuses to chip them, and right, because nothing in the CITATION says
+ * what lies between. Here it is not an implication: the siblings are in the
+ * provision on screen. 10 U.S.C. 9063 has (a) through (i) and all nine contain
+ * "in the Air Force", which is what the NDAA struck each place it appears; two
+ * were marked.
+ *
+ * A test, never a guess. Both ends must be real paths in the tree, at the same
+ * depth, under the same parent, and in that order — anything else returns the
+ * op untouched. The order comes from `knownPaths`, which every caller builds by
+ * walking the tree, so its iteration order IS document order.
+ */
+function expandRange(op, knownPaths) {
+  if (!op.scopeRange || !op.scopes || op.scopes.length !== 2) return op;
+  const marks = (s) => String(s).match(/\([A-Za-z0-9]{1,8}\)/g) || [];
+  const [a, b] = op.scopes;
+  const ma = marks(a);
+  const mb = marks(b);
+  if (!ma.length || ma.length !== mb.length) return op;
+  const parent = ma.slice(0, -1).join('');
+  if (mb.slice(0, -1).join('') !== parent) return op;
+  const sibs = [...knownPaths]
+    .map(String)
+    .filter((p) => {
+      const m = marks(p);
+      return m.length === ma.length && m.slice(0, -1).join('') === parent;
+    });
+  const i = sibs.indexOf(a);
+  const j = sibs.indexOf(b);
+  if (i < 0 || j < 0 || j <= i) return op;
+  return { ...op, scopes: sibs.slice(i, j + 1) };
 }
 
 /**
@@ -333,7 +380,11 @@ export function createRedline(ops, fullText, knownPaths) {
   // Addresses are reconciled against the tree BEFORE anything is split or
   // measured, so `work`, `additions` and `stale` all reason about the same
   // scopes the renderer will ask with.
-  const scoped = knownPaths ? reScope(named, knownPaths) : named;
+  // Ranges last, so an op whose scope reScope() had to repair — which drops its
+  // sibling list along with it — is never expanded off a path it does not have.
+  const scoped = knownPaths
+    ? reScope(named, knownPaths).map((o) => expandRange(o, knownPaths))
+    : named;
 
   const work = scoped
     .filter((o) => (o.type === 'strike' || o.type === 'insert') && typeof o.text === 'string')
@@ -459,8 +510,21 @@ export function createRedline(ops, fullText, knownPaths) {
     // parent's own text and excludes the subparagraphs, so a strike scoped
     // there must not be allowed to land inside (A) — which is exactly the text
     // the instruction identifies itself by staying out of.
-    const inScope = (op) =>
-      !op.scope || (op.exact ? String(path) === op.scope : String(path).startsWith(op.scope));
+    //
+    // `scopes` is a navigation LIST: "in subsections (a) through (i), by
+    // striking ``in the Air Force''" names nine provisions and the op belongs
+    // to every one of them. Returns WHICH member this passage sits in — the
+    // longest, so a member nested inside another wins — because the latch below
+    // is per member rather than per op. Null where the op does not apply here.
+    const scopeHit = (op) => {
+      const p = String(path);
+      const test = (sc) => (op.exact ? p === sc : p.startsWith(sc));
+      if (!op.scopes) return !op.scope ? '' : test(op.scope) ? op.scope : null;
+      let best = null;
+      for (const sc of op.scopes) if (test(sc) && (best === null || sc.length > best.length)) best = sc;
+      return best;
+    };
+    const inScope = (op) => scopeHit(op) !== null;
     const folded = fold(text);
     const dels = [];
     const inss = [];
@@ -481,16 +545,35 @@ export function createRedline(ops, fullText, knownPaths) {
      * is a worse rendering than the bug. `done` is still set either way,
      * because `placed()` reads it.
      *
+     * A navigation LIST repeats too, and it repeats ONCE PER MEMBER rather
+     * than freely. "In subsections (a) through (i), by striking ``in the Air
+     * Force''" means one occurrence in each of nine subsections — a member's
+     * subtree is many nodes, and firing in all of them would strike nine
+     * provisions nine times over. `doneIn` records the members already
+     * satisfied, so the latch is per member and `all` is what lifts it inside
+     * one.
+     *
      * Nothing else repeats. `atEnd` stays latched deliberately — a provision
-     * has one end — and an ordinary strike means one occurrence, which is the
-     * whole reason `all` has to be written down.
+     * has one end — and an ordinary strike with a single scope means one
+     * occurrence, which is the whole reason `all` has to be written down.
      */
-    const repeats = (op) =>
-      Boolean(op.all) ||
-      (op.replaces != null && work.some((o) => o.start === op.replaces && o.all));
+    const pairedTo = (op) =>
+      op.replaces != null ? work.find((o) => o.start === op.replaces) : null;
+    const mayFire = (op, hit) => {
+      if (!op.done) return true;
+      const src = pairedTo(op) || op;
+      if (src.all) return true;
+      return Boolean(src.scopes) && !(op.doneIn && op.doneIn.has(hit));
+    };
+    const fired = (op, hit) => {
+      op.done = true;
+      if (hit) (op.doneIn || (op.doneIn = new Set())).add(hit);
+    };
 
     for (const op of work) {
-      if ((op.done && !op.all) || op.type !== 'strike' || !inScope(op)) continue;
+      if (op.type !== 'strike') continue;
+      const hit = scopeHit(op);
+      if (hit === null || !mayFire(op, hit)) continue;
       const hits = occurrences(folded, op.text);
       if (!hits.length) continue;
       // "each place it appears" is the bill saying so outright. Otherwise one
@@ -514,7 +597,7 @@ export function createRedline(ops, fullText, knownPaths) {
         chosen = [last];
       } else chosen = [hits[0]];
       for (const h of chosen) dels.push({ ...h, op });
-      op.done = true;
+      fired(op, hit);
       struckAt.set(op.start, chosen[chosen.length - 1]);
     }
 
@@ -526,23 +609,27 @@ export function createRedline(ops, fullText, knownPaths) {
      * occurrence chosen is the one the bill is talking about — statutory
      * language repeats, and the first match is regularly a different sentence.
      */
-    const enact = (op, near, known) => {
+    const enact = (op, near, known, member) => {
       const hits = known ? [known] : occurrences(folded, op.text);
       if (!hits.length) return false;
-      let hit = hits[0];
+      let pick = hits[0];
       if (near != null) {
         for (const h of hits) {
-          if (Math.abs(h.start - near) < Math.abs(hit.start - near)) hit = h;
+          if (Math.abs(h.start - near) < Math.abs(pick.start - near)) pick = h;
         }
-      } else if (op.atEnd) hit = hits[hits.length - 1];
-      dels.push({ ...hit, op, mark: 'was' });
-      op.done = true;
+      } else if (op.atEnd) pick = hits[hits.length - 1];
+      dels.push({ ...pick, op, mark: 'was' });
+      // A list-scoped op is latched per MEMBER, so the member has to travel
+      // here too — enacting in subsection (a) must not settle subsection (b).
+      fired(op, member);
       op.enacted = true;
       return true;
     };
 
     for (const op of work) {
-      if ((op.done && !repeats(op)) || op.type !== 'insert' || !inScope(op)) continue;
+      if (op.type !== 'insert') continue;
+      const hit = scopeHit(op);
+      if (hit === null || !mayFire(op, hit)) continue;
       // Placed structurally, by additionsAt(). Weaving it in here too would
       // draw the same new provision twice.
       if (op.placement === 'after-unit') continue;
@@ -584,12 +671,12 @@ export function createRedline(ops, fullText, knownPaths) {
             }
             const struck = work.find((o) => o.start === op.replaces);
             if (struck) struck.enacted = true;
-            enact(op, null, spans);
+            enact(op, null, spans, hit);
             continue;
           }
           if (!stale) {
             inss.push({ at: where.end, text: op.text, op });
-            op.done = true;
+            fired(op, hit);
           }
           continue;
         }
@@ -599,21 +686,21 @@ export function createRedline(ops, fullText, knownPaths) {
         // bill's work rather than withheld. The length floor is `alreadyIn`'s,
         // because there is no anchor here doing the positional work: staleness
         // is evidence about the amendment, not about this spot.
-        if (stale && String(op.text).trim().length >= ENACTED_MIN) enact(op, null);
+        if (stale && String(op.text).trim().length >= ENACTED_MIN) enact(op, null, undefined, hit);
         continue;
       }
       if (op.anchor) {
-        const hit = occurrences(folded, op.anchor)[0];
-        if (hit) {
-          const at = op.relation === 'before' ? hit.start : hit.end;
+        const found = occurrences(folded, op.anchor)[0];
+        if (found) {
+          const at = op.relation === 'before' ? found.start : found.end;
           // The words already sit against the anchor the instruction names.
           // That is positional proof and needs no length floor — it used to be
           // grounds for drawing nothing at all, which told the reader the
           // anchor could not be found when the truth was the opposite.
-          if (alreadyThere(text, at, op.text)) { enact(op, at); continue; }
+          if (alreadyThere(text, at, op.text)) { enact(op, at, undefined, hit); continue; }
           if (stale) continue;
           inss.push({ at, text: op.text, op });
-          op.done = true;
+          fired(op, hit);
         }
       }
     }

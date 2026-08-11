@@ -725,6 +725,16 @@ section('relative navigation inside amendments');
      (ams[0]?.steps || []).map((s) => s.path).join(' '), '(A)');
   eq('  and the rest are plain references',
      (ams[0]?.refs || []).map((s) => s.path).join(' '), '(B)');
+  // Their paths stay on the step, because the bill named all of them and an
+  // operation scoped to one of nine subsections marks one of nine. `scope`
+  // stays the first — every other consumer reads it as a string — and `scopes`
+  // carries the list for redline.js, which is the one that can use it.
+  eq('  and the step remembers the members it named',
+     ((ams[0]?.steps || [])[0] || {}).also?.join(' '), '(B)');
+  eq('  which reaches the operations as a list',
+     (ams[0]?.ops || []).map((o) => (o.scopes || [o.scope]).join('+')).join(' '), '(A)+(B)');
+  eq('    with scope still the first member, for every other consumer',
+     (ams[0]?.ops || []).map((o) => o.scope).join(' '), '(A)');
 }
 {
   // The user's case: clause references that are operands or positions, not

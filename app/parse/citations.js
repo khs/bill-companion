@@ -628,6 +628,19 @@ function scopeOps(ops, steps, base = '') {
     }
     if (inForce) {
       op.scope = inForce.path;
+      // A navigation LIST names every member — "in subsections (a) through (i),
+      // by striking ``X'' each place it appears" is nine subsections, and
+      // scoping to one marks one. `scope` stays the first member, because every
+      // other consumer (reScope, scopeAdditions, the panel's messages) reads it
+      // as a string and the first is the member the cursor is left on; `scopes`
+      // carries the whole list for the one consumer that can use it.
+      if (inForce.also) op.scopes = [inForce.path, ...inForce.also];
+      // "(a) through (i)" parses to its two ENDS — a range names what lies
+      // between only by implication, which is why the citation card says so
+      // rather than chipping nine. The provision tree does not have to guess:
+      // the siblings are on disk. Flagged here and expanded in redline.js,
+      // which is the only place that knows what the provision contains.
+      if (inForce.also && inForce.range) op.scopeRange = inForce.range;
       // "in the matter preceding (A)" scopes to the parent but excludes its
       // children; every other step includes them.
       if (inForce.exact) op.exact = true;
@@ -1956,7 +1969,25 @@ function extractSteps(text, from, to, basePath) {
       // The later members are still addresses worth a chip, so they move to
       // `refs` rather than being dropped — the same thing a bare reference is,
       // which is what they are once they are not steering the walk.
-      if (steps.length > before + 1) refs.push(...steps.splice(before + 1));
+      //
+      // Their PATHS stay on the first step. Scoping to the first member is
+      // right — it is the one the cursor is left on and the one every other
+      // consumer assumes — but the bill named all of them, and an operation
+      // scoped to one of nine subsections marks one of nine. See `scopes`.
+      if (steps.length > before + 1) {
+        const rest = steps.splice(before + 1);
+        const first = steps[before];
+        if (first) {
+          // Same section only: a member the walk reached in another section of
+          // the Act is not a sibling of this one, and an op cannot be drawn
+          // there anyway.
+          const also = rest
+            .filter((r) => (r.secSection || '') === (first.secSection || '') && r.path && r.path !== first.path)
+            .map((r) => r.path);
+          if (also.length) first.also = [...new Set(also)];
+        }
+        refs.push(...rest);
+      }
       current = resolved.addresses[0].levels;
     }
 

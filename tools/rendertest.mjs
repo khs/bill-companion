@@ -627,6 +627,51 @@ section('redline on the current law');
     ok('  the paired insert repeats too',
        show(red.apply('the fee', '(c)')).includes('[ins:charge]'));
   }
+  // A navigation LIST names every member, and the op belongs to all of them.
+  // "In subsections (a) through (i), by striking ``in the Air Force''" is nine
+  // subsections; scoping to the first marked one. 10 U.S.C. 9063 has the phrase
+  // in all nine.
+  {
+    const red = createRedline([
+      { type: 'strike', text: 'fee', start: 1, end: 4, scope: '(a)', scopes: ['(a)', '(c)'] },
+    ]);
+    eq('a list scope marks its first member', show(red.apply('the fee', '(a)')), 'the [del:fee]');
+    eq('  and a member further down', show(red.apply('a fee', '(c)')), 'a [del:fee]');
+    // Once per MEMBER, not once per node: a member's subtree is many nodes, and
+    // firing in all of them would strike one provision several times over.
+    eq('  but only once inside a member',
+       show(red.apply('the fee again', '(c)(1)')), 'the fee again');
+    // A member the list does not name gets nothing, which is the whole point of
+    // scoping at all.
+    eq('  and never outside the list', show(red.apply('the fee', '(b)')), 'the fee');
+  }
+  // A RANGE is written as its two ends, and the provisions between are in the
+  // tree rather than implied — so they are enumerated from knownPaths, never
+  // guessed. Both ends must be real, same depth, same parent, in that order.
+  {
+    const paths = new Set(['(a)', '(b)', '(c)', '(d)']);
+    const ranged = () => [{ type: 'strike', text: 'fee', start: 1, end: 4,
+                            scope: '(a)', scopes: ['(a)', '(c)'], scopeRange: 'through' }];
+    const red = createRedline(ranged(), undefined, paths);
+    eq('a range fills in the members between',
+       ['(a)', '(b)', '(c)'].map((p) => show(red.apply('the fee', p))).join(' '),
+       'the [del:fee] the [del:fee] the [del:fee]');
+    eq('  and stops at the far end', show(red.apply('the fee', '(d)')), 'the fee');
+    // Without the flag it is a two-member list, not a range.
+    const two = createRedline(
+      [{ type: 'strike', text: 'fee', start: 1, end: 4, scope: '(a)', scopes: ['(a)', '(c)'] }],
+      undefined, paths);
+    eq('  a plain list does not fill anything in',
+       ['(a)', '(b)', '(c)'].map((p) => show(two.apply('the fee', p))).join(' '),
+       'the [del:fee] the fee the [del:fee]');
+    // An end the provision does not have leaves the op exactly as it was.
+    const gone = createRedline(
+      [{ type: 'strike', text: 'fee', start: 1, end: 4, scope: '(a)', scopes: ['(a)', '(z)'],
+         scopeRange: 'through' }], undefined, paths);
+    eq('  and an end that does not exist expands nothing',
+       ['(a)', '(b)'].map((p) => show(gone.apply('the fee', p))).join(' '),
+       'the [del:fee] the fee');
+  }
   // A plain strike still means one occurrence, and "at the end" still means the
   // one end — neither may leak into a later node.
   {
