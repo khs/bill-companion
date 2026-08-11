@@ -4637,3 +4637,28 @@ LVXXXVI--FEDERAL MARITIME
    "Congressional statement of findings".
 
    selftest 711 -> 712, rendertest 456 -> 461, proptest clean, corpus updated.
+
+79. **Only the first amendment beginning in a paragraph announced itself.**
+   (2026-08-10, L5 of item 65.) `render-bill.js` asked `amendments.find(...)` for
+   the one amendment opening in each rendered paragraph, so where two begin in
+   the same one the second contributed **no "▸ amends …" tag and no op chips**.
+   Six across the corpus, on 3 of 30 bills, every one the appropriations proviso
+   chain item 2 taught `AMEND_BOUNDARY` to see — a colon opens a proviso and the
+   next instruction starts after "That", inside the same paragraph.
+
+   The block is per PARAGRAPH, because there is one paragraph to wrap; the tag is
+   per AMENDMENT, because that is the announcement the reader is looking for. So
+   the wrapper now carries a tag for each, then the paragraph, then each
+   amendment's own chips.
+
+   **The render test already asserted this exactly, and could not fail at it.**
+   `eq('renders exactly one block per amendment', blocks, amends.length)` counted
+   WRAPPERS, and passed only because no two amendments share a paragraph in any
+   of the five sample bills. It counts tags now, and there is a fixture of the
+   proviso shape beside it — which fails three ways against the old renderer.
+   That is the tracked rule about a fixture that cannot fail at the thing it
+   claims to cover, arriving in the assertion this file wrote to replace a loose
+   bound.
+
+   Corpus unchanged; this is rendering. selftest 712, rendertest 461 -> 467,
+   proptest clean.

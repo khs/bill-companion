@@ -267,8 +267,16 @@ if (existsSync(samplePath)) {
   // measured exact on all five sample bills, including the two carrying
   // distributed amendments. If this drops by one, an amendment has gone
   // invisible — which is precisely the bug the loose bound was hiding.
-  const blocks = el.querySelectorAll('.amend').length;
-  eq('renders exactly one block per amendment', blocks, amends.length);
+  //
+  // Counted on the TAG, not the wrapper. The wrapper is per paragraph, because
+  // there is one paragraph to wrap; the tag is per amendment, because that is
+  // the announcement the reader is looking for. Counting wrappers passed here
+  // only because no two amendments share a paragraph in this fixture — 6 across
+  // the corpus do, all of them the appropriations proviso chain, and each of the
+  // later ones announced nothing at all. Asserted against a fixture of that
+  // shape below.
+  const blocks = el.querySelectorAll('.amend-tag').length;
+  eq('renders exactly one tag per amendment', blocks, amends.length);
   // Each amendment must own at most one wrapper — no double-wrapping.
   eq('no paragraph is wrapped twice', el.querySelectorAll('.amend .amend').length, 0);
 
@@ -1409,6 +1417,39 @@ section('Act-relative derivation');
   ok('  and names the law where there is exactly one',
      /Pub\. L\. 117-169/.test(ira.text), ira.text.slice(0, 200));
   eq('    with a link to it', ira.href, 'https://example.invalid/plaw');
+}
+
+{
+  // Two amendments beginning in ONE rendered paragraph — the appropriations
+  // proviso chain, where a colon opens a proviso and the next instruction
+  // starts after "That". The renderer took only the first, so the second
+  // contributed no "▸ amends …" tag and no op chips: 6 across the corpus, on
+  // 3 of 30 bills, and invisible to every fixture here because none of them
+  // has two amendments in one paragraph.
+  const { renderBill } = await imp('app/ui/render-bill.js');
+  const { parseBill, normalizeText } = await imp('app/parse/bill.js');
+  const { extractCitations, extractAmendments } = await imp('app/parse/citations.js');
+  const t = normalizeText(
+    'SEC. 742. PROVISO.\n' +
+    '    Section 4(b) of the Widget Act (7 U.S.C. 1704(b)) is amended by ' +
+    "striking ``2023'' and inserting ``2024'': Provided further, That section " +
+    "9(h)(3) of the Gadget Act (42 U.S.C. 1758(h)(3)) is amended by striking ``$1''.\n"
+  );
+  const b = parseBill(t);
+  const cs = extractCitations(t);
+  const ams = extractAmendments(t, cs, b.divisions, b.sections);
+  eq('a proviso chain parses as two amendments', ams.length, 2);
+  const el = renderBill(b, cs, ams, () => {}, () => {});
+  eq('  and both announce themselves', el.querySelectorAll('.amend-tag').length, 2);
+  eq('    in one wrapper, because there is one paragraph',
+     el.querySelectorAll('.amend').length, 1);
+  eq('    with the paragraph drawn exactly once',
+     el.querySelectorAll('.amend > p').length, 1);
+  ok('  naming each target',
+     [...el.querySelectorAll('.amend-tag')].map((x) => x.textContent).join(' | ').includes('1758'),
+     [...el.querySelectorAll('.amend-tag')].map((x) => x.textContent).join(' | '));
+  eq('  and each amendment gets its own op chips',
+     el.querySelectorAll('.amend-ops').length, 2);
 }
 
 section('additions at the end');

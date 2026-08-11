@@ -184,40 +184,52 @@ export function renderBill(bill, citations, amendments, onCite, onAmend) {
     // boundary between two. Asking only for the first overlap then returns the
     // *previous* amendment, whose start isn't in this paragraph, and the header
     // is never emitted.
-    const opening = amendments.find((am) => am.start >= para.start && am.start < para.end);
-    const covering = opening || amendments.find((am) => para.start < am.end && para.end > am.start);
+    // More than one may open here, and taking only the first silently drops the
+    // rest. An appropriations proviso chains instructions after a colon — the
+    // shape AMEND_BOUNDARY learned to see in TODO 2 — so two, three or four
+    // amendments routinely begin inside one rendered paragraph, and each of the
+    // later ones contributed no "▸ amends …" tag and no op chips. 6 across the
+    // corpus, on 3 of 30 bills. The block is per PARAGRAPH (there is one
+    // paragraph to wrap) and the tag is per AMENDMENT, which is what the reader
+    // counts and what the render test now asserts against.
+    const openingAll = amendments.filter((am) => am.start >= para.start && am.start < para.end);
+    const covering =
+      openingAll[0] || amendments.find((am) => para.start < am.end && para.end > am.start);
     if (covering) {
       p.classList.add('has-amend');
-      if (opening) {
-        const amend = opening;
+      if (openingAll.length) {
         const wrap = document.createElement('div');
         wrap.className = 'amend';
-        const tag = document.createElement('div');
-        tag.className = 'amend-tag';
-        tag.textContent = `▸ amends ${
-          amend.target ? inline(amend.target.text) : `${amend.unit} ${amend.section}${amend.subsection}`
-        }`;
-        // A synthesised target reads exactly like one the bill wrote out, and
-        // this tag is where the reader meets the claim. The parser knows the
-        // instruction named nothing and where the Act came from instead; saying
-        // so here costs one word and stops the inference being read as a quote.
-        if (amend.target && amend.target.implied) {
-          const from = document.createElement('span');
-          from.className = 'amend-implied';
-          from.textContent = 'from context';
-          from.title = `Not named in this instruction. Supplied by context: ${amend.target.implied}.`;
-          tag.appendChild(from);
+        for (const amend of openingAll) {
+          const tag = document.createElement('div');
+          tag.className = 'amend-tag';
+          tag.textContent = `▸ amends ${
+            amend.target ? inline(amend.target.text) : `${amend.unit} ${amend.section}${amend.subsection}`
+          }`;
+          // A synthesised target reads exactly like one the bill wrote out, and
+          // this tag is where the reader meets the claim. The parser knows the
+          // instruction named nothing and where the Act came from instead; saying
+          // so here costs one word and stops the inference being read as a quote.
+          if (amend.target && amend.target.implied) {
+            const from = document.createElement('span');
+            from.className = 'amend-implied';
+            from.textContent = 'from context';
+            from.title = `Not named in this instruction. Supplied by context: ${amend.target.implied}.`;
+            tag.appendChild(from);
+          }
+          tag.setAttribute('role', 'button');
+          tag.tabIndex = 0;
+          const fire = () => onAmend(amend);
+          tag.addEventListener('click', fire);
+          tag.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(); }
+          });
+          wrap.appendChild(tag);
         }
-        tag.setAttribute('role', 'button');
-        tag.tabIndex = 0;
-        const fire = () => onAmend(amend);
-        tag.addEventListener('click', fire);
-        tag.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(); }
-        });
-        wrap.appendChild(tag);
         wrap.appendChild(p);
-        if (amend.ops.length) wrap.appendChild(opChips(amend.ops));
+        for (const amend of openingAll) {
+          if (amend.ops.length) wrap.appendChild(opChips(amend.ops));
+        }
         root.appendChild(wrap);
         continue;
       }
