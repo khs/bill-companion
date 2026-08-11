@@ -19,7 +19,7 @@
 // none was catchable by counting.
 //
 // It is a test, not a report: it exits non-zero.
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -74,10 +74,22 @@ const dim = (s) => `\x1b[2m${s}\x1b[0m`;
 
 const args = process.argv.slice(2);
 const listMode = args.includes('--list');
-const only = args.find((a) => !a.startsWith('--'));
-const manifest = JSON.parse(readFileSync(join(ROOT, 'corpus/corpus.json'), 'utf8'));
-const bills = (Array.isArray(manifest) ? manifest : manifest.bills || Object.values(manifest)[0])
-  .filter((x) => !only || x.id === only);
+const only = args.filter((a) => !a.startsWith('--')).find((a) => a !== (args.includes('--dir') ? args[args.indexOf('--dir') + 1] : null));
+// A DIRECTORY of bills instead of the corpus, so the same instrument can be
+// pointed at a different sample. The corpus is 28 enacted bills and 2 pending
+// ones, which is a blind spot in exactly the dimension the enacted/pending
+// guards operate in — pointing this at a folder of introduced bills is how you
+// find out whether the sentences hold up there too.
+const dirArg = args.includes('--dir') ? args[args.indexOf('--dir') + 1] : null;
+const bills = dirArg
+  ? readdirSync(dirArg)
+      .filter((f) => /\.(htm|html|txt|pdf)$/i.test(f))
+      .map((f) => ({ id: f.replace(/\.[^.]+$/, ''), local: join(dirArg, f) }))
+  : (() => {
+      const manifest = JSON.parse(readFileSync(join(ROOT, 'corpus/corpus.json'), 'utf8'));
+      return (Array.isArray(manifest) ? manifest : manifest.bills || Object.values(manifest)[0])
+        .filter((x) => !only || x.id === only);
+    })();
 
 async function textOf(path) {
   if (path.toLowerCase().endsWith('.pdf')) {
@@ -143,7 +155,9 @@ const bad = [];
 const bump = (m, k) => m.set(k, (m.get(k) || 0) + 1);
 
 for (const bill of bills) {
-  const path = bill.local ? join(ROOT, bill.local) : join(ROOT, 'corpus/files', `${bill.id}.htm`);
+  const path = bill.local
+    ? (existsSync(bill.local) ? bill.local : join(ROOT, bill.local))
+    : join(ROOT, 'corpus/files', `${bill.id}.htm`);
   if (!existsSync(path)) continue;
   const text = normalizeText(await textOf(path));
   const parsed = parseBill(text);

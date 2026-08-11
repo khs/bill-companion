@@ -5415,3 +5415,11 @@ LVXXXVI--FEDERAL MARITIME
 
    **And it earned itself on the first run**, before any of that: 49 U.S.C.
    31104 promised two marks for one, which is what turned up item 89.
+
+   `--dir <folder>` points it at a different sample, which is the discipline
+   this file already states about re-running anything: "'re-ran clean' is not
+   the point: the point is to do a DIFFERENT random sample and see if it
+   works". Run over the 14 introduced bills of item 84's campaign — a
+   population the instrument was never built against, and the one where the
+   enacted/pending sentences differ — it reads 450 op rows over 16 distinct
+   sentences with **0 contradictions**.
