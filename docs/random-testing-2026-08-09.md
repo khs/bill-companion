@@ -464,3 +464,56 @@ Two entangled pairs worth doing together rather than serially:
   the section move on the side instead of emitting a step, and twelve of the
   thirteen rows on screen were right; the thirteenth is what showed it. Every
   count was green.
+
+
+---
+
+## Status, 2026-08-10 (third pass) — 19 of the 27 closed
+
+Seven more fixed. CLAUDE.md items 75–79 carry the reasoning and the audits.
+
+```
+  W6  fixed  item 75   a replacement the law already made is not pending
+  W7  fixed  item 78   an Act with no head must not be given one
+  W8  fixed  item 76   a block opener need not begin the line
+  W9  fixed  item 76   a marker followed by "of section" is not a provision
+  W10 fixed  item 77   an operand budget that re-matches instead of truncating
+  W13 fixed  item 78   a harvested name that runs into its own sentence
+  L5  fixed  item 79   every amendment beginning in a paragraph announces itself
+```
+
+**Still open: W14, W16, L3, L8, L9, C1 — 6, plus L2's other half.**
+
+Ranked by what they cost a reader:
+
+- **C1** is labelled cosmetic and is worth more than that: the same mechanism
+  makes rendertest's "rendered text preserves the source exactly" identity FALSE
+  on 4 of 30 plain-text bills. It passes today only because it runs on one
+  fixture. 12 overrun paragraphs across 8 bills; 2 corrupt a section heading.
+- **L2's remaining half with L3**, still entangled and still wanting `inScope()`
+  to take a SET — `reScope()`, `scopeAdditions()` and the panel all read
+  `op.scope` as a string.
+- **W16 with the paste path**: adding `"` to `RE_QUOTE_CLOSE` alone is not
+  enough, because with a symmetric delimiter the opening line of a
+  multi-paragraph block also closes it. The state machine has to become
+  pair-aware the way `quotedBlocks()` already is. 0 shipped incidence.
+- **W14** is one site in 34 MB — an unbalanced quote in the govinfo rendition of
+  Pub. L. 107-56 — and nothing is drawn from it today.
+- **L8** and **L9** are latent: measured at 3 and 1 occurrences with 0
+  demonstrated reader-visible cost.
+
+**Three things to carry into any of them**, on top of the two the second pass
+recorded:
+
+- **Audit what a change WITHDRAWS, and classify it rather than sampling it.**
+  W8 withdrew 58 answers; splitting them into "answered from the bill's own
+  drafting instructions" (31) and "answered from a sibling quoted block" (27)
+  is what made the trade decidable. A count of 58 says nothing either way.
+- **A geometric test beats a textual one where position is the evidence.** W6's
+  first cut asked whether the new phrase sat at one END of the struck span,
+  which fires on any insert sharing a word with the operand — and it withdrew
+  BOTH marks, which is worse than the bug it fixed. Requiring the phrase to span
+  the struck words and reach past them cannot be fooled that way.
+- **The corpus is blind to a span REPLACEMENT.** `opSpans` is the size of a
+  `type:start-end` key set, so W10's 14 corrected spans moved it by zero. Diff
+  the keys, not the count.
