@@ -198,7 +198,7 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 - **Right:** the announce test should require the line to actually announce a table, or be gated to front matter. Nothing resets `inToc` here because in an appropriations division the next non-caps line is a lowercase account heading and `realBodyFollows` returns false.
 - **Frequency:** 101 mid-body mentions across 20 of 26 bills; this is the one that lands, and it lands on the Consolidated Appropriations Act, 2020.
 
-**L2. A navigation LIST scopes the operation to its last member only** — PARTLY FIXED 2026-08-10, CLAUDE.md item 73 (first member now scopes; scoping to a SET is still open, with L3) — `extractSteps` sets `current = resolved.addresses[0].levels` under a comment saying "Only the first address of a list advances the cursor", but `emit()` pushes **every** address into `steps` and `scopeOps()` binds the op to the last one. `in subsections (a) through (i), by striking … each place it appears` → scope `(i)`: nine subsections named, one marked. **95 list-member steps, 139 ops, 13 bills.** Reader consequence driven end to end (hr6395 §924 / 10 U.S.C. 9063): the app draws a chip for subsection (a), the reader clicks it, the operand is visibly present, nothing is marked, and the panel prints "⚠ not found verbatim".
+**L2. A navigation LIST scopes the operation to its last member only** — FIXED 2026-08-10, CLAUDE.md items 73 (which member scopes) and 82 (all of them do) — `extractSteps` sets `current = resolved.addresses[0].levels` under a comment saying "Only the first address of a list advances the cursor", but `emit()` pushes **every** address into `steps` and `scopeOps()` binds the op to the last one. `in subsections (a) through (i), by striking … each place it appears` → scope `(i)`: nine subsections named, one marked. **95 list-member steps, 139 ops, 13 bills.** Reader consequence driven end to end (hr6395 §924 / 10 U.S.C. 9063): the app draws a chip for subsection (a), the reader clicks it, the operand is visibly present, nothing is marked, and the panel prints "⚠ not found verbatim".
 
 **L3. "Each place it appears" never crosses a node** — FIXED 2026-08-10, CLAUDE.md item 81 — `app/ui/redline.js` sets `op.done = true` after the first passage the strike lands in, while `render-context.js` builds one redline per provision and calls `apply()` per node. So `all` can only ever widen *within* one node. hr5376 §13903(b)(1) on 26 U.S.C. 461(l)(1): both (A) and (B) contain "January 1, 2027"; one mark drawn. **10 strikes corpus-wide where the operand is in more than one in-scope node** — worst is 7 U.S.C. 136w-8, operand present in **10 nodes, one mark**. The fix must be scoped to `all` only: `op.done` deliberately prevents double-drawing, and `atEnd` should stay latched.
 
@@ -482,19 +482,13 @@ Seven more fixed. CLAUDE.md items 75–79 carry the reasoning and the audits.
   L5  fixed  item 79   every amendment beginning in a paragraph announces itself
   C1  fixed  item 80   a line head only there because the line wrapped
   L3  fixed  item 81   "each place it appears" crosses a node
+  L2  fixed  item 82   an op scoped to a list belongs to every member
 ```
 
-**Still open: W14, W16, L8, L9 — 4, plus L2's other half.**
+**Still open: W14, W16, L8, L9 — 4.**
 
 Ranked by what they cost a reader:
 
-- **L2's remaining half**, and it is NOT entangled with L3 after all — L3
-  needed one scope applied in every node, which is a guard; L2's remainder is
-  an operation scoped to a SET of provisions and does want `inScope()` to take
-  one, with `reScope()`, `scopeAdditions()` and every panel message reading
-  `op.scope` as a string today. Measured at 95 list-member steps over 139 ops
-  on 13 bills; how many of those name a member that also contains the operand
-  is the number to get before building.
 - **W16 with the paste path**: adding `"` to `RE_QUOTE_CLOSE` alone is not
   enough, because with a symmetric delimiter the opening line of a
   multi-paragraph block also closes it. The state machine has to become

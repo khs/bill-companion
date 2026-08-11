@@ -4838,3 +4838,65 @@ LVXXXVI--FEDERAL MARITIME
    `scopeAdditions()` and every panel message reading `op.scope` as a string
    today. L3 needed none of it: one scope, applied in every node under it.
    Doing the cheap one first is what showed that.
+
+82. **An operation scoped to a LIST belongs to every member of it.** (2026-08-10,
+   the half of L2 item 73 left open.) Item 73 fixed *which* member scopes an
+   operation — the first, not the last — and left the bill's actual claim unmet:
+
+   ```
+   (A) in subsections (a) through (i), by striking ``in the Air Force'' each
+       place it appears and inserting ``in the Air Force and the Space Force''
+   ```
+
+   names nine subsections and marked one. 10 U.S.C. 9063 contains the phrase in
+   **all nine**. 135 operations on 13 bills carry a list.
+
+   The members' paths stay on the step (`also`) and reach the op as `scopes`.
+   **`scope` is still the first member**, because `reScope()`,
+   `scopeAdditions()` and every panel message read it as a string and the first
+   is the one the cursor is left on; `scopes` is for the one consumer that can
+   use it. That is the shape item 33's rule asks for — a new field with a
+   consumer, not without one.
+
+   Three things a set needed that a single scope did not:
+
+   - **The latch is per MEMBER, not per node.** A member's subtree is many
+     nodes, and a plain strike means one occurrence in each named provision,
+     not one in every node beneath them. `scopeHit()` answers which member a
+     passage sits in — the LONGEST match, so a member nested inside another
+     wins — and `doneIn` records the members already satisfied. `all` is what
+     lifts the latch inside one member; the two compose rather than competing.
+   - **A repaired scope drops its sibling list.** A first member the provision
+     does not have means the list was read against a structure this provision
+     does not share, so the others are no more trustworthy than the one being
+     repaired. The members that DO exist are simply left undrawn, which is
+     where they already were.
+   - **A range is written as its two ENDS, and the middle is on disk.**
+     `MARKER_LIST` gives "(a) through (i)" as (a) and (i), and item 46 is right
+     that the citation card must not chip what lies between — nothing in the
+     *citation* says. The provision on screen does. `expandRange()` enumerates
+     the siblings from `knownPaths`, and it is a test rather than a guess: both
+     ends must be real paths, at the same depth, under the same parent, in that
+     order, or the op is returned untouched. 2 of 79 lists are ranges, and both
+     expand. The order comes from `knownPaths`, which every caller builds by
+     walking the tree, so its iteration order IS document order — worth knowing
+     before changing how that set is built.
+
+   Audited by where every mark LANDS across the corpus: **3,071 -> 3,125, 54
+   added and 0 withdrawn** — 40 from the list and 14 from the two ranges.
+
+   `coverage.mjs` moves by two operations (`shown to the reader` 3,199 ->
+   3,201), because its counters are per OP and an op marked in nine subsections
+   is still one op. Corpus unchanged. Rendered per item 60: 10 U.S.C. 9063 (a)
+   through (i) each carry the mark, against (a) and (i) before — **and the first
+   attempt showed only (a) and (i)**, because the page had `redline.js` cached
+   from before the edit. That is item 11's second mechanical note, and it looks
+   exactly like the fix not working. Hard-reload before believing a render.
+
+   selftest 713 -> 716, rendertest 483 -> 491, proptest clean.
+
+   Left, and it is the honest remainder: an operation whose members the Code has
+   RENUMBERED is silently narrowed rather than reported — `scopes` names paths,
+   and a member that is not in the tree draws nothing and says nothing. That is
+   the same gap `scopeLost` fills for a single scope, and it wants the panel to
+   say "the bill also names (d), which this provision does not have".
