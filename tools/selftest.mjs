@@ -929,6 +929,52 @@ section('relative navigation inside amendments');
   eq('a bill with no parsed sections is bounded as before', noSecs[0].end, loose[0].end);
 }
 {
+  // ---- …and at the next instruction, even one nothing can target -----------
+  //
+  // The three bounds above are the next RE_AMEND_HEAD match, 2,500 characters
+  // and the bill section. A bill writes plenty of instruction heads none of
+  // them recognises, and the previous instruction then claims what they
+  // introduce: 26 U.S.C. 72(t)(8) was shown paragraph (13) of section 402 as
+  // language this bill adds to it, because the SECOND "adding at the end"
+  // phrase inside the body window belonged to the next sentence.
+  const t = normalizeText(
+    'SEC. 101. BOTH.\n' +
+    '    (1) Paragraph (8) of section 72(t) is amended by adding at the end the ' +
+    "following new subparagraph:\n``(F) Mine.--This is the first block.''.\n" +
+    '        (2) Subsection (c) of such section, as amended by this Act, is further ' +
+    "amended by adding at the end the following new paragraph:\n" +
+    "``(13) Theirs.--This is the second block.''.\n"
+  );
+  const bill = parseBill(t);
+  const ams = extractAmendments(t, extractCitations(t), bill.divisions, bill.sections);
+  const blocks = ams[0].ops.filter((o) => o.type === 'add-at-end').map((o) => String(o.text).slice(0, 12));
+  eq('an instruction reads its own added block and no other', blocks.join(' | '), '(F) Mine.--T');
+  // The bound must be the sentence, not the block: everything the FIRST
+  // instruction writes still belongs to it.
+  ok('  and its own block is whole',
+     ams[0].ops.some((o) => String(o.text || '').includes('the first block')),
+     JSON.stringify(ams[0].ops.map((o) => o.type)));
+  // Inside quoted new law the same words are not a head. Inserted law says
+  // "is amended" constantly, and cutting there would end an instruction in the
+  // middle of the block it is adding.
+  const q = normalizeText(
+    'SEC. 101. ONE.\n' +
+    '    Section 3 of the Widget Act (15 U.S.C. 2603) is amended by adding at the ' +
+    'end the following:\n' +
+    '``(d) Rule.--The Secretary shall act. Such provision is amended as the ' +
+    'Secretary directs.\n' +
+    "``(e) Other.--The rest of the block.''.\n"
+  );
+  const qbill = parseBill(q);
+  const qa = extractAmendments(q, extractCitations(q), qbill.divisions, qbill.sections);
+  const quoted = q.indexOf('Such provision is amended');
+  ok('a head inside quoted new law does not end the instruction',
+     qa[0].end > quoted, `end ${qa[0].end} vs ${quoted}`);
+  ok('  so the block is still read whole',
+     qa[0].ops.some((o) => String(o.text || '').includes('The rest of the block')),
+     JSON.stringify(qa[0].ops.map((o) => `${o.type}:${String(o.text || '').slice(0, 24)}`)));
+}
+{
   // A cross-reference inside quoted text must not hijack the cursor.
   const t =
     'Section 5 of the Widget Act (15 U.S.C. 2605) is amended—\n' +

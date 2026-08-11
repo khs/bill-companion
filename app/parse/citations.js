@@ -1354,6 +1354,61 @@ const MAX_AMEND_BODY = 2500;
 const QO = '(?:``|‘‘|[“"])';
 const QC = '(?:\'\'|’’|[”"])';
 
+// A later instruction ends this one even where nothing can target it.
+//
+// The body is bounded by the next head RE_AMEND_HEAD found, by MAX_AMEND_BODY
+// and by the bill section — and a bill writes plenty of instruction heads none
+// of those matchers recognise:
+//
+//   ``…(F) Recontributions.--…''.
+//       (2) Qualified plans.--Subsection (c) of section 402, as amended by
+//   this Act, is further amended by adding at the end the following new
+//   paragraph: ``(13) Recontributions of withdrawals for home purchases.--
+//
+// The first instruction adds subparagraph (F) to 26 U.S.C. 72(t)(8). The scans
+// run over its whole body, find the SECOND "adding at the end" phrase, and hand
+// it paragraph (13) of section 402 as well — a real provision of a different
+// section, drawn into 72(t)(8) in the insertion colour. 93 operations across
+// the corpus sit behind a head the matchers cannot see: "Subsection (c) of such
+// section, as so redesignated, is further amended", "The heading of such
+// section is amended to read as follows", "The analysis for chapter 7 of title
+// 14 … is further amended".
+//
+// This does not make them instructions — that is TODO 2, one phrasing at a
+// time, and each costs its own risk. It stops the PREVIOUS instruction claiming
+// what they introduce, which is the blank-beats-wrong half and is free.
+//
+// Two things are load-bearing. The sentence must OPEN with a capital after a
+// full stop or semicolon, optionally behind a closing quotation and a
+// sub-instruction marker, because "…to the extent such section is amended by
+// this Act…" is a subordinate clause and not a head. And anything inside quoted
+// new law is skipped: inserted law says "is amended" constantly, and cutting
+// there would end an instruction in the middle of the block it is adding.
+const RE_LOOSE_HEAD = new RegExp(
+  `(?:${QC})?\\s*[.;]\\s+((?:\\([A-Za-z0-9]{1,4}\\)\\s*)*[A-Z][^.;]{0,200}?` +
+    '\\b(?:is|are)\\s+(?:further\\s+|also\\s+|hereby\\s+)?(?:amended|repealed)\\b)',
+  'g'
+);
+
+/**
+ * Where the next unrecognised instruction begins, or `limit`.
+ *
+ * @param {string} text   the whole bill
+ * @param {number} from   this instruction's headEnd
+ * @param {number} limit  the bound already established by the other three rules
+ */
+function looseHeadEnd(text, from, limit) {
+  RE_LOOSE_HEAD.lastIndex = from;
+  let m;
+  while ((m = RE_LOOSE_HEAD.exec(text))) {
+    const at = m.index + m[0].indexOf(m[1]);
+    if (at >= limit) break;
+    if (!quotedBlockAt(text, at)) return at;
+    RE_LOOSE_HEAD.lastIndex = at + 1;
+  }
+  return limit;
+}
+
 // The connective between verb and operand varies a lot ("striking out",
 // "inserting after paragraph (8) the following:", with the quote often on the
 // next line), so it's bounded and lazy. It's also tempered against the opposite
@@ -3749,7 +3804,8 @@ export function extractAmendments(text, citations, divisions = [], sections = []
 
   const out = merged.flatMap((h, i) => {
     const nextHead = i + 1 < merged.length ? merged[i + 1].start : text.length;
-    const bodyEnd = Math.min(nextHead, h.headEnd + MAX_AMEND_BODY, secEnd(h.start), text.length);
+    const hardEnd = Math.min(nextHead, h.headEnd + MAX_AMEND_BODY, secEnd(h.start), text.length);
+    const bodyEnd = looseHeadEnd(text, h.headEnd, hardEnd);
     const body = text.slice(h.headEnd, bodyEnd);
 
     // Prefer an explicit code citation inside the head — "(42 U.S.C. 1395x(s)(2))"

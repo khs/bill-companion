@@ -334,6 +334,14 @@ sections are claimed by two Code sections and are dropped rather than guessed;
   be *exact* where the matcher sees it, never where the source does.
 - **PowerShell mangles quotes in `python -c "..."`.** Write a script file to
   `$CLAUDE_JOB_DIR/tmp` and run that.
+- **…and bash eats regex backslashes in `node -e "..."`.** The same rule, and it
+  fails silently rather than loudly: `/\s+/g` written that way arrives as
+  `/s+/g` and replaces every letter "s" with a space, which reads exactly like a
+  `fold()` index-mapping bug in the app. `\b(?:is|are)\s+amended\b` arrives
+  matching nothing and reports zero occurrences of a shape that occurs 443
+  times. Four separate measurements were wrong this way on 2026-08-11. Write the
+  script with the Write tool and run the file — and when a measurement surprises
+  you, check the instrument before the product.
 - **`/tmp` in the Bash tool is invisible to native Windows Python.** Different
   filesystems; use the job tmp dir for anything crossing between them.
 - PowerShell intermittently fails with `Starting the CLR failed with HRESULT
@@ -5423,3 +5431,127 @@ LVXXXVI--FEDERAL MARITIME
    population the instrument was never built against, and the one where the
    enacted/pending sentences differ — it reads 450 op rows over 16 distinct
    sentences with **0 contradictions**.
+
+91. **A later instruction ends this one even where nothing can target it.**
+   (2026-08-11, item 48's open hazard, closed.) The body is bounded by the next
+   `RE_AMEND_HEAD` match, by 2,500 characters and by the bill section. A bill
+   writes plenty of instruction heads none of those recognise:
+
+   ```
+   Paragraph (8) of section 72(t) is amended by adding at the end the following
+   new subparagraph: ``(F) Recontributions.-- … ''.
+       (2) Qualified plans.--Subsection (c) of section 402, as amended by this
+   Act, is further amended by adding at the end the following new paragraph:
+   ``(13) Recontributions of withdrawals for home purchases.--
+   ```
+
+   The scans run over the whole body, find the SECOND "adding at the end"
+   phrase, and hand the first instruction paragraph (13) of section 402 as well
+   — a real provision of a different section, drawn into 26 U.S.C. 72(t)(8) in
+   the insertion colour. **93 operations across 9 bills**, on heads reading
+   "Subsection (a) of such section, as so redesignated, is further amended",
+   "The heading of such section is amended to read as follows", "The analysis
+   for chapter 7 of title 14 … is further amended".
+
+   `looseHeadEnd()` is a fourth bound. It does **not** make these instructions —
+   that is TODO 2, one phrasing at a time, and each costs its own risk — it
+   stops the previous instruction claiming what they introduce, which is the
+   blank-beats-wrong half and is free. Two things are load-bearing: the sentence
+   must OPEN with a capital after a full stop or semicolon, because "…to the
+   extent such section is amended by this Act…" is a subordinate clause; and
+   anything inside quoted new law is skipped, since inserted law says "is
+   amended" constantly and cutting there would end an instruction in the middle
+   of the block it is adding. Both are asserted, and both new checks were
+   confirmed to FAIL against the old code — a test that passes either way proves
+   nothing about the bound.
+
+   **The removed set is exactly the measured set**: 93 of 93, with none removed
+   that was not measured and none measured that was not removed. **0 ops added
+   and 0 surviving ops changed scope.** All **43 distinct boundary sentences**
+   were read and every one is an instruction head; not one is a subordinate
+   clause, quoted law or prose.
+
+   Corpus, accounted to the unit: `opSpans -93` (strike 36 · insert 42 ·
+   add-at-end 4 · replace 11), `refs -53`, `relative -51` (the two differ
+   because 2 of the withdrawn references sit on an amendment with no resolved
+   target), `steps -4`, and **`uncoveredVerbs +37`** — the honest cost, exactly
+   as in item 70: those verbs were never covered, they were attributed to the
+   wrong instruction, and the counter exists so a gap is visible instead of
+   hiding as a wrong answer.
+
+   Marks 2,884 -> 2,884: **1 withdrawn and 1 added.** Both were read.
+
+   - Withdrawn: 26 U.S.C. 1031(h) carried a `was` mark over the words "Real
+     property" — the insert from "(5) The heading of section 1031 is amended by
+     striking ``property'' and inserting ``real property''", four
+     sub-instructions later, which renames the SECTION and touches no
+     subsection at all. Rendered before and after, per item 60: the pane went
+     from three op rows (a strike and an insert both reading "✓ already in the
+     law — marked above", with the mark drawn) to the one genuine rewrite.
+   - Added: 10 U.S.C. 4201(b) gains a correct in-force mark. An over-reaching
+     body poisons the STALENESS verdict — a strike belonging to a different
+     instruction can never be found, so the amendment is declared live and its
+     own insertions withheld. Same second-order gain item 70 recorded.
+
+   Coverage confirms nothing drawn was lost: inline operations 14,780 -> 14,725,
+   of which **drawn as a pending change is unchanged at 1,039**; the movement is
+   withheld -29, not found -25, in force -1. Of the 10 replacements that go,
+   6 were already refused as heading-only and 4 were "provision not on screen" —
+   **not one was marking anything.** `no such level at all` 193 -> 190.
+
+   selftest 744 -> 748, rendertest 513, proptest clean, paneltest clean at 292
+   distinct sentences, corpus updated.
+
+92. **Two more measured here and deliberately NOT built, with the numbers.**
+   Both were found while auditing item 91 and both are recorded so the next pass
+   starts from evidence.
+
+   - **The heading as the SUBJECT of the sentence.** `markHeadingOps()` reads
+     "in the heading, by striking" and "by striking ``X'' in the heading"; it
+     does not read "The heading of section 1031 is amended by striking
+     ``property''". **22 operations**, and **0 of them draw a mark today** — the
+     TCJA's was the only one that did, and item 91's bound removed it for a
+     different reason. So the flag would buy a truer status sentence and nothing
+     else. It was built, and reverted: flagging an op takes it out of `work`, and
+     `stale` is computed over `work`, so removing a heading strike removes the
+     (accidental) evidence that the amendment has already happened. On
+     26 U.S.C. 7508A that turned a correct "already in the law" mark into a green
+     pending insert — **one right mark traded for one wrong one**. Item 88 made
+     that trade knowingly for the other 501; here it is not worth making until
+     the next item is done.
+   - **A stated scope written AFTER the operand.** "by inserting ``, fire,''
+     after ``disaster'' each place it appears in **subsections (a)(1) and (b)**"
+     — the bill says exactly where, and nothing reads it, so the op searches the
+     whole provision and lands in the chapeau of (a). **393 operations across the
+     corpus, and not one agrees with the scope it currently carries**: 55 state a
+     path DEEPER than the walked scope and 338 state a relative marker to be
+     composed onto it (`(d)` + `(1)` -> `(d)(1)`). The instrument already exists —
+     `scopeStatedUnits()`, built for item 68's "at the end of paragraph (N)",
+     composes exactly this way and already carries `scopeFallback` for a path the
+     Code does not have. Three things to settle before building: the phrase is
+     often a LIST ("subsections (a)(1) and (b)"), which wants item 82's `scopes`;
+     the tail must not cross into the next sub-instruction, which is the guard
+     `RE_HEADING_AFTER` had to learn the hard way; and this moves op scopes, so
+     it moves the redline and needs a mark-level audit rather than a baseline
+     diff.
+
+   And the independent read item 86 never got, done by hand rather than by
+   agents: **all 47 "already in force" claims a RUN op produces were checked
+   against the shipped shards, and all 47 are right** — the provision reads the
+   inserted language in every case, including the three whose mark lands in a
+   section's lead rather than in a numbered node (46 U.S.C. 70051 twice and
+   26 U.S.C. 804). Also confirmed: of the 18 that reach the claim through the
+   run's own positional test, **18 of 18 used an offset recorded in the same
+   node**. `struckAt` is construction-scoped and a run bypasses the `dels`
+   same-passage guard, so a cross-node offset is possible in principle; it
+   happens nowhere in 34 MB.
+
+   **One instrument note that cost four rounds.** Generating a script by string
+   surgery inside `node -e` inside a bash double-quoted string eats regex
+   backslashes: `/\s+/g` arrived as `/s+/g` and silently replaced every letter
+   "s" with a space, which reads exactly like a `fold()` index-mapping bug. The
+   same escaping turned `\b(?:is|are)\s+amended\b` into a pattern matching
+   nothing and reported "0 occurrences" of a shape that occurs 443 times. This
+   is item 65's `\b`-in-a-heredoc gotcha in a new wrapper. **Write the script
+   with the Write tool and run the file** — the environment notes already say
+   this about `python -c`, and it is just as true of `node -e`.
