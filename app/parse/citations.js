@@ -1791,11 +1791,26 @@ function resolvePhrase(pairs, contextLevels) {
 // this marks the start of a run rather than each line of it — the reference that
 // exposed the bug sat on a *continuation* line ("…in accordance \n with
 // subparagraph (B)(iii) as having a…"), which carries no quote mark at all.
-const RE_QUOTED_LINE = /^\s*(?:``|‘‘|["“])/;
-// …and what ends the run. Deliberately two characters for the single-quote
-// conventions: a lone ’ is an apostrophe, and the blocks are full of defined
-// terms in single quotes (`applicable material') that must not close anything.
-const RE_QUOTE_CLOSE = /''|’’|[”]/;
+const RE_QUOTED_LINE = /^[ \t]*(``|‘‘|["“])/;
+// …and what ends the run: the closer BELONGING to the opener that started it.
+//
+// Deliberately two characters for the single-quote conventions: a lone ’ is an
+// apostrophe, and the blocks are full of defined terms in single quotes
+// (`applicable material') that must not close anything.
+//
+// Paired rather than an alternation, for the reason QUOTE_PAIRS exists at all —
+// a block opened with `` must be closed by '' and not by a curly double
+// appearing inside it. An alternation also knew only three of the four
+// conventions, and the missing one is the STRAIGHT double, where the same
+// character opens and closes: a `"` line would have opened a run that could
+// never end, because the alternation had no `"` in it at all. With the pair,
+// the search starts past the opener, so a one-line operand closes on its own
+// line and a multi-paragraph block does not. Re-spelling a bill's quotes as
+// straight doubles used to collapse hr2 from 898 navigation steps to 436, with
+// 623 operations keeping the previous walk's scope — a different provision, not
+// a blank. No shipped fixture uses them; `ingest()` is the exposure, and text
+// pasted from a web page or a word processor is exactly where they arrive.
+const closerFor = (open) => (QUOTE_PAIRS.find(([o]) => o === open) || [])[1];
 
 /**
  * Compose the addresses an instruction navigates to and refers to.
@@ -1823,6 +1838,8 @@ function extractSteps(text, from, to, basePath) {
   let current = (basePath.match(MARKER_RE) || []).map((marker, i) => ({ marker, depth: i }));
   let off = from;
   let inQuotedBlock = false;
+  // The closer belonging to the opener that started the run — see closerFor().
+  let quoteCloser = null;
   // The section the walk is currently inside, once an instruction has stepped
   // out of the one its target names. Null until then, which is every
   // instruction that stays where it started.
@@ -1891,9 +1908,15 @@ function extractSteps(text, from, to, basePath) {
     // Quoted inserted law: not an instruction, and its cross-references point
     // inside itself rather than into the Code. The run persists across
     // continuation lines and ends on the line that closes the quotation.
-    if (RE_QUOTED_LINE.test(line)) inQuotedBlock = true;
+    const opener = inQuotedBlock ? null : line.match(RE_QUOTED_LINE);
+    if (opener) { inQuotedBlock = true; quoteCloser = closerFor(opener[1]); }
     const inserted = inQuotedBlock;
-    if (inserted && RE_QUOTE_CLOSE.test(line)) inQuotedBlock = false;
+    // Past the opener on the line that opened the run, so a symmetric delimiter
+    // cannot close itself; from the start of the line on every continuation.
+    if (inserted && line.indexOf(quoteCloser, opener ? opener[0].length : 0) >= 0) {
+      inQuotedBlock = false;
+      quoteCloser = null;
+    }
     if (inserted) continue;
 
     // Pass 1: navigation. Records the spans it claims so pass 2 skips them.

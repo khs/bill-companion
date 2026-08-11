@@ -1705,6 +1705,41 @@ section('operand placement');
   const atEnd = p('Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking ``and\'\' at the end.\n');
   ok('"at the end" marks the strike', atEnd.find((o) => o.type === 'strike').atEnd === true);
 
+  // Every quote convention, everywhere — the tracked invariant, asserted where
+  // it had been broken. `extractSteps` skips a line of quoted inserted law, and
+  // the run was closed by an ALTERNATION over three conventions of four. The
+  // missing one is the STRAIGHT double, where the same character opens and
+  // closes: a `"` line opened a run that could never end, so every later line
+  // was skipped as inserted law and every later operation kept the first walk's
+  // scope — a different provision, not a blank. hr2 re-spelled that way fell
+  // from 898 navigation steps to 436. No shipped fixture uses them; a paste
+  // from a web page or a word processor does.
+  //
+  // Written from the pair table rather than four literals, because the govinfo
+  // convention is two backticks and two apostrophes and BOTH halves are string
+  // delimiters somewhere. Asserted as an identity across the four, which is
+  // stronger than four separate expectations and cannot drift apart.
+  {
+    const SHAPE =
+      'SEC. 2. TEST.\n' +
+      '    Section 2 of the Widget Act (15 U.S.C. 2601) is amended--\n' +
+      '        (1) in subsection (c)(2), by adding at the end the following:\n' +
+      '@O@(D) a contract of sale of a digital commodity.@C@; and\n' +
+      '        (2) in subsection (b), by striking @O@fee@C@ and inserting @O@charge@C@.\n';
+    const read = ([o, c]) => {
+      const t = normalizeText(SHAPE.split('@O@').join(o).split('@C@').join(c));
+      const a = extractAmendments(t, extractCitations(t))[0];
+      return `${(a.steps || []).length}|${a.ops.map((x) => x.scope ?? '-').join(',')}`;
+    };
+    const pairs = [['``', "''"], ['‘‘', '’’'], ['“', '”'], ['"', '"']];
+    const got = pairs.map(read);
+    eq('all four quote conventions parse the same instruction alike',
+       new Set(got).size, 1, JSON.stringify(got));
+    // …and to the right answer, or agreeing on a wrong one would satisfy it.
+    eq('  and the second sub-instruction scopes to its own subsection',
+       got[0], '2|(b),(b),(c)(2)');
+  }
+
   // Against real bills: most inserts should get a position, or the redline is
   // mostly empty and the feature does not earn its place.
   if (existsSync(samplePath)) {
