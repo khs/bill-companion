@@ -466,6 +466,39 @@ section('relative navigation inside amendments');
   const sAms = extractAmendments(short, extractCitations(short));
   eq('a block inside the budget yields exactly one op',
      (sAms[0]?.ops || []).filter((o) => o.type === 'insert').length, 1);
+
+  // The same budget on the GENERIC scan, where the failure is not a missing op
+  // but a WRONG one. The lazy gap tries the first opener, cannot reach the
+  // closer within 400 characters, backtracks, and succeeds from a LATER opener
+  // — so the span begins in the middle of the new language. Verbatim from
+  // H.R. 1892: the panel quoted the new law starting at "(1) the qualified
+  // solar electric property expenditures", dropping "the sum of the applicable
+  // percentages of" and so reading as 100% of the expenditures.
+  // Sized to reproduce the backtrack rather than the total failure: the whole
+  // block is 421 characters, so the first opener cannot reach the closer, and
+  // the SECOND one can. Before the fix this recorded 368 characters beginning
+  // "(1) the qualified…".
+  const gen =
+    "Section 25D(a) is amended by striking ``the sum of--'' and all that " +
+    'follows and inserting ``the sum of the applicable percentages of--\n' +
+    '        ``(1) the qualified solar electric property expenditures,\n' +
+    '        ``(2) the qualified solar water heating property expenditures,\n' +
+    '        ``(3) the qualified fuel cell property expenditures,\n' +
+    '        ``(4) the qualified small wind energy property expenditures,\n' +
+    '        ``(5) the qualified geothermal heat pump property expenditures,\n' +
+    "    which are paid or incurred during such year.''.\n";
+  const gIns = (extractAmendments(gen, extractCitations(gen))[0]?.ops || [])
+    .filter((o) => o.type === 'insert');
+  eq('an over-budget generic insert yields one op', gIns.length, 1);
+  ok('  and begins at the first opener after the verb',
+     gIns[0] && /^the sum of the/.test(gIns[0].text),
+     JSON.stringify(gIns[0] && gIns[0].text.slice(0, 50)));
+  eq('  its span still round-trips', gen.slice(gIns[0].start, gIns[0].end), gIns[0].text);
+  // And the negative: an ordinary short operand is untouched by any of this.
+  const plain = "Section 3 is amended by inserting ``and jets'' after ``planes''.\n";
+  const pIns = (extractAmendments(plain, extractCitations(plain))[0]?.ops || [])
+    .filter((o) => o.type === 'insert');
+  eq('a short operand is read as itself', pIns[0] && pIns[0].text, 'and jets');
 }
 {
   // The instruction's own head is an address, and everything below it composes

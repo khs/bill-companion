@@ -3577,6 +3577,41 @@ export function extractAmendments(text, citations, divisions = [], sections = []
         // last thing in the match (the connective precedes it), so lastIndexOf
         // lands on the operand even when the same words appear in the lead-in.
         const rel = om[0].lastIndexOf(om[1]);
+        // The 400-character operand budget does not TRUNCATE. Where the closer
+        // is out of reach the whole match fails at that opener, the engine
+        // extends the lazy gap, and it succeeds from a LATER one — so the span
+        // recorded begins in the middle of the new language:
+        //
+        //     by striking ``the sum of--'' and all that follows and inserting
+        //     ``the sum of the applicable percentages of--
+        //     ``(1) the qualified solar electric property expenditures, …''
+        //
+        // recorded 376 characters beginning "(1) the qualified solar electric",
+        // and `render-context.js` prints a plain insert verbatim — so the panel
+        // stated the new law starting mid-sentence, reading as 100% of the
+        // expenditures rather than the applicable percentage of them. Worse
+        // where the truncated head is the tell another guard reads: s47 drops
+        // "SEC. 711. JUNIPER FLATS." off the front and item 48's newSection
+        // check, which tests exactly those characters, can never fire.
+        //
+        // An opener inside the gap is the signature and it is exact: the gap is
+        // lazy, so the first opener within reach is always tried first, and one
+        // sitting behind the operand means that attempt failed. A block
+        // delimited by quotes wants a block reader, which is what RE_ADD_END has
+        // used since item 36 — the same instrument, in the sibling shape.
+        const verb = om[0].match(/^(?:strik(?:e|ing)|insert(?:ing)?)/i);
+        const gap = verb ? om[0].slice(verb[0].length, rel).replace(/(?:``|‘‘|["“])$/, '') : '';
+        if (/``|‘‘|["“]/.test(gap)) {
+          const whole = readAddedBlock(text, h.headEnd + om.index + verb[0].length);
+          // No block to be had — the gap crosses another instruction, or the
+          // closer is past the runaway guard. Recording the re-matched fragment
+          // anyway is the fault this exists to stop, so nothing is recorded.
+          if (whole) {
+            ops.push({ type, text: text.slice(whole.start, whole.end),
+                       start: whole.start, end: whole.end });
+          }
+          continue;
+        }
         ops.push({
           type,
           text: om[1],

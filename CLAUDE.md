@@ -4518,3 +4518,52 @@ LVXXXVI--FEDERAL MARITIME
    all three references in the mid-line block now read "This sits inside language
    the bill is inserting, so (1) refers to the law being amended rather than to
    anything in the bill". selftest 699 -> 707, rendertest 456, proptest clean.
+
+77. **A 400-character operand budget does not truncate — it re-matches from a
+   later opener.** (2026-08-10, W10 of item 65, and the sibling of item 36.)
+   `RE_INSERT`'s gap is lazy, so the first quote opener within reach is always
+   tried first. Where the closer is more than 400 characters away that attempt
+   FAILS, the engine extends the gap, and the match succeeds from a later
+   opener — so the span recorded begins in the middle of the new language:
+
+   ```
+   Section 25D(a) is amended by striking ``the sum of--'' and all that follows
+   and inserting ``the sum of the applicable percentages of--
+   ``(1) the qualified solar electric property expenditures, …''
+     -> recorded 376 characters beginning "(1) the qualified solar electric"
+   ```
+
+   `render-context.js` prints a plain insert verbatim, so the panel stated the
+   new law starting mid-sentence — reading as 100% of the expenditures rather
+   than the applicable percentage of them. Item 36 fixed exactly this for the
+   after-unit form and left the generic scan alone; the note on
+   `RE_INSERT_AFTER_UNIT` has described the mechanism since.
+
+   **The signature is exact rather than heuristic.** An opener inside the gap
+   means the lazy engine tried an earlier one and failed there — it cannot mean
+   anything else. So the test is "is the operand's opener the first opener after
+   the verb?", and where it is not, `readAddedBlock()` reads the block from the
+   real opener, which is the instrument item 36 already chose for this shape: a
+   block delimited by quotes wants a block reader, not a character budget.
+   Where no block can be had — the gap crosses another instruction, or the
+   closer is past the runaway guard — **nothing is recorded**, because the
+   re-matched fragment is the fault this exists to stop.
+
+   **14 ops across 11 bills**, every one of them an insert, every recorded
+   length in 344–399 (the cap's fingerprint) and every new one 402–468. 0 spans
+   fail the round-trip. The two knock-ons the report names are both confirmed:
+   s47's block regains its head `SEC. 711. JUNIPER FLATS.`, which is the text
+   item 48's `newSection` guard tests and could never see; and hr1892's block
+   regains `(4) for fiscal year 2019, $900,000,000;`, so its leading marker is
+   (4) and not (5) — the depth signal `scopeAdditions()` reads.
+
+   **The corpus cannot see this, and the reason is written in item 74.**
+   `opSpans` is the SIZE of a set of `type:start-end` keys: 14 keys left and 14
+   arrived, so the count is identical. Verified by diffing the keys themselves.
+   `tools/coverage.mjs` does not move by a single operation either — all 14 are
+   plain inserts with neither a paired strike nor a quoted anchor, so they fall
+   through both branches of `apply()` and were never drawn. The whole of this
+   defect's reader-visible surface is the panel's verbatim quotation, which is
+   why it survived every instrument in the repo.
+
+   selftest 707 -> 711, rendertest 456, proptest clean, corpus unchanged.

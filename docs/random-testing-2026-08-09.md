@@ -107,7 +107,7 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 
 ---
 
-**W10. `RE_INSERT`'s 400-character operand cap does not truncate — it re-matches from a later opener**
+**W10. `RE_INSERT`'s 400-character operand cap does not truncate — it re-matches from a later opener** — FIXED 2026-08-10, CLAUDE.md item 77
 `app/parse/citations.js:959`. The lazy run cannot reach the closer from the first opener, the match fails there, and the engine advances the gap and succeeds from a later quote opener.
 
 - **Repro:** hr1892-115-enr SEC. 40402(b)(1) — `Section 25D(a) is amended by striking ``the sum of--'' and all that follows and inserting ``the sum of the applicable percentages of-- ``(1) the qualified solar electric property expenditures, … ''.`
