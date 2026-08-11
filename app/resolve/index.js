@@ -304,6 +304,30 @@ async function dispatch(cite) {
         }
       }
 
+      // Some names have no head at all, and saying so is the whole point.
+      // "National Defense Authorization Act" is one generic pattern over twenty
+      // distinct Public Laws — the entry recorded `10 U.S.C. 101` for it, and
+      // the pane printed "Definitions" under the sentence "Shown below is its
+      // first section", which is false: § 101's own credit is the title 10
+      // codification act of 1956 and no NDAA enacted it. 180 citations across
+      // 6 bills, plus the Inflation Reduction Act (26 U.S.C. 1, "Tax imposed")
+      // and the Infrastructure Investment and Jobs Act (23 U.S.C. 101,
+      // "Definitions") under the same false sentence.
+      //
+      // The contrast that makes those wrong rather than merely vague: 20 U.S.C.
+      // 6301 genuinely IS ESEA § 1001, so the identical sentence is true there.
+      // Where the anchor cannot be stood behind it is not recorded, and the
+      // reader gets the Act's name and the outbound links instead of a real
+      // provision from an unrelated statute.
+      if (!act.title || !act.section) {
+        return {
+          source: 'Act (popular name)',
+          actName: act.name,
+          citation: act.name,
+          range: rangeLabel(act),
+          actNoHead: true,
+        };
+      }
       // An Act name on its own points at a range, not a provision. Resolve the
       // Act's first codified section so the pane has something concrete, but
       // label it clearly as the start of the Act rather than "the" provision.
@@ -385,7 +409,7 @@ async function dispatch(cite) {
       // instead would make the richer citation the poorer answer, which is the
       // wrong way round: this form should never resolve to less than its parts.
       const named = cite.shortTitle && findAct(cite.shortTitle);
-      if (named) {
+      if (named && named.title && named.section) {
         const start = await resolveUsc({ title: named.title, section: named.section, subsection: '' });
         return {
           ...start,

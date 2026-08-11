@@ -173,6 +173,21 @@ export function renderContext(res, handlers) {
   if (res.crumbs && res.crumbs.length) root.appendChild(crumbs(res.crumbs, res, handlers));
   if (res.also && res.also.length) root.appendChild(alternates(res, handlers));
   if (res.offsetNote) root.appendChild(card('Numbering caveat', res.offsetNote, 'warn'));
+  // The Act is known by name and by nothing else. Saying so beats showing a
+  // provision from an unrelated statute under "shown below is its first
+  // section" — see the note in index.js.
+  if (res.actNoHead) {
+    root.appendChild(
+      card(
+        'Whole Act',
+        `This names the whole law, not a single provision, and no one section of ` +
+          `the U.S. Code is its head. ` +
+          (res.range ? res.range.text : 'The name covers more than one Public Law.'),
+        'warn',
+        res.range ? res.range.link : null
+      )
+    );
+  }
   if (res.isActStart) {
     root.appendChild(
       card(

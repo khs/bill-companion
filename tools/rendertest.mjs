@@ -1383,6 +1383,32 @@ section('Act-relative derivation');
   ok('an Act with no usable range adds no dangling phrase',
      /first section\.$/.test(bare.text), JSON.stringify(bare.text.slice(-90)));
   eq('  and no dangling link', bare.href, null);
+
+  // An Act with no head at all. "National Defense Authorization Act" is one
+  // pattern over twenty Public Laws; the table recorded 10 U.S.C. 101 for it
+  // and the card said "shown below is its first section" about title 10's
+  // Definitions, which no NDAA enacted. The card must state the absence, and
+  // must NOT be the isActStart card, which claims a provision follows.
+  const noHead = (range) => {
+    const root = rc({ citation: 'Widget Act', actName: 'Widget Act', actNoHead: true, range },
+                    { onScope: () => {} });
+    const el = [...root.querySelectorAll('.card')].find((x) => /Whole Act/i.test(x.textContent));
+    const a = el && el.querySelector('a');
+    return { text: el ? el.textContent.replace(/\s+/g, ' ').trim() : '(none)',
+             href: a ? a.getAttribute('href') : null };
+  };
+  const nda = noHead(null);
+  ok('an Act with no head says so', /no one section of the U\.S\. Code is its head/.test(nda.text),
+     nda.text.slice(0, 200));
+  ok('  and never claims a provision follows', !/first section/.test(nda.text), nda.text.slice(0, 200));
+  ok('  saying instead that the name covers more than one law',
+     /more than one Public Law/.test(nda.text), nda.text.slice(0, 200));
+  // Where the Act IS one law, the reader still gets a way to read it.
+  const ira = noHead({ text: 'The Act as a whole is Pub. L. 117-169.',
+                       link: { label: 'Read the law', href: 'https://example.invalid/plaw' } });
+  ok('  and names the law where there is exactly one',
+     /Pub\. L\. 117-169/.test(ira.text), ira.text.slice(0, 200));
+  eq('    with a link to it', ira.href, 'https://example.invalid/plaw');
 }
 
 section('additions at the end');

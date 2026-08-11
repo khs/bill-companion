@@ -4567,3 +4567,73 @@ LVXXXVI--FEDERAL MARITIME
    why it survived every instrument in the repo.
 
    selftest 707 -> 711, rendertest 456, proptest clean, corpus unchanged.
+
+78. **"Shown below is its first section" was false for three Acts, and one
+   harvested entry made a single chip out of two.** (2026-08-10, W7 and W13 of
+   item 65.)
+
+   **An Act with no head must not be given one.** The table recorded
+   `10 U.S.C. 101` for "National Defense Authorization Act" — one generic
+   pattern over twenty distinct Public Laws — so the pane printed title 10's
+   *Definitions* under the sentence "This looks like the entire law... Shown
+   below is its first section." That sentence is false: § 101's own credit is
+   `(Aug. 10, 1956, ch. 1041, 70A Stat. 3)`, the title 10 codification act, and
+   no NDAA enacted it. **180 citations across 6 bills**, plus the Inflation
+   Reduction Act (26 U.S.C. 1, "Tax imposed") and the Infrastructure Investment
+   and Jobs Act (23 U.S.C. 101, "Definitions") under the same false sentence.
+
+   The contrast is what makes these wrong rather than merely vague, and it is
+   worth keeping: **20 U.S.C. 6301 genuinely IS ESEA § 1001**, so the identical
+   sentence is true there and must keep being said. The three are exactly the
+   entries whose anchor was authored by hand and never checked against a
+   credit — the harvested ones come from the `et seq.` parenthetical Congress
+   writes beside a name, which IS the start of the Act's codified range.
+
+   The anchor is dropped from the data rather than flagged, because the problem
+   is that the data asserted something untrue. `resolve()` returns the Act's
+   name with `actNoHead`, and the card states the absence and links to the law
+   where there is exactly one. **`selftest` asserted the opposite invariant** —
+   "every entry carries name/pattern/title/section" — so that assertion now
+   requires a name, a pattern, and a WHOLE anchor or none, and names the three
+   outright so the count cannot drift.
+
+   **A harvested name can run into the sentence around it.** Seven entries are
+   not short titles at all:
+
+   ```
+   'Consumer Financial Protection Act of 2010, and under the Federal Trade Commission Act'
+   'President on March 13, 2020 under the National Emergencies Act'
+   'Production of Critical Food.--Chapter IV of the Federal Food, Drug, and Cosmetic Act'
+   ```
+
+   Only the first produces a wrong provision — an 84-character chip **opening on
+   the words "Consumer Financial Protection Act of 2010"** and resolving to
+   15 U.S.C. 41, the FTC Act's establishment section. The CFPA is 12 U.S.C. 5481
+   et seq. The other six are span overreach: the right Act, a chip covering words
+   that are not its name.
+
+   Five are deleted outright, because the Act named inside each already has its
+   own entry. Two are trimmed rather than dropped, and the reason is the useful
+   part: the Investment Company Act of 1940 has **no other entry at all**, and
+   the sibling "Indian Self-Determination and Education Assistance Act **of
+   1975**" requires the year, so deleting would have lost the year-less form
+   Congress writes constantly.
+
+   Corpus, composed to the unit — `byKind.act` and `citations` +199 on 20 bills
+   and **nothing else at all**, which is the signature of pure addition:
+
+   ```
+     -19  malformed spans, every one a sentence-prefixed harvest
+    +122  "Indian Self-Determination and Education Assistance Act", year-less
+     +79  "Investment Company Act of 1940", which had no clean entry
+     +17  the inner Act now chipped on its own name where the harvest ate it
+          (National Emergencies Act 10, Securities Exchange Act 4, FFDCA,
+           Endangered Species Act, Federal Trade Commission Act)
+   ```
+
+   19 removed and 19 replaced; `overlaps` and `badOffsets` stay 0, and no
+   amendment, target, step, ref or op span moves. Both new families resolve:
+   15 U.S.C. 80a-1 "Findings and declaration of policy" and 25 U.S.C. 5301
+   "Congressional statement of findings".
+
+   selftest 711 -> 712, rendertest 456 -> 461, proptest clean, corpus updated.

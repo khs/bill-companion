@@ -77,7 +77,7 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 
 ---
 
-**W7. Three hand-authored popular-name entries with no `enactedAs` answer with an unrelated section under a false sentence**
+**W7. Three hand-authored popular-name entries with no `enactedAs` answer with an unrelated section under a false sentence** — FIXED 2026-08-10, CLAUDE.md item 78
 `app/resolve/popular-names.js:83` — `{ name: 'National Defense Authorization Act', pattern: '…(?:\\s+for\\s+Fiscal\\s+Year\\s+\\d{4})?', title: '10', section: '101', range: 'varies' }` (confirmed verbatim).
 
 - **Repro:** any sentence naming an NDAA → `extractCitations` + `resolve`.
@@ -139,7 +139,7 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 
 ---
 
-**W13. A malformed harvested popular-name entry makes one chip out of two Acts**
+**W13. A malformed harvested popular-name entry makes one chip out of two Acts** — FIXED 2026-08-10, CLAUDE.md item 78
 `app/resolve/popular-names.js:288` — confirmed verbatim: `name: 'Consumer Financial Protection Act of 2010, and under the Federal Trade Commission Act'`, `title: '15', section: '41'`.
 
 - **Repro:** the Dodd-Frank §1027 sentence at hr4173-111-enr @2325790.

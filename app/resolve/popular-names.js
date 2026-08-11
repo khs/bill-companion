@@ -80,10 +80,10 @@ export const POPULAR_NAMES = [
   { name: 'Comprehensive Environmental Response, Compensation, and Liability Act of 1980', pattern: '(?:Comprehensive\\s+Environmental\\s+Response,?\\s+Compensation,?\\s+and\\s+Liability\\s+Act(?:\\s+of\\s+1980)?|CERCLA)', title: '42', section: '9601', enactedAs: 'Pub. L. 96–510', range: '9601 et seq.' },
   { name: 'Safe Drinking Water Act', pattern: 'Safe\\s+Drinking\\s+Water\\s+Act', title: '42', section: '300f', enactedAs: 'July 1, 1944, ch. 373', range: '300f et seq.' },
   { name: 'Toxic Substances Control Act', pattern: 'Toxic\\s+Substances\\s+Control\\s+Act', title: '15', section: '2601', enactedAs: 'Pub. L. 94–469', range: '2601 et seq.' },
-  { name: 'National Defense Authorization Act', pattern: 'National\\s+Defense\\s+Authorization\\s+Act(?:\\s+for\\s+Fiscal\\s+Year\\s+\\d{4})?', title: '10', section: '101', range: 'varies' },
+  { name: 'National Defense Authorization Act', pattern: 'National\\s+Defense\\s+Authorization\\s+Act(?:\\s+for\\s+Fiscal\\s+Year\\s+\\d{4})?', range: 'varies' },
   { name: 'Balanced Budget and Emergency Deficit Control Act of 1985', pattern: 'Balanced\\s+Budget\\s+and\\s+Emergency\\s+Deficit\\s+Control\\s+Act\\s+of\\s+1985', title: '2', section: '900', enactedAs: 'Pub. L. 99–177', range: '900 et seq.' },
-  { name: 'Inflation Reduction Act of 2022', pattern: 'Inflation\\s+Reduction\\s+Act\\s+of\\s+2022', title: '26', section: '1', range: 'Pub. L. 117-169' },
-  { name: 'Infrastructure Investment and Jobs Act', pattern: 'Infrastructure\\s+Investment\\s+and\\s+Jobs\\s+Act', title: '23', section: '101', range: 'Pub. L. 117-58' },
+  { name: 'Inflation Reduction Act of 2022', pattern: 'Inflation\\s+Reduction\\s+Act\\s+of\\s+2022', range: 'Pub. L. 117-169' },
+  { name: 'Infrastructure Investment and Jobs Act', pattern: 'Infrastructure\\s+Investment\\s+and\\s+Jobs\\s+Act', range: 'Pub. L. 117-58' },
   { name: 'CARES Act', pattern: 'CARES\\s+Act', title: '15', section: '9001', enactedAs: 'Pub. L. 116–136', range: 'Pub. L. 116-136' },
   {
     name: 'National Artificial Intelligence Initiative Act of 2020',
@@ -228,7 +228,6 @@ export const POPULAR_NAMES = [
   { name: 'Right to Financial Privacy Act of 1978', pattern: 'Right[\\s\\-]+to[\\s\\-]+Financial[\\s\\-]+Privacy[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1978', title: '12', section: '3401', range: '3401 et seq.', enactedAs: 'Pub. L. 95–630' },
   { name: 'National Quantum Initiative Act', pattern: 'National[\\s\\-]+Quantum[\\s\\-]+Initiative[\\s\\-]+Act', title: '15', section: '8851', range: '8851 et seq.', enactedAs: 'Pub. L. 115–368' },
   { name: 'Taiwan Relations Act', pattern: 'Taiwan[\\s\\-]+Relations[\\s\\-]+Act', title: '22', section: '3301', range: '3301 et seq.', enactedAs: 'Pub. L. 96–8' },
-  { name: 'President on March 13, 2020 under the National Emergencies Act', pattern: 'President[\\s\\-]+on[\\s\\-]+March[\\s\\-]+13,[\\s\\-]+2020[\\s\\-]+under[\\s\\-]+the[\\s\\-]+National[\\s\\-]+Emergencies[\\s\\-]+Act', title: '50', section: '1601', range: '1601 et seq.', enactedAs: 'Pub. L. 94–412' },
   { name: 'National Science and Technology Policy, Organization, and Priorities Act of 1976', pattern: 'National[\\s\\-]+Science[\\s\\-]+and[\\s\\-]+Technology[\\s\\-]+Policy,[\\s\\-]+Organization,[\\s\\-]+and[\\s\\-]+Priorities[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1976', title: '42', section: '6601', range: '6601 et seq.', enactedAs: 'Pub. L. 94–282' },
   { name: 'Peace Corps Act', pattern: 'Peace[\\s\\-]+Corps[\\s\\-]+Act', title: '22', section: '2501', range: '2501 et seq.', enactedAs: 'Pub. L. 87–293' },
   { name: 'Federal Meat Inspection Act', pattern: 'Federal[\\s\\-]+Meat[\\s\\-]+Inspection[\\s\\-]+Act', title: '21', section: '601', range: '601 et seq.', enactedAs: 'Mar. 4, 1907, ch. 2907' },
@@ -256,7 +255,6 @@ export const POPULAR_NAMES = [
   { name: 'Rhinoceros and Tiger Conservation Act of 1994', pattern: 'Rhinoceros[\\s\\-]+and[\\s\\-]+Tiger[\\s\\-]+Conservation[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1994', title: '16', section: '5301', range: '5301 et seq.', enactedAs: 'Pub. L. 103–391' },
   { name: 'AIDS Housing Opportunity Act', pattern: 'AIDS[\\s\\-]+Housing[\\s\\-]+Opportunity[\\s\\-]+Act', title: '42', section: '12901', range: '12901 et seq.', enactedAs: 'Pub. L. 101–625' },
   { name: 'National Manufactured Housing Construction and Safety Standards Act of 1974', pattern: 'National[\\s\\-]+Manufactured[\\s\\-]+Housing[\\s\\-]+Construction[\\s\\-]+and[\\s\\-]+Safety[\\s\\-]+Standards[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1974', title: '42', section: '5401', range: '5401 et seq.', enactedAs: 'Pub. L. 93–383' },
-  { name: 'Securities and Exchange Commission under the Securities Exchange Act of 1934', pattern: 'Securities[\\s\\-]+and[\\s\\-]+Exchange[\\s\\-]+Commission[\\s\\-]+under[\\s\\-]+the[\\s\\-]+Securities[\\s\\-]+Exchange[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1934', title: '15', section: '78a', range: '78a et seq.', enactedAs: 'June 6, 1934, ch. 404' },
   { name: 'Fair Debt Collection Practices Act', pattern: 'Fair[\\s\\-]+Debt[\\s\\-]+Collection[\\s\\-]+Practices[\\s\\-]+Act', title: '15', section: '1692', range: '1692 et seq.', enactedAs: 'Pub. L. 90–321' },
   { name: 'Community Development Banking and Financial Institutions Act of 1994', pattern: 'Community[\\s\\-]+Development[\\s\\-]+Banking[\\s\\-]+and[\\s\\-]+Financial[\\s\\-]+Institutions[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1994', title: '12', section: '4701', range: '4701 et seq.' },
   { name: 'Federal Alcohol Administration Act', pattern: 'Federal[\\s\\-]+Alcohol[\\s\\-]+Administration[\\s\\-]+Act', title: '27', section: '201', range: '201 et seq.', enactedAs: 'Aug. 29, 1935, ch. 814' },
@@ -276,22 +274,26 @@ export const POPULAR_NAMES = [
   { name: 'Indian Gaming Regulatory Act', pattern: 'Indian[\\s\\-]+Gaming[\\s\\-]+Regulatory[\\s\\-]+Act', title: '25', section: '2701', range: '2701 et seq.', enactedAs: 'Pub. L. 100–497' },
   { name: 'Anti-Deficiency Act', pattern: 'Anti[\\s\\-]+Deficiency[\\s\\-]+Act', title: '31', section: '1511', range: '1511 et seq.' },
   { name: 'Warning, Alert, and Response Network Act', pattern: 'Warning,[\\s\\-]+Alert,[\\s\\-]+and[\\s\\-]+Response[\\s\\-]+Network[\\s\\-]+Act', title: '47', section: '1201', range: '1201 et seq.' },
-  { name: 'Secretary of the Interior under the Indian Self-Determination and Education Assistance Act', pattern: 'Secretary[\\s\\-]+of[\\s\\-]+the[\\s\\-]+Interior[\\s\\-]+under[\\s\\-]+the[\\s\\-]+Indian[\\s\\-]+Self[\\s\\-]+Determination[\\s\\-]+and[\\s\\-]+Education[\\s\\-]+Assistance[\\s\\-]+Act', title: '25', section: '5304', range: '5304 et seq.', enactedAs: 'Pub. L. 93–638' },
+  // Harvested with the sentence in front of it — "the Secretary of the Interior
+  // under the Indian Self-Determination…". Trimmed to the Act's own name rather
+  // than deleted, because the sibling entry below requires the year and this is
+  // the only one that reads the year-less form. Anchored where that sibling is;
+  // 5304 is the Act's definitions section, not its start.
+  { name: 'Indian Self-Determination and Education Assistance Act', pattern: 'Indian[\\s\\-]+Self[\\s\\-]+Determination[\\s\\-]+and[\\s\\-]+Education[\\s\\-]+Assistance[\\s\\-]+Act', title: '25', section: '5301', range: '5301 et seq.', enactedAs: 'Pub. L. 93–638' },
   { name: 'Barry Goldwater Scholarship and Excellence in Education Act of 1986', pattern: 'Barry[\\s\\-]+Goldwater[\\s\\-]+Scholarship[\\s\\-]+and[\\s\\-]+Excellence[\\s\\-]+in[\\s\\-]+Education[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1986', title: '20', section: '4701', range: '4701 et seq.', enactedAs: 'Pub. L. 99–661' },
-  { name: 'Production of Critical Food.--Chapter IV of the Federal Food, Drug, and Cosmetic Act', pattern: 'Production[\\s\\-]+of[\\s\\-]+Critical[\\s\\-]+Food\\.[\\s\\-]+Chapter[\\s\\-]+IV[\\s\\-]+of[\\s\\-]+the[\\s\\-]+Federal[\\s\\-]+Food,[\\s\\-]+Drug,[\\s\\-]+and[\\s\\-]+Cosmetic[\\s\\-]+Act', title: '21', section: '341', range: '341 et seq.', enactedAs: 'June 25, 1938, ch. 675' },
-  { name: 'Secretary under the Endangered Species Act of 1973', pattern: 'Secretary[\\s\\-]+under[\\s\\-]+the[\\s\\-]+Endangered[\\s\\-]+Species[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1973', title: '16', section: '1531', range: '1531 et seq.', enactedAs: 'Pub. L. 93–205' },
   { name: 'Federal Columbia River Transmission System Act', pattern: 'Federal[\\s\\-]+Columbia[\\s\\-]+River[\\s\\-]+Transmission[\\s\\-]+System[\\s\\-]+Act', title: '16', section: '838', range: '838 et seq.', enactedAs: 'Pub. L. 93–454' },
   { name: 'Depository Institutions Management Interlocks Act', pattern: 'Depository[\\s\\-]+Institutions[\\s\\-]+Management[\\s\\-]+Interlocks[\\s\\-]+Act', title: '12', section: '3201', range: '3201 et seq.', enactedAs: 'Pub. L. 95–630' },
   { name: 'Bankruptcy Code or the Securities Investor Protection Act of 1970', pattern: 'Bankruptcy[\\s\\-]+Code[\\s\\-]+or[\\s\\-]+the[\\s\\-]+Securities[\\s\\-]+Investor[\\s\\-]+Protection[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1970', title: '15', section: '78aaa', range: '78aaa et seq.', enactedAs: 'Pub. L. 91–598' },
   { name: 'Bankruptcy Code, the Securities Investor Protection Act of 1970', pattern: 'Bankruptcy[\\s\\-]+Code,[\\s\\-]+the[\\s\\-]+Securities[\\s\\-]+Investor[\\s\\-]+Protection[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1970', title: '15', section: '78aaa', range: '78aaa et seq.', enactedAs: 'Pub. L. 91–598' },
   { name: 'Securities Exchange Act of 1934.--The Securities Exchange Act of 1934', pattern: 'Securities[\\s\\-]+Exchange[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1934\\.[\\s\\-]+The[\\s\\-]+Securities[\\s\\-]+Exchange[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1934', title: '15', section: '78a', range: '78a et seq.', enactedAs: 'June 6, 1934, ch. 404' },
-  { name: 'Consumer Financial Protection Act of 2010, and under the Federal Trade Commission Act', pattern: 'Consumer[\\s\\-]+Financial[\\s\\-]+Protection[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+2010,[\\s\\-]+and[\\s\\-]+under[\\s\\-]+the[\\s\\-]+Federal[\\s\\-]+Trade[\\s\\-]+Commission[\\s\\-]+Act', title: '15', section: '41', range: '41 et seq.', enactedAs: 'Sept. 26, 1914, ch. 311' },
   { name: 'Sikes Act', pattern: 'Sikes[\\s\\-]+Act', title: '16', section: '670', range: '670 et seq.', enactedAs: 'Pub. L. 86–797' },
   { name: 'Defense Base Act', pattern: 'Defense[\\s\\-]+Base[\\s\\-]+Act', title: '42', section: '1651', range: '1651 et seq.', enactedAs: 'Aug. 16, 1941, ch. 357' },
   { name: 'International Economic Emergency Powers Act', pattern: 'International[\\s\\-]+Economic[\\s\\-]+Emergency[\\s\\-]+Powers[\\s\\-]+Act', title: '50', section: '1701', range: '1701 et seq.', enactedAs: 'Pub. L. 95–223' },
   { name: 'Alaska Native Educational Equity, Support, and Assistance Act', pattern: 'Alaska[\\s\\-]+Native[\\s\\-]+Educational[\\s\\-]+Equity,[\\s\\-]+Support,[\\s\\-]+and[\\s\\-]+Assistance[\\s\\-]+Act', title: '20', section: '6301', range: '6301 et seq.', enactedAs: 'Pub. L. 89–10' },
   { name: 'Safe and Drug-Free Schools and Communities Act', pattern: 'Safe[\\s\\-]+and[\\s\\-]+Drug[\\s\\-]+Free[\\s\\-]+Schools[\\s\\-]+and[\\s\\-]+Communities[\\s\\-]+Act', title: '20', section: '7101', range: '7101 et seq.', enactedAs: 'Pub. L. 89–10' },
-  { name: 'Securities and Exchange Commission under the Investment Company Act of 1940', pattern: 'Securities[\\s\\-]+and[\\s\\-]+Exchange[\\s\\-]+Commission[\\s\\-]+under[\\s\\-]+the[\\s\\-]+Investment[\\s\\-]+Company[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1940', title: '15', section: '80a-1', range: '80a-1 et seq.' },
+  // Same harvest fault, and this Act has no other entry at all — so trimmed
+  // rather than dropped. 15 U.S.C. 80a-1 really is the Act's first section.
+  { name: 'Investment Company Act of 1940', pattern: 'Investment[\\s\\-]+Company[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1940', title: '15', section: '80a-1', range: '80a-1 et seq.' },
 ];
 
 /** Look up an Act by a name the bill used. Returns the table entry or null. */

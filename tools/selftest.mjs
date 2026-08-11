@@ -2123,10 +2123,21 @@ section('internal cross-references');
     ok('  and most of them resolve their own section numbers',
        POPULAR_NAMES.filter((a) => a.enactedAs).length >= 150,
        `${POPULAR_NAMES.filter((a) => a.enactedAs).length} with enactedAs`);
-    // Every entry must have the four fields the resolver reads, or a name
-    // matches text and then resolves to nothing.
-    const malformed = POPULAR_NAMES.filter((a) => !a.name || !a.pattern || !a.title || !a.section);
-    eq('  every entry carries name/pattern/title/section', malformed.length, 0);
+    // Every entry must have a name and a pattern, or it matches text and then
+    // resolves to nothing. An ANCHOR is optional and must be all-or-nothing: a
+    // name that covers twenty Public Laws has no first section to stand behind,
+    // and recording one made the pane print an unrelated provision under
+    // "shown below is its first section". Half an anchor is still malformed.
+    const malformed = POPULAR_NAMES.filter(
+      (a) => !a.name || !a.pattern || Boolean(a.title) !== Boolean(a.section)
+    );
+    eq('  every entry carries name and pattern, and a whole anchor or none',
+       malformed.length, 0, JSON.stringify(malformed.map((a) => a.name)));
+    // The ones that deliberately have none, so the count cannot drift silently.
+    eq('  three entries name a law with no single head',
+       POPULAR_NAMES.filter((a) => !a.title).map((a) => a.name).sort().join(' | '),
+       'Inflation Reduction Act of 2022 | Infrastructure Investment and Jobs Act | ' +
+         'National Defense Authorization Act');
     // A pattern is spliced into a \b…\b match, so a capturing group inside one
     // would shift every later group in the composed regexes.
     const capturing = POPULAR_NAMES.filter((a) => /\((?!\?)/.test(a.pattern));
