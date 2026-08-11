@@ -1705,6 +1705,54 @@ section('operand placement');
   const atEnd = p('Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking ``and\'\' at the end.\n');
   ok('"at the end" marks the strike', atEnd.find((o) => o.type === 'strike').atEnd === true);
 
+  // "…and all that follows" — the bill removes a RUN and the strike scan reads
+  // only where it starts. 523 phrases across the corpus, 383 of them directly
+  // after a parsed strike, and every one drew a mark far smaller than the change
+  // the bill makes. Four endpoints, and they are not interchangeable.
+  {
+    const run = (tail) =>
+      p(`Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking \`\`$1.50 per acre'' and all that follows ${tail}\n`)
+        .find((o) => o.type === 'strike');
+    const quoted = run("through ``the period at the end'' and inserting ``$3 per acre''.");
+    eq('a run stated at both ends carries its endpoint', quoted.runTo, 'the period at the end');
+    ok('  and is not confused with "to the end"', !quoted.runToEnd && !quoted.runUnknown);
+
+    const punct = run("through the period at the end and inserting ``$3 per acre''.");
+    ok('"through the period at the end" runs to the end of the passage',
+       punct.runToEnd === true && !punct.runTo, JSON.stringify(punct));
+    ok('  and so does a bare "all that follows"', run("and inserting ``$3''.").runToEnd === true);
+    // "through the end of the subsection" is the same endpoint spelled longer —
+    // the unit it names sits at or above the passage the operand is found in.
+    ok('  and so does "through the end of the subsection"',
+       run("through the end of the subsection and inserting ``$3''.").runToEnd === true);
+
+    // The refusal, and it is the half that costs something: the mark drawn today
+    // on the opening phrase is withdrawn with it, because a strikethrough over
+    // "$1.50 per acre" alone claims the bill removes those words and no others.
+    const named = run("through subparagraph (E) and inserting ``$3''.");
+    ok('a run ending at a whole sibling provision is refused',
+       named.runUnknown === true && !named.runTo && !named.runToEnd, JSON.stringify(named));
+    ok('  as is one ending at a sentence',
+       run('through the second sentence.').runUnknown === true);
+
+    // The pairing. RE_REPLACES reads the gap between the two operands, and a run
+    // puts its whole endpoint phrase in there — so without RE_RUN_REPLACES the
+    // insert is unpaired, apply() has neither a strike nor an anchor to place it
+    // against, and nothing is drawn or tested. 15 U.S.C. 1681u(b) reads the
+    // amended way today and had 362 characters of the PATRIOT Act's own inserted
+    // language struck through as a pending deletion.
+    const paired = p(
+      'Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking ' +
+      "``$1.50 per acre'' and all that follows through the period at the end and " +
+      "inserting the following: ``$3 per acre per year''.\n"
+    );
+    const ins = paired.find((o) => o.type === 'insert');
+    const str = paired.find((o) => o.type === 'strike');
+    ok('  a run\'s insert is paired across the endpoint phrase',
+       ins && str && ins.replaces === str.start,
+       JSON.stringify(paired.map((o) => `${o.type}:${o.text}:${o.replaces}`)));
+  }
+
   // A quoted operand may not run past the start of the next one. The SOURCE can
   // be malformed: govinfo's rendition of Pub. L. 107-56 writes the USA PATRIOT
   // Act's §814(c) with two backticks and one apostrophe, so the scan for a
@@ -3591,8 +3639,26 @@ if (existsSync(substitutePath)) {
   // budget did not truncate them — the closer was unreachable, so the match
   // failed and no op existed at all. Read by readAddedBlock() now, the same way
   // "adding at the end the following" has been since 2026-08-01.
+  //
+  // 33, not 30, for the other half of that same budget. Where an opener sits
+  // inside the lazy gap the engine re-matches from a later one and records a
+  // fragment (item 77); where there is nothing behind it to fall back to, the
+  // match fails silently and no op exists. Two of the three new ones insert a
+  // whole new SECTION into the Securities Act and the Exchange Act — 969 and
+  // 10,490 characters — after an anchor RE_INSERT_AFTER_UNIT cannot read,
+  // because "section" is not one of the levels within a provision.
   eq('substitute: extracts the operations', JSON.stringify(opCounts(ams)),
-     JSON.stringify({ strike: 16, insert: 30, 'add-at-end': 10, redesignate: 4 }));
+     JSON.stringify({ strike: 16, insert: 33, 'add-at-end': 10, redesignate: 4 }));
+  // Counted against the source rather than asserted at: five quoted insert
+  // operands in this bill run past the 400-character budget, and all five now
+  // have an op whose span round-trips. Two were already read by the after-unit
+  // block reader; the three above are what this adds.
+  {
+    const big = ams.flatMap((a) => a.ops).filter((o) => o.type === 'insert' && o.start != null && o.end - o.start > 400);
+    eq('  quoted insert operands over the 400-character budget', big.length, 5);
+    eq('    every one of them round-trips',
+       big.filter((o) => text.slice(o.start, o.end) !== o.text).length, 0);
+  }
 
   // Counted against the source, not asserted at. Every "adding at the end the
   // following" in this bill falls inside a parsed amendment, so the op count is
@@ -3790,7 +3856,22 @@ if (existsSync(clarityPdfPath)) {
      // written twice in this print — produced no operation at all, while the
      // identical sentence with "clause" worked. 45 such instructions across 8
      // corpus bills, against 0 produced.
-     JSON.stringify({ 'add-at-end': 27, insert: 64, redesignate: 8, strike: 44, replace: 2 }));
+     //
+     // 74 inserts, not 64. Every one of the ten is "by inserting after section
+     // N the following: ‘‘SEC. …''" — nine of them, plus one "before paragraph
+     // (12)" — and each is a whole new section of the Exchange Act or the
+     // Commodity Exchange Act, up to 32,716 characters, which the generic
+     // scan's 400-character budget could not reach and RE_INSERT_AFTER_UNIT
+     // does not claim because a section is not a level within a provision.
+     JSON.stringify({ 'add-at-end': 27, insert: 74, redesignate: 8, strike: 44, replace: 2 }));
+  // Counted against the source: 17 quoted insert operands in this print run
+  // past the budget, 7 of which the after-unit reader already claimed.
+  {
+    const big = ams.flatMap((a) => a.ops).filter((o) => o.type === 'insert' && o.start != null && o.end - o.start > 400);
+    eq('  quoted insert operands over the 400-character budget', big.length, 17);
+    eq('    every one of them round-trips',
+       big.filter((o) => text.slice(o.start, o.end) !== o.text).length, 0);
+  }
 
   // Counted against the source. 31 phrases in the bill, 27 of them inside a
   // parsed amendment — the other four sit in the long tail of amendatory
@@ -3839,7 +3920,10 @@ if (existsSync(clarityPdfPath)) {
   // +2 for the two replacements. Both are NEW spans rather than conversions of
   // an existing insert, and two ops producing two distinct spans is what proves
   // neither block was claimed twice — the same argument the seven above rest on.
-  eq('  which collapse to distinct spans', spans.size, 125);
+  // +10 for the over-budget blocks with no anchor phrase the after-unit reader
+  // can read, and this is again the assertion that makes them trustworthy: ten
+  // new ops producing ten new DISTINCT spans is what proves none was read twice.
+  eq('  which collapse to distinct spans', spans.size, 135);
   const quoted = ams.flatMap((a) => a.ops).filter((o) => o.text);
   ok('  and they are real quoted language', quoted.some((o) => /digital commodity/i.test(o.text)),
      JSON.stringify(quoted.slice(0, 3).map((o) => o.text)));

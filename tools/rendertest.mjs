@@ -685,6 +685,75 @@ section('redline on the current law');
        'apples [del:and] / pears and');
   }
 
+  // A RUN — "by striking ``X'' and all that follows through ``Y''" — is never
+  // drawn as a deletion, and that is the measured answer rather than a missing
+  // feature. Extending the mark to the stated endpoint was wrong in 38 of 42
+  // cases read against the shipped shards: the Code is current, the operand
+  // survives inside the language that replaced it, and the extension then
+  // strikes the amendment's own result.
+  {
+    eq('a run to a quoted endpoint is not drawn',
+       show(seg([{ type: 'strike', text: '$1.50', start: 1, end: 6, runTo: 'per acre' }],
+                'a fee of $1.50 for each per acre of land')),
+       'a fee of $1.50 for each per acre of land');
+    eq('  nor is a run to the end of the passage',
+       show(seg([{ type: 'strike', text: 'means', start: 1, end: 6, runToEnd: true }],
+                'the term means the amount of the fee.')),
+       'the term means the amount of the fee.');
+    eq('  nor one whose endpoint cannot be placed at all',
+       show(seg([{ type: 'strike', text: 'fee', start: 1, end: 4, runUnknown: true }], 'a fee is due')),
+       'a fee is due');
+    // The negative that keeps the refusal narrow: an ordinary strike is still
+    // drawn, so this cannot silently swallow the whole strike path.
+    eq('  while an ordinary strike still is',
+       show(seg([{ type: 'strike', text: 'fee', start: 1, end: 4 }], 'a fee is due')),
+       'a [del:fee] is due');
+  }
+  // What a run DOES draw is the positive case, and only that: where the language
+  // the bill inserts demonstrably sits at the run's start, it is marked as
+  // already in force. A match is evidence; its absence is not.
+  //
+  // Equality is the signature here and the ordinary paired-insert test rejects
+  // it — that test requires the new phrase to reach PAST the struck words, which
+  // is right for "strike ``The substitution'', insert ``Subject to paragraph
+  // (6), the substitution''" and wrong for a run, where the struck span IS the
+  // new text exactly.
+  {
+    const ops = () => [
+      { type: 'strike', text: 'means', start: 1, end: 6, runToEnd: true },
+      { type: 'insert', text: 'means the amount by which the wages exceed', start: 9, end: 50, replaces: 1 },
+    ];
+    eq('a run already in force is marked as such',
+       show(createRedline(ops()).apply('the term means the amount by which the wages exceed')),
+       'the term [was:means the amount by which the wages exceed]');
+    // …and where it is not in force, nothing at all — not a red run, and not a
+    // green replacement either, because the words would have to go where the run
+    // ended and that is the thing that cannot be confirmed.
+    eq('  and one that is not is left alone entirely',
+       show(createRedline(ops()).apply('the term means the old amount')),
+       'the term means the old amount');
+  }
+
+  // A block is listed, not woven. An operand over 400 characters is a provision
+  // rather than a phrase, and the corpus divides there exactly: of 601 inline
+  // green inserts drawn before the block reader existed, none was longer, and
+  // the first two that became drawable were both language already in force.
+  {
+    const long = 'the following new subparagraph shall apply in every case '.repeat(9);
+    ok('  and the operand is over the inline budget', long.length > 400);
+    eq('a block-length insert is listed, not woven in',
+       show(seg([{ type: 'insert', text: long, start: 1, end: 1 + long.length,
+                   relation: 'after', anchor: 'planes' }], 'for planes only')),
+       'for planes only');
+    // The negative: the same shape one character under the budget still draws,
+    // so this cannot silently swallow ordinary insertions.
+    const short = long.slice(0, 400);
+    eq('  while a phrase-length one still is',
+       show(seg([{ type: 'insert', text: short, start: 1, end: 401,
+                   relation: 'after', anchor: 'planes' }], 'for planes only')),
+       `for planes[ins:${short}] only`);
+  }
+
   // An anchored insertion goes beside the anchor, which is not struck.
   eq('an "after" anchor places the insertion',
      show(seg([{ type: 'insert', text: ' and jets', start: 1, end: 9, relation: 'after', anchor: 'planes' }],

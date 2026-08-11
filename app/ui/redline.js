@@ -131,6 +131,31 @@ function occurrences(folded, needle) {
 const ENACTED_MIN = 24;
 
 /**
+ * The longest operand that is a PHRASE rather than a provision.
+ *
+ * Woven into a sentence, a phrase reads; a provision does not. This is the same
+ * 400 characters RE_INSERT used as its operand budget, and that is not a
+ * coincidence being reused — it is where the two populations actually divide.
+ * Measured before it was imposed: across the corpus the inline renderer drew
+ * 601 green inserts and NOT ONE of them was over 400 characters, because an
+ * operand that long could not be parsed at all. Reading those blocks (item 77's
+ * other half) put 549 new operations into the panel, of which exactly two
+ * reached this branch — and both were wrong in the way this file cares about
+ * most. 42 U.S.C. 1396d(a)(4)(A) already carries the American Rescue Plan's
+ * subparagraph (E) and 1396o(a)(2)(B) already carries the tobacco-cessation
+ * clause, so 1,099 and 458 characters of law in force were drawn as pending
+ * additions. Neither in-force test could see it: the codifier writes "March 11,
+ * 2021" where the bill wrote "the date of the enactment of the American Rescue
+ * Plan Act of 2021".
+ *
+ * So a block is LISTED and not woven. The panel prints its language, which is
+ * the whole of what reading it gained; drawing it was never part of that.
+ * Marking one as already in force is unaffected — that is a claim about text
+ * on screen, and positive evidence is safe at any length.
+ */
+const INLINE_MAX = 400;
+
+/**
  * An operation scoped to a path the provision does not have.
  *
  * `inScope` asks whether the node's path starts with the op's scope, so a scope
@@ -590,6 +615,49 @@ export function createRedline(ops, fullText, knownPaths) {
       // punctuation follows the match, it really is at the end; otherwise the
       // language is gone and the honest answer is to mark nothing.
       let chosen;
+      // A RUN, not a phrase — "by striking ``X'' and all that follows through
+      // ``Y''" removes everything from X to Y — and a run is never drawn as a
+      // deletion. That refusal was measured rather than chosen.
+      //
+      // Marking X alone, which is what the strike scan gives, shows a far
+      // smaller change than the bill makes. Extending the mark to the endpoint
+      // is the obvious repair and it is wrong: of 42 extended marks read against
+      // the shipped shards by two independent lenses, 38 were wrong and 4 right.
+      // Every failure is the same one. The Code is CURRENT, so an enacted bill's
+      // run has already been made; the operand survives inside the language the
+      // bill inserted (a rewrite quotes its opening words back), the endpoint
+      // survives with it, and the extension then strikes the amendment's own
+      // result — 26 U.S.C. 3402(a)(2), 2 U.S.C. 287c(a), 7 U.S.C. 3322(b)(1),
+      // 400 characters at a time, with the identical sentence re-inserted in
+      // green beside it. That is the duplication every guard in this file
+      // exists to prevent, at the scale of a whole paragraph.
+      //
+      // Nor can "has this run already been made?" be answered by comparing the
+      // insert against the passage. Four separate things defeat it, each
+      // measured: the bill writes "taxpayer's" and the Code "taxpayer’s"; the
+      // codifier translates a cross-reference ("section 473" -> "section 673 of
+      // this title", "this Act" -> "this chapter"); the insert carries its own
+      // markers, which the Code holds as child NODES rather than as text; and a
+      // rewrite regularly prepends words in front of the operand.
+      //
+      // So the run is stated and not drawn. What IS drawn is the positive case
+      // below: where the inserted language demonstrably sits at the run's start,
+      // it is marked as already in force. That asymmetry is the one this file
+      // uses everywhere — a match is evidence, its absence is not.
+      //
+      // The extent is still computed, because the in-force test needs it. The
+      // endpoint is searched for AT OR AFTER the opening phrase, since a run
+      // does not double back and statutory language repeats.
+      if (op.runUnknown) continue;
+      if (op.runTo || op.runToEnd) {
+        const from = hits[0];
+        const stop = op.runTo
+          ? occurrences(folded, op.runTo).find((h) => h.start >= from.end)
+          : { end: text.replace(/\s+$/, '').length };
+        if (!stop || stop.end <= from.start) continue;
+        struckAt.set(op.start, { start: from.start, end: stop.end });
+        continue;
+      }
       if (op.all) chosen = hits;
       else if (op.atEnd) {
         const last = hits[hits.length - 1];
@@ -635,9 +703,12 @@ export function createRedline(ops, fullText, knownPaths) {
       if (op.placement === 'after-unit') continue;
       if (op.replaces != null) {
         const where = struckAt.get(op.replaces);
+        const struckOp = work.find((o) => o.start === op.replaces);
+        const isRun = Boolean(struckOp && (struckOp.runTo || struckOp.runToEnd));
         // Only in the same passage the strike landed in; otherwise wait, the
-        // provision may continue in a later node.
-        if (where && dels.some((d) => d.start === where.start)) {
+        // provision may continue in a later node. A RUN has no `del` to look
+        // for — it is never drawn as one — so its recorded extent stands in.
+        if (where && (isRun || dels.some((d) => d.start === where.start))) {
           // The replacement has already been made. A bill most often rewrites a
           // phrase by quoting it back with something in front of it — strike
           // "The substitution", insert "Subject to paragraph (6), the
@@ -656,11 +727,25 @@ export function createRedline(ops, fullText, knownPaths) {
           // and in'' and inserting ``paragraph,''" starts with the same word,
           // and the operand still being there is the amendment NOT having
           // happened. Nothing that lies inside the struck span is evidence.
-          const spans = occurrences(folded, op.text).find(
-            (h) =>
-              h.start <= where.start &&
-              h.end >= where.end &&
-              (h.start < where.start || h.end > where.end)
+          //
+          // A RUN is the one shape where EQUALITY is the evidence rather than
+          // its absence. "by striking ``means the amount'' and all that
+          // follows and inserting ``means the amount by which the wages
+          // exceed…''" replaces everything from the operand to the end of the
+          // passage, so once it is in force the struck span IS the new text,
+          // exactly — and the strict-larger test above rejects that. It
+          // rejected it in the worst possible direction: 26 U.S.C. 3402(a)(2)
+          // reads the amended way today, and the run drew a strikethrough
+          // across the whole of it with the identical words inserted beside.
+          // The test for a run is therefore that the new language BEGINS where
+          // the run begins, which is where the replacement put it. This is the
+          // ONLY thing a run draws — see the strike loop for why.
+          const spans = occurrences(folded, op.text).find((h) =>
+            isRun
+              ? h.start === where.start
+              : h.start <= where.start &&
+                h.end >= where.end &&
+                (h.start < where.start || h.end > where.end)
           );
           if (spans) {
             // The strike goes with it. Those words are part of the new phrase,
@@ -669,12 +754,17 @@ export function createRedline(ops, fullText, knownPaths) {
             for (let i = dels.length - 1; i >= 0; i--) {
               if (dels[i].op.start === op.replaces) dels.splice(i, 1);
             }
-            const struck = work.find((o) => o.start === op.replaces);
-            if (struck) struck.enacted = true;
+            if (struckOp) { struckOp.enacted = true; struckOp.done = true; }
             enact(op, null, spans, hit);
             continue;
           }
-          if (!stale) {
+          // A run's replacement is not drawn either, and for the same reason
+          // the run is not: the words would have to go where the run ended, and
+          // the run's end is the thing that cannot be confirmed. Drawing it
+          // would put a green paragraph in the middle of text that may already
+          // read that way. The panel prints the new language instead.
+          if (isRun) continue;
+          if (!stale && String(op.text).length <= INLINE_MAX) {
             inss.push({ at: where.end, text: op.text, op });
             fired(op, hit);
           }
@@ -698,7 +788,7 @@ export function createRedline(ops, fullText, knownPaths) {
           // grounds for drawing nothing at all, which told the reader the
           // anchor could not be found when the truth was the opposite.
           if (alreadyThere(text, at, op.text)) { enact(op, at, undefined, hit); continue; }
-          if (stale) continue;
+          if (stale || String(op.text).length > INLINE_MAX) continue;
           inss.push({ at, text: op.text, op });
           fired(op, hit);
         }

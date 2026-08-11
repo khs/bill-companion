@@ -899,6 +899,13 @@ function effect(eff, handlers) {
       const words = flat(op.text);
       t.textContent = `rewritten to read: “${words.length > 140 ? `${words.slice(0, 140)}…` : words}”`;
     } else if (op.type === 'repeal') t.textContent = 'the provision is repealed in full';
+    // A RUN, not a phrase. "by striking ``X'' and all that follows through
+    // ``Y''" removes everything between the two, and printing the operand alone
+    // named a fraction of what the bill deletes — the same understatement the
+    // redline used to draw. See RE_RUN in app/parse/citations.js.
+    else if (op.runTo) t.textContent = `“${flat(op.text)}” through “${flat(op.runTo)}”`;
+    else if (op.runToEnd) t.textContent = `“${flat(op.text)}” to the end`;
+    else if (op.runUnknown) t.textContent = `“${flat(op.text)}” and all that follows`;
     else t.textContent = `“${flat(op.text)}”`;
     row.appendChild(t);
 
@@ -965,6 +972,16 @@ function effect(eff, handlers) {
             ? '✓ the provision above already reads as the rewrite'
             : '✓ the provision is marked above')
         : '✓ shown above';
+      row.appendChild(f);
+    } else if (op.type === 'strike' && (op.runTo || op.runToEnd || op.runUnknown)) {
+      // A run — "and all that follows" — is never drawn as a deletion; see the
+      // strike loop in redline.js for the measurement behind that. "⚠ not found
+      // verbatim" would be false about an operand that is usually sitting right
+      // there, so say what was decided instead. The op's own text above already
+      // states the run's two ends.
+      const f = document.createElement('span');
+      f.className = 'notfound';
+      f.textContent = '⚠ removes a run of text — not drawn';
       row.appendChild(f);
     } else if (op.type === 'strike') {
       const f = document.createElement('span');
@@ -1133,6 +1150,27 @@ function effect(eff, handlers) {
     p.textContent =
       'Struck language not found verbatim usually means the amendment targets a ' +
       'different subsection than the one shown, or the text has since changed.';
+    c.appendChild(p);
+  }
+  // …and one sentence for the runs, because "not drawn" without a reason reads
+  // as a failure when it is a decision. See the strike loop in redline.js: the
+  // Code is current, so an enacted run's opening phrase survives inside the
+  // language that replaced it, and extending a strikethrough to the stated
+  // endpoint marked the amendment's own result — wrong in 38 of 42 cases read
+  // against the shipped shards.
+  const runs = eff.ops.filter((o) => o.type === 'strike' && (o.runTo || o.runToEnd || o.runUnknown));
+  const undrawn = eff.redline
+    ? runs.filter((o) => !eff.redline.placed().some((p) => p.start === o.start))
+    : runs;
+  if (undrawn.length) {
+    const p = document.createElement('p');
+    p.className = 'dim';
+    p.style.marginTop = '8px';
+    p.textContent =
+      `${undrawn.length === 1 ? 'One operation removes a run' : `${undrawn.length} operations remove runs`} ` +
+      'of text rather than a phrase. Where the run starts is stated above; how far it ' +
+      'reaches depends on whether this amendment has already been made, which the ' +
+      'text alone does not settle — so it is listed rather than drawn.';
     c.appendChild(p);
   }
   return c;

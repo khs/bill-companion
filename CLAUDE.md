@@ -5082,3 +5082,154 @@ LVXXXVI--FEDERAL MARITIME
    matches in fewer places, so some strikes now drawn will stop being found —
    that is the number that decides whether this is an improvement, not the
    count of longer marks.
+
+86. **"And all that follows" is stated and NOT drawn, and the measurement is why.**
+   (2026-08-11, item 85 built — and then rebuilt, because the obvious version was
+   wrong nine times out of ten.) A bill removes a RUN of text:
+
+   ```
+   by striking ``$1.50 per acre'' and all that follows through the period at
+   the end and inserting ``$3 per acre per year''
+   ```
+
+   `RE_STRIKE` captures the opening phrase and stops, so the redline drew a
+   strikethrough on `$1.50 per acre` alone and left the rest of the sentence
+   standing. **523 phrases across the corpus, 383 directly after a parsed
+   strike.** Item 85 recorded the population and named the obvious fix: extend
+   the mark to the stated endpoint, which for 278 of them is quoted outright and
+   needs no inference at all.
+
+   **Built, measured, and reverted.** Of 42 extended marks read against the
+   shipped shards by two independent lenses over 118 changed cases, **38 were
+   wrong and 4 right** — and the quoted-endpoint form was no better than the bare
+   one (6 wrong of 7). Every failure is one failure. The Code is CURRENT, so an
+   enacted bill's run has already been made; a rewrite quotes its opening words
+   back, so the operand survives INSIDE the language that replaced it, the
+   endpoint often survives with it, and the extension then strikes the
+   amendment's own result:
+
+   ```
+   26 U.S.C. 3402(a)(2)   112 characters struck, and the provision IS the insert
+   2 U.S.C. 287c(a)       217
+   7 U.S.C. 3322(b)(1)    400 — the whole rewritten paragraph, in red
+   ```
+
+   with the identical sentence re-inserted in green beside it. That is the
+   duplication every guard in this file exists to prevent, arriving at the scale
+   of a whole paragraph.
+
+   **Nor can "has this run already been made?" be answered.** Four separate
+   things defeat a comparison of the insert against the passage, each measured on
+   a real case: the bill writes `taxpayer's` and the Code writes it with a curly
+   apostrophe, which `fold()` does not normalise; the codifier translates a
+   cross-reference (`section 473` → `section 673 of this title`, `this Act` →
+   `this chapter`, `section 311(d) of the Legislative Branch Appropriation Act` →
+   `section 4532 of this title`); the insert carries its own markers, which the
+   Code holds as child NODES rather than as text; and a rewrite regularly
+   prepends words in front of the operand.
+
+   So the run is **stated and not drawn**, and the short mark drawn today is
+   withdrawn with it. The op row reads `“X” through “Y”` or `“X” to the end`, the
+   status reads `⚠ removes a run of text — not drawn`, and a footnote says why.
+   The one thing a run DOES draw is the positive case: where the inserted
+   language demonstrably begins exactly where the run begins, it is marked
+   already in force. That asymmetry is this file's own — a match is evidence, its
+   absence is not.
+
+   Audited mechanically, because here the numbers are stronger than a sample. Of
+   **295 run ops with a resolved target, all 295 are from enrolled bills**; the
+   run's opening phrase still exists in only 70 of them, which is the entire
+   population that could ever draw a mark; and of those 70, **60 have their
+   replacement already in the provision at ≥0.85 word containment** — measured
+   with a test the redline does not use, so agreement is evidence rather than
+   tautology. Only 4 score under 0.70 with the operand present, three of them the
+   same 2 U.S.C. 4575 pay provision whose score is depressed by a translated
+   cross-reference. Marks: **74 withdrawn (73 red, 1 in-force), 49 added (all 49
+   in-force), 0 extended.** All 49 sit on enrolled bills, which is the signature
+   an "already in force" claim needs.
+
+   Three supporting changes, two of which were only needed once runs existed:
+
+   - **`RE_RUN_REPLACES` — a pairing rule reads a gap, and a run puts its whole
+     endpoint phrase in it.** Between the two operands the bill has written "and
+     all that follows through the period at the end and inserting the
+     following:", which `RE_REPLACES` cannot admit — so the insert was unpaired,
+     `apply()` had neither a strike nor an anchor to place it against, and
+     nothing was drawn or tested. That is the tracked rule about gaps in its
+     third incarnation. "the following" is admitted HERE and not in the shared
+     pattern: widening that moves the plain-phrase population, which is a
+     separate question with its own measurement.
+   - **The 400-character operand budget, other half.** Item 77 fixed the case
+     where an opener sits inside the lazy gap and the engine re-matches from a
+     later one, recording a fragment. Where there is nothing behind the operand
+     to fall back to, the match simply FAILS, the global scan moves on, and no
+     operation exists at all. **549 across the corpus** — 351 by a narrower count
+     that could not see a block ending past the instruction body — every one a
+     passage of new law the reader was never shown, up to 58,863 characters.
+     `RE_INSERT_VERB` + `readAddedBlock()` reads them, the same instrument
+     `RE_ADD_END` has used since item 36 and the same argument: a block delimited
+     by quotes wants a block reader, not a character budget.
+     Corpus, accounted to the unit: `opSpans +549` and `ops.insert +549`, equal
+     on all 27 bills that move and **nothing else at all**; 560 spans added and
+     **0 removed**, every one an insert, every one over 400 characters, every one
+     round-tripping, every one with an insert verb in its 130-character lead-in.
+     229 of the 560 are section-headed blocks, which `markSectionAdditions()`
+     already refuses to draw inside a subsection.
+   - **`INLINE_MAX` — a block is listed, not woven.** The two populations divide
+     at exactly the budget above, and that was measured rather than assumed:
+     across the corpus the inline renderer drew 601 green inserts and **not one
+     was over 400 characters**, because an operand that long could not be parsed.
+     Reading them put exactly two into that branch and **both were wrong** —
+     42 U.S.C. 1396d(a)(4)(A) already carries the American Rescue Plan's
+     subparagraph (E) and 1396o(a)(2)(B) the tobacco-cessation clause, so 1,099
+     and 458 characters of law in force were drawn as pending additions, with no
+     in-force test able to see it (the codifier writes "March 11, 2021" for the
+     bill's "the date of the enactment of the American Rescue Plan Act of 2021").
+     Marking one as already in force is unaffected: that is a claim about text on
+     screen, and positive evidence is safe at any length.
+
+   Rendered per item 60, in a browser, on the case proved by hand first:
+   15 U.S.C. 1681u under the USA PATRIOT Act now shows **zero** `del` and zero
+   `ins`, five marks titled "Already in the law", and op rows reading
+   `strike “in writing that” to the end · ✓ already in the law — marked above`
+   and `strike “in camera that” through “States.” · ✓ already in the law`.
+   Before, (b) carried a red strike on "in writing that" while the provision read
+   the amended way — which is how this whole entry started.
+
+   selftest 726 → 734, rendertest 492 → 501, proptest clean, corpus updated.
+
+   **The methodological finding, which is worth more than the fix.** Item 85 was
+   written from a population count and a shape analysis, and it named the
+   quoted-endpoint form "exactly drawable, no inference". That was true about the
+   BILL and false about the LAW, and no amount of counting phrases could have
+   shown it. What showed it was rendering 42 changed marks beside the provisions
+   they landed on. **A shape that is unambiguous in the bill can still be
+   undrawable against a current Code** — and for this app that is the common
+   case, not the exception.
+
+   One process note, recorded because it will happen again: the second audit —
+   the one over the FINAL change rather than the reverted one — was launched and
+   **every agent died on the session's subagent limit**, so the final shape has
+   the mechanical audit above and no independent read. That is why the mechanical
+   audit is stated in full rather than summarised.
+
+87. **Two defects found while auditing item 86 and NOT fixed.** Both pre-date it
+   and both were confirmed against the shipped shards.
+
+   - **An insert into a subsection HEADING is drawn into its body.** H.R. 3684
+     writes "(A) in the subsection heading, by inserting ``and Reduction'' after
+     ``Lead Testing''" and the green mark lands inside 42 U.S.C.
+     300j-24(d)(2)(A), after the words "lead testing" in the provision's own
+     text. The Code stores a heading apart from its body, so the heading is not
+     in the haystack at all and the anchor matches the next best thing. Present
+     in the baseline as well as after item 86, so it is not a regression. The
+     tell is in the instruction and is as fixed as item 60's
+     `RE_HEADING_REWRITE`: "in the subsection heading" / "in the heading".
+   - **`fold()` does not normalise the apostrophe.** The bill writes an ASCII
+     `'` and the Code a curly one, and every already-happened test compares
+     folded strings — so 26 U.S.C. 3402(a)(2) cannot be recognised as in force
+     over one character. Folding them together is one line and looks free; it is
+     not, because a lone curly single is deliberately NOT a delimiter here ("the
+     Nation's") and `fold` is what `occurrences()` matches every operand with. It
+     wants its own measured pass over the whole already-happened population, not
+     a character added to a class.

@@ -562,6 +562,28 @@ function listedProvisions(text, from, to) {
 // replacement the bill never wrote.
 const RE_REPLACES = /^\s*(?:''|’’|["”])?\s*(?:,\s*)?(?:each\s+place\s+(?:it|they)\s+(?:appears?|occurs?)\s*)?(?:,\s*)?and\s+insert(?:ing)?(?:\s+in\s+lieu\s+thereof)?\s*(?:``|‘‘|["“])?\s*$/i;
 const RE_EACH_PLACE = /each\s+place\s+(?:it|they)\s+(?:appears?|occurs?)/i;
+// …and the same gap when a RUN sits in it.
+//
+// This is the tracked rule that a pairing test reads a gap and the gap depends
+// on what the bill wrote there, arriving in the run shape: between "``X''" and
+// "``Z''" the bill has written "and all that follows through the period at the
+// end and inserting", which RE_REPLACES cannot admit — so 26 U.S.C. 3402(a)(2)
+// had its whole current text struck with no replacement beside it, the strike
+// being drawn and the insert falling through both branches of apply().
+//
+// Bounded and anchored at BOTH ends, so the gap has to be the run phrase and
+// nothing else. An unbounded reach would pair a strike with the next
+// instruction's insert.
+//
+// "the following" is admitted here and not in RE_REPLACES, and the difference
+// is what the pairing is FOR. A run replaces a whole passage, so the bill
+// writes "and inserting the following:" as often as not — and without it
+// 15 U.S.C. 1681u(b), which reads the amended way today, had 362 characters of
+// the PATRIOT Act's own inserted language struck through as a pending deletion.
+// Widening the shared pattern would move the plain-phrase population too, which
+// is a separate question with its own measurement.
+const RE_RUN_REPLACES =
+  /^\s*(?:''|’’|["”])?\s*,?\s*and\s+all\s+that\s+follows\b[\s\S]{0,200}?,?\s*and\s+insert(?:ing)?(?:\s+in\s+lieu\s+thereof)?(?:\s+the\s+following)?\s*:?\s*(?:``|‘‘|["“])?\s*$/i;
 // "at the end", and the unit it may go on to name.
 //
 // The tail is the same one PUNCT_UNIT_TAIL reads, and it is here for the same
@@ -573,6 +595,53 @@ const RE_EACH_PLACE = /each\s+place\s+(?:it|they)\s+(?:appears?|occurs?)/i;
 const RE_AT_THE_END =
   /^\s*(?:''|’’|["”])?\s*,?\s*at\s+the\s+end\b(?:\s+(?:of|in)\s+(?:such\s+)?(subsection|paragraph|subparagraph|clause|subclause|item|subitem)s?\s*((?:\([A-Za-z0-9]{1,8}\))*))?/i;
 const RE_ANCHORED = /^\s*(?:''|’’|["”])?\s*(after|before)\s+(?:``|‘‘|["“])([\s\S]{1,200}?)(?:''|’’|["”])/i;
+
+// "by striking ``X'' and all that follows" — the bill removes a RUN of text, and
+// the strike scan captures only the phrase it starts at.
+//
+//   by striking ``$1.50 per acre'' and all that follows through the period at
+//   the end and inserting ``$3 per acre per year''
+//
+// So the redline drew a strikethrough on "$1.50 per acre", put the replacement
+// beside it, and left the rest of the sentence standing — the reader was shown a
+// far smaller change than the bill makes, and where the tail carries conditions
+// they appear to survive when they do not. 523 phrases across the corpus, 383 of
+// them directly after a parsed strike.
+//
+// Three endpoints, and they differ in how much has to be inferred:
+//
+//   through ``Y''             both ends stated; the span is exactly drawable
+//   through the period …      the rest of the passage
+//   through the end …         likewise, and it may name the unit it ends
+//   (nothing)                 likewise the rest of the passage
+//   through subparagraph (E)  a whole sibling provision — not a position in
+//                             this passage, and refused
+//   through the second sentence
+//                             a position nothing here can locate
+//
+// The last is REFUSED rather than guessed at, and refusing costs something: the
+// mark drawn today on the opening phrase alone is withdrawn with it. That is the
+// right trade — a strikethrough over "X" claims the bill removes X and nothing
+// else, which is false, and `runUnknown` lets the panel say what the bill does
+// instead of drawing a smaller change than it makes.
+//
+// The endpoint may run past the 60 characters `after` gives the other tail
+// tests, so this one reads a longer window. Widening the shared one would move
+// `all` and `atEnd`, whose populations were measured at 60.
+const RE_RUN = new RegExp(
+  '^\\s*(?:\'\'|’’|["”])?\\s*,?\\s*and\\s+all\\s+that\\s+follows\\b' +
+    '(?:\\s+through\\s+(?:' +
+    '(?:``|‘‘|["“])([\\s\\S]{1,200}?)(?:\'\'|’’|["”])' + // 1: quoted endpoint
+    // 2: the rest of the passage, however the bill spells it. "the end", "the
+    // end of the subsection", "the end of paragraph (1)" and "the period at the
+    // end" are one endpoint — the passage's last character — and the unit named
+    // after "the end of" is at or above the passage the operand is found in, so
+    // stopping there understates at worst.
+    '|(the\\s+end\\b|the\\s+(?:period|semicolon|colon|comma)\\b)' +
+    '|([^\\s])' + //                                        3: something else
+    '))?',
+  'i'
+);
 
 
 /**
@@ -1060,6 +1129,14 @@ function placeOps(text, ops) {
         op.atEnd = true;
         if (end[2]) { op.statedUnit = end[1].toLowerCase(); op.statedPath = end[2]; }
       }
+      // "…and all that follows". See RE_RUN: the operand names where the run
+      // STARTS, and what is struck reaches to the endpoint the bill states.
+      const run = RE_RUN.exec(text.slice(op.end, op.end + 900).replace(/\s+/g, ' ').slice(0, 240));
+      if (run) {
+        if (run[1]) op.runTo = run[1];
+        else if (run[3]) op.runUnknown = true;
+        else op.runToEnd = true;
+      }
       continue;
     }
     if (op.type !== 'insert') continue;
@@ -1074,7 +1151,10 @@ function placeOps(text, ops) {
     if (op.unitAnchor) continue;
 
     const prev = spans[i - 1];
-    if (prev && prev.type === 'strike' && op.start - prev.end < 100) {
+    // A run puts its endpoint in the gap, so the gap is longer than a
+    // connective by exactly as much as the endpoint is.
+    const run = prev && (prev.runTo || prev.runToEnd);
+    if (prev && prev.type === 'strike' && op.start - prev.end < (run ? 320 : 100)) {
       // Which gap test applies depends on where the op's span begins. A quoted
       // insert starts INSIDE its quotes, so the verb is left behind in the gap
       // and RE_REPLACES looks for it there. A named insert ("and inserting a
@@ -1082,7 +1162,10 @@ function placeOps(text, ops) {
       // connective — asking RE_REPLACES about it finds no "inserting" and
       // silently declines every one of them.
       const gap = text.slice(prev.end, op.start);
-      if (op.punctuation ? RE_PUNCT_REPLACES.test(gap) : RE_REPLACES.test(gap)) {
+      const pairs = op.punctuation
+        ? RE_PUNCT_REPLACES.test(gap)
+        : RE_REPLACES.test(gap) || (run && RE_RUN_REPLACES.test(gap));
+      if (pairs) {
         op.replaces = prev.start;
         continue;
       }
@@ -1146,6 +1229,9 @@ const RE_STRIKE = new RegExp(
 const RE_INSERT = new RegExp(
   `insert(?:ing)?\\b(?:(?!strik)[\\s\\S]){0,120}?${QO}([\\s\\S]{1,400}?)${QC}`, 'gi');
 const RE_ADD_END = /adding\s+at\s+the\s+end\s+the\s+following/gi;
+// Just the verb. readAddedBlock() does the rest of the work — the gap, the
+// intervening-verb guard and the pairing of the opener with its own closer.
+const RE_INSERT_VERB = /\binsert(?:ing)?\b/gi;
 
 // "by inserting after paragraph (8) the following:" followed by the new
 // paragraph itself — the sibling of RE_ADD_END, and the one that never got a
@@ -3670,6 +3756,47 @@ export function extractAmendments(text, citations, divisions = [], sections = []
         start: block.start,
         end: block.end,
         unitAnchor: um[1],
+      });
+    }
+
+    // …and the same failure with no anchor phrase in front of it.
+    //
+    // Item 77 fixed the half of the operand budget where an opener sits inside
+    // the lazy gap: the engine re-matches from a later one and records a
+    // fragment. The other half is silent. With nothing behind the operand to
+    // fall back to, the whole match fails, the global scan moves on to the next
+    // verb, and NO operation exists at all:
+    //
+    //     by striking ``in writing that'' and all that follows through the end
+    //     and inserting the following: ``in writing that such information is
+    //     sought for the conduct of an authorized investigation …''
+    //
+    // 351 across the corpus, every one a passage of new law the reader was
+    // never shown. Worse than absent, once runs are drawn: with no insert to
+    // pair the strike with, the already-in-force test has nothing to test, and
+    // 15 U.S.C. 1681u(b) — which reads the amended way today — had 362
+    // characters of the PATRIOT Act's own language struck through as a pending
+    // deletion.
+    //
+    // A block delimited by quotes wants a block reader, which is the same
+    // instrument RE_ADD_END has used since item 36 and RE_INSERT_AFTER_UNIT
+    // since item 36's sibling. The budget test is what keeps this narrow: at or
+    // under 400 the generic scan reads the operand correctly and reading it
+    // here as well would record the same span twice.
+    RE_INSERT_VERB.lastIndex = 0;
+    let bm;
+    while ((bm = RE_INSERT_VERB.exec(body))) {
+      const at = bm.index + bm[0].length;
+      const block = readAddedBlock(text, h.headEnd + at);
+      if (!block || block.end - block.start <= 400) continue;
+      const rel = block.end - h.headEnd;
+      if (claimed.some(([a, b]) => bm.index < b && rel > a)) continue;
+      claimed.push([bm.index, Math.max(at, rel)]);
+      ops.push({
+        type: 'insert',
+        text: text.slice(block.start, block.end),
+        start: block.start,
+        end: block.end,
       });
     }
 
