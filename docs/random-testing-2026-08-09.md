@@ -537,3 +537,55 @@ for a caps heading and wrong for this one. 2 sites in one bill, and the heading
 TEXT is truncated as well as the paragraph split, so this is TODO 7's family.
 Indentation is the instrument, as it is for appropriations headings — govinfo
 sets a centred heading at ~27 columns and body text at 4.
+
+
+---
+
+## Status, 2026-08-10 (fourth pass) — all 27 closed, and the campaign §4 asked for
+
+**All 27 defects are closed: 25 fixed, 2 measured and declined (W15, L9).**
+CLAUDE.md items 67–83 carry the reasoning.
+
+Then §4's recommendation was run. **14 introduced and reported bills, 1.4 MB,
+chosen by seeded random bill number** across the 118th and 119th Congresses
+(seed 20260810, 389 tries, keeping those over 40 KB containing "is amended").
+Picking by number rather than by hand is the point: it is an unbiased draw on
+what Congress writes, where a hand-picked set is a draw on what the author
+expects.
+
+### Clean, and this is most of the value
+
+- All twelve parse properties hold over **2,173 citations and 537 ops: 0
+  failures**.
+- **`was` inline marks 0, replacements in force 0** — what a pending corpus
+  should produce, and the first time anyone has checked. CLAUDE.md's stated
+  expectation ("~75% of a pending bill's amendments and ~20% of an enacted
+  one's") now has one side measured.
+- A hand-read of **12 randomly sampled marks** (seed 77003) found 9 plainly
+  right and 3 unjudgeable from the sampler's own truncated display.
+
+### Found and fixed
+
+**13 `.node.was-added` marks, every one attributing a provision to a bill that
+never passed.** 40 U.S.C. 15301(a)(5) — "The Mid-Atlantic Regional Commission"
+— is in the Code, and S. 3891 of the 118th Congress is not the law that put it
+there. The mark is right and the sentence was not. CLAUDE.md item 84; commit
+`88bb45e0a`.
+
+### Found and NOT built — the next piece of work
+
+**"and all that follows" marks the opening phrase and nothing else.** 327
+phrases across 44 bills, **234 directly after a parsed strike**; 119 state both
+endpoints and are exactly drawable, 113 run to a stated end. The reader sees a
+much smaller change than the bill makes. CLAUDE.md item 85 has the split and
+the two things to check before building.
+
+### What the next campaign should do differently
+
+The pending sample is 14 bills and its own weakness is visible: **only one of
+the 14 produced more than 40 drawn marks**, so the enacted/pending guards were
+exercised thinly. A second draw at the same seed discipline, filtered for bills
+that RESOLVE heavily (many U.S.C. targets, not merely many "is amended"), would
+put real load on the branch that has never carried any. And **check the
+instrument before the product**: the campaign's own report doubled a citation
+against its path and read exactly like a parser bug for ten minutes.

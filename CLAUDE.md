@@ -4994,3 +4994,91 @@ LVXXXVI--FEDERAL MARITIME
    **All 27 defects from `docs/random-testing-2026-08-09.md` are now closed:
    25 fixed, 2 measured and declined (W15, L9).** Both declines are recorded
    with their numbers so nobody re-derives them.
+
+84. **The pending-bill campaign, and the one thing it found that the enacted
+   corpus never could.** (2026-08-10.) The random-testing report's §4 named this
+   as the single most valuable next campaign, and it was right for the reason it
+   gave: **all 26 corpus bills and 2 of the 4 fixtures are ENACTED**, which is a
+   blind spot in exactly the dimension the enacted/pending machinery operates
+   in.
+
+   14 introduced and reported bills, 1.4 MB, none of them ever seen by this
+   project — chosen by **seeded random bill number** across the 118th and 119th
+   Congresses rather than by hand (seed 20260810, 389 tries, keeping those over
+   40 KB that contain "is amended"). Picking the sample by number is the point:
+   it is an unbiased draw on what Congress writes, where a hand-picked set is a
+   draw on what I expect.
+
+   **The clean results first, because they are most of the value.** All twelve
+   parse properties hold over 2,173 citations and 537 ops: 0 failures. Nothing
+   claims to be a pending change that has already happened — `was` inline marks
+   0, replacements in force 0, which is what a pending corpus should produce and
+   the first time anyone has checked. A hand-read of 12 randomly sampled marks
+   found 9 plainly right and 3 unjudgeable from my own truncated display.
+
+   **What it found:** 13 `.node.was-added` marks, every one attributing a
+   provision to a bill that never passed. 40 U.S.C. 15301(a)(5) — "The
+   Mid-Atlantic Regional Commission" — is in the Code, and S. 3891 of the 118th
+   Congress is not the law that put it there. The mark is right and the sentence
+   was not: all `inLaw` establishes is that the law CONTAINS the language, and
+   the attribution is an inference that is sound on an enacted bill, false by
+   construction on a pending one, and undecidable here. `render-context.js`
+   already made that argument fifteen lines below, refusing to colour a
+   whole-provision rewrite for the same reason; the labels now say what is known
+   and stop short of why —
+
+   ```
+   Added by this bill — already in force
+     -> Already in the law — this is the language the bill adds here
+   Rewritten by this bill — already in force
+     -> Already reads this way — this is the rewrite the bill makes
+   ```
+
+   — with the render test asserting BOTH halves, because a positive alone would
+   pass against any wording at all.
+
+   **And a measurement error of my own worth recording**, because it looked
+   exactly like a parser bug for ten minutes: the campaign script printed
+   `citation + path`, which for a subsection-cited target reads "40 U.S.C.
+   15304(a)(a)(8)". The doubling was in the report, not in the data. A doubled
+   marker is a shape three real bugs have produced (P6 and P7 exist for it), so
+   it reads as familiar — check the instrument before the product.
+
+85. **"and all that follows" marks the opening phrase and nothing else.**
+   (Measured 2026-08-10 by the campaign above; NOT built.) The commonest way a
+   bill deletes a span rather than a phrase:
+
+   ```
+   by striking ``$1.50 per acre'' and all that follows through the period at
+   the end and inserting ``$3 per acre per year''
+   ```
+
+   `RE_STRIKE` captures the quoted operand and stops, so the redline draws a
+   strikethrough on `$1.50 per acre` and puts the replacement beside it — while
+   the bill removes the whole rest of the sentence. The reader is shown a much
+   smaller change than the bill makes, and where the tail carries conditions
+   they are shown as surviving when they do not.
+
+   **327 phrases across 44 bills** (30 corpus + 14 pending), **234 of them
+   sitting directly after a parsed strike**. By endpoint:
+
+   ```
+     119  ``…'' and all that follows through ``Y''      both ends stated
+      71  … through the period/semicolon at the end     runs to the end
+      42  … and all that follows                        runs to the end
+       2  … through a named position
+   ```
+
+   The 119 need no inference at all — both endpoints are quoted, so the span is
+   the start of X to the end of Y and it is exactly drawable. The other 113 want
+   the same reasoning `atEnd` already applies, and the same guard: the Code is
+   current, so on an enacted bill the span is usually already gone and drawing
+   it would be the duplication every guard here exists to prevent.
+
+   Two things to check before building, both learned the expensive way in this
+   file. **Extending a strike's span moves `opSpans`**, which keys on
+   `type:start-end`, so the corpus WILL move and every deviation has to be
+   composed to the unit. And **audit what it withdraws**: a longer operand
+   matches in fewer places, so some strikes now drawn will stop being found —
+   that is the number that decides whether this is an improvement, not the
+   count of longer marks.
