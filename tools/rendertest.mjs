@@ -606,6 +606,40 @@ section('redline on the current law');
      show(seg([{ type: 'strike', text: 'fee', start: 1, end: 4, all: true }], 'the fee or the fee')),
      'the [del:fee] or the [del:fee]');
 
+  // …and every one in a LATER NODE too. The pane draws a provision one node at
+  // a time — nodeEl() calls apply() per node over a shared op list — so
+  // latching `done` after the first passage meant `all` could only ever widen
+  // WITHIN a node. 26 U.S.C. 461(l)(1) holds "January 1, 2027" in both (A) and
+  // (B) and one was marked; 7 U.S.C. 136w-8 holds its operand in ten nodes.
+  // Asserted per-node, because the single-node case above passed throughout.
+  {
+    const red = createRedline([
+      { type: 'strike', text: 'fee', start: 1, end: 4, all: true },
+      { type: 'insert', text: 'charge', start: 5, end: 11, replaces: 1 },
+    ]);
+    eq('  and again in the next node', show(red.apply('the fee applies', '(a)')),
+       'the [del:fee][ins:charge] applies');
+    eq('  and again in the one after', show(red.apply('a second fee here', '(b)')),
+       'a second [del:fee][ins:charge] here');
+    // The paired insert repeats WITH it. Un-latching only the strike leaves a
+    // later node with a strikethrough and no replacement beside it, which is a
+    // worse rendering than the bug.
+    ok('  the paired insert repeats too',
+       show(red.apply('the fee', '(c)')).includes('[ins:charge]'));
+  }
+  // A plain strike still means one occurrence, and "at the end" still means the
+  // one end — neither may leak into a later node.
+  {
+    const one = createRedline([{ type: 'strike', text: 'fee', start: 1, end: 4 }]);
+    eq('a plain strike does not repeat across nodes',
+       show(one.apply('the fee', '(a)')) + ' / ' + show(one.apply('the fee', '(b)')),
+       'the [del:fee] / the fee');
+    const end = createRedline([{ type: 'strike', text: 'and', start: 1, end: 4, atEnd: true }]);
+    eq('  nor does "at the end"',
+       show(end.apply('apples and', '(a)')) + ' / ' + show(end.apply('pears and', '(b)')),
+       'apples [del:and] / pears and');
+  }
+
   // An anchored insertion goes beside the anchor, which is not struck.
   eq('an "after" anchor places the insertion',
      show(seg([{ type: 'insert', text: ' and jets', start: 1, end: 9, relation: 'after', anchor: 'planes' }],

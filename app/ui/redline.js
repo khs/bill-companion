@@ -465,8 +465,32 @@ export function createRedline(ops, fullText, knownPaths) {
     const dels = [];
     const inss = [];
 
+    /**
+     * May this op fire again in a later passage?
+     *
+     * "Each place it appears" is a claim about the whole provision, and the
+     * pane draws one node at a time — `nodeEl()` calls `apply()` once per node
+     * over a shared `work` array — so latching `done` after the first passage
+     * meant `all` could only ever widen WITHIN one node. 26 U.S.C. 461(l)(1)
+     * holds "January 1, 2027" in both (A) and (B) and one was marked; 7 U.S.C.
+     * 136w-8 holds "subsection (b)(3)" in ten nodes and one was marked. 12
+     * strikes corpus-wide, 41 unmarked passages.
+     *
+     * The PAIRED insert has to repeat with it. Un-latching only the strike
+     * gives a later node a strikethrough with no replacement beside it, which
+     * is a worse rendering than the bug. `done` is still set either way,
+     * because `placed()` reads it.
+     *
+     * Nothing else repeats. `atEnd` stays latched deliberately — a provision
+     * has one end — and an ordinary strike means one occurrence, which is the
+     * whole reason `all` has to be written down.
+     */
+    const repeats = (op) =>
+      Boolean(op.all) ||
+      (op.replaces != null && work.some((o) => o.start === op.replaces && o.all));
+
     for (const op of work) {
-      if (op.done || op.type !== 'strike' || !inScope(op)) continue;
+      if ((op.done && !op.all) || op.type !== 'strike' || !inScope(op)) continue;
       const hits = occurrences(folded, op.text);
       if (!hits.length) continue;
       // "each place it appears" is the bill saying so outright. Otherwise one
@@ -518,7 +542,7 @@ export function createRedline(ops, fullText, knownPaths) {
     };
 
     for (const op of work) {
-      if (op.done || op.type !== 'insert' || !inScope(op)) continue;
+      if ((op.done && !repeats(op)) || op.type !== 'insert' || !inScope(op)) continue;
       // Placed structurally, by additionsAt(). Weaving it in here too would
       // draw the same new provision twice.
       if (op.placement === 'after-unit') continue;
