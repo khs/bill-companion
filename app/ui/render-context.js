@@ -973,6 +973,29 @@ function effect(eff, handlers) {
             : '✓ the provision is marked above')
         : '✓ shown above';
       row.appendChild(f);
+    } else if (
+      eff.redline &&
+      eff.redline.caseOnly &&
+      eff.redline.caseOnly().some((p) => p.start === op.start)
+    ) {
+      // The two halves are the same words in a different case, so the redline
+      // matches on a fold that cannot see the difference and drawing both would
+      // show the reader identical text twice. Neither "not found verbatim" nor
+      // "shown above" is true; this is.
+      const f = document.createElement('span');
+      f.className = 'found';
+      f.textContent = '✓ changes capitalisation only';
+      row.appendChild(f);
+    } else if (op.headingOnly) {
+      // The bill renames the provision; these words are not in its text at all,
+      // so nothing is drawn (see the `work` filter in redline.js) and "⚠ not
+      // found verbatim" would blame the pane for a search that was aimed at the
+      // wrong thing. The same sentence a heading REWRITE gets, since it is the
+      // same fact about the same instruction.
+      const f = document.createElement('span');
+      f.className = 'found';
+      f.textContent = '✓ changes this provision’s heading, not its text';
+      row.appendChild(f);
     } else if (op.type === 'strike' && (op.runTo || op.runToEnd || op.runUnknown)) {
       // A run — "and all that follows" — is never drawn as a deletion; see the
       // strike loop in redline.js for the measurement behind that. "⚠ not found

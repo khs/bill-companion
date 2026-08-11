@@ -1705,6 +1705,34 @@ section('operand placement');
   const atEnd = p('Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking ``and\'\' at the end.\n');
   ok('"at the end" marks the strike', atEnd.find((o) => o.type === 'strike').atEnd === true);
 
+  // A HEADING is not the provision's text. The Code stores the two apart, so an
+  // operand aimed at a heading can only ever match in the body — 501 ops across
+  // the corpus sit behind one of these phrases and 112 drew a mark there.
+  {
+    const head = (phrase) =>
+      p(`Section 2 of the Widget Act (15 U.S.C. 2601) is amended-- (1) ${phrase}\n`);
+    const both = (ops) => ops.filter((o) => o.headingOnly).length;
+    const a = head("in the subsection heading, by striking ``Fees'' and inserting ``Charges''.");
+    eq('a heading amendment flags both halves', both(a), 2, JSON.stringify(a.map((o) => `${o.type}:${o.headingOnly}`)));
+    // The phrase may sit BETWEEN the two operands, in which case only the insert
+    // is behind it — so the flag has to travel back along the pair as well.
+    const b = head("by striking ``Fees'' in the heading and inserting ``Charges''.");
+    eq('  including when the phrase sits between them', both(b), 2,
+       JSON.stringify(b.map((o) => `${o.type}:${o.headingOnly}`)));
+    eq('  and it reads the unit the phrase names',
+       both(head("in the heading of paragraph (4), by striking ``Fees'' and inserting ``Charges''.")), 2);
+    // The negative, and it is what keeps this narrow: a sub-instruction after a
+    // semicolon is a different operation and must not inherit the flag.
+    const c = head(
+      "in the section heading, by striking ``Fees'' and inserting ``Charges''; and (2) by " +
+      "striking ``widget'' and inserting ``gadget''."
+    );
+    eq('  while an operation past the semicolon is untouched', both(c), 2,
+       JSON.stringify(c.map((o) => `${o.type}:${JSON.stringify(o.text)}:${o.headingOnly}`)));
+    eq('  and a plain amendment flags nothing',
+       both(head("by striking ``Fees'' and inserting ``Charges''.")), 0);
+  }
+
   // "…and all that follows" — the bill removes a RUN and the strike scan reads
   // only where it starts. 523 phrases across the corpus, 383 of them directly
   // after a parsed strike, and every one drew a mark far smaller than the change

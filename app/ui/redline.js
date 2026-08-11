@@ -78,8 +78,20 @@ export function fold(s) {
     lastWasSpace = false;
     // The en dash joins the em dash: USLM prints both, and a bill writing either
     // means the same separator. The ASCII hyphen is deliberately left alone.
+    // A LONE curly single is an apostrophe, and the two sources spell it
+    // differently: the bill writes "taxpayer's" with U+0027 and the Code
+    // "taxpayer’s" with U+2019. Every already-happened test compares folded
+    // strings, so 26 U.S.C. 3402(a)(2) could not be recognised as in force over
+    // one character out of 112. The DOUBLED forms are consumed above, which is
+    // what makes this safe: a lone one reaching here is never a delimiter.
     norm +=
-      c === '“' || c === '”' ? '"' : c === '–' || c === '—' ? '—' : c.toLowerCase();
+      c === '“' || c === '”'
+        ? '"'
+        : c === '–' || c === '—'
+        ? '—'
+        : c === '’' || c === '‘'
+        ? "'"
+        : c.toLowerCase();
     from.push(i); to.push(i + 1); i++;
   }
   return { norm, from, to };
@@ -413,7 +425,13 @@ export function createRedline(ops, fullText, knownPaths) {
 
   const work = scoped
     .filter((o) => (o.type === 'strike' || o.type === 'insert') && typeof o.text === 'string')
-    .filter((o) => !structural(o) && !o.scopeLost && !o.otherSection)
+    // An operation aimed at a provision's HEADING is refused by being kept out
+    // of this list, so `placed()` is right without being told — the same shape
+    // headingRewrites() and elsewhere() use. The Code stores a heading apart
+    // from its body, so apply() searches text the words are not in, and where
+    // they happen to occur in the body the mark lands there: 112 across the
+    // corpus. See markHeadingOps() in app/parse/citations.js.
+    .filter((o) => !structural(o) && !o.scopeLost && !o.otherSection && !o.headingOnly)
     .map((o) => ({ ...o, done: false }));
 
   // Additions are placed structurally rather than woven into a run of text.
@@ -456,7 +474,10 @@ export function createRedline(ops, fullText, knownPaths) {
   // was added separately and each broke this the same way"), and coverage.mjs
   // tests here(placed, o), so the report could not have detected its own bug.
   // Absent from the list, every consumer is right for free.
-  const headingRewrites = scoped.filter((o) => o.type === 'replace' && o.headingOnly);
+  // Any type, not just `replace`. The phrase introduces an ordinary strike or
+  // insert far more often than a whole-provision rewrite, and those were being
+  // drawn into the body — see the `work` filter below.
+  const headingRewrites = scoped.filter((o) => o.headingOnly);
   const replacements = scoped
     .filter(
       (o) =>
@@ -514,6 +535,31 @@ export function createRedline(ops, fullText, knownPaths) {
     hays.length > 0 &&
     evidence.length > 0 &&
     !evidence.some((o) => occurrences(fold(hays[0]), o.text).length);
+
+  // A CASE-ONLY amendment folds to a no-op, and drawing it shows the same words
+  // twice.
+  //
+  // "by striking ``the council's functions'' and inserting ``the Council's
+  // functions''" capitalises one letter. `fold()` lowercases, because the bill
+  // and the Code disagree about case constantly and matching would otherwise
+  // fail everywhere — so the struck text and the inserted text are the SAME
+  // folded string, the strike is found, and the insert is drawn beside it
+  // reading identically. The reader is shown a change with no visible
+  // difference; on an enacted bill it is also a claim that the change is
+  // pending. 46 pairs of 6,455 across the corpus, most of them the Consolidated
+  // Appropriations Act's "Indian tribes" -> "Indian Tribes" sweep.
+  //
+  // Neither half is drawn and the panel says why. The `spans` test below cannot
+  // reach these: it asks whether the new phrase reaches PAST the struck words,
+  // and here it occupies exactly the same span.
+  for (const op of work) {
+    if (op.type !== 'insert' || op.replaces == null) continue;
+    const s = work.find((o) => o.start === op.replaces);
+    if (!s || typeof s.text !== 'string') continue;
+    if (fold(op.text).norm.trim() !== fold(s.text).norm.trim()) continue;
+    op.caseOnly = true;
+    s.caseOnly = true;
+  }
 
   // Where each strike landed, keyed by its offset in the bill, so an insert that
   // replaces it can be placed immediately after.
@@ -597,6 +643,8 @@ export function createRedline(ops, fullText, knownPaths) {
 
     for (const op of work) {
       if (op.type !== 'strike') continue;
+      // Indistinguishable from its replacement on the fold; see above.
+      if (op.caseOnly) continue;
       const hit = scopeHit(op);
       if (hit === null || !mayFire(op, hit)) continue;
       const hits = occurrences(folded, op.text);
@@ -696,6 +744,7 @@ export function createRedline(ops, fullText, knownPaths) {
 
     for (const op of work) {
       if (op.type !== 'insert') continue;
+      if (op.caseOnly) continue;
       const hit = scopeHit(op);
       if (hit === null || !mayFire(op, hit)) continue;
       // Placed structurally, by additionsAt(). Weaving it in here too would
@@ -1033,6 +1082,14 @@ export function createRedline(ops, fullText, knownPaths) {
      * words in front of them are not a proposal.
      */
     enactedInserts: () => work.filter((o) => o.enacted),
+    /**
+     * Operations whose two halves are the same words in different case.
+     *
+     * Neither is drawn — see the note where `caseOnly` is set — and the panel
+     * needs to say which silence this is, because "not found verbatim" is false
+     * about a strike whose operand is demonstrably right there.
+     */
+    caseOnly: () => work.filter((o) => o.caseOnly),
     /**
      * Operations whose address does not exist in this provision at all.
      *

@@ -1091,6 +1091,89 @@ function dropRunawayOperands(ops) {
   }
 }
 
+// "in the subsection heading, by striking ``In General'' and inserting
+// ``Reference''" — the bill renames a provision, and those words are not in the
+// provision's TEXT at all.
+//
+// Item 60 established this for a whole-provision rewrite: the tell is in the
+// instruction and no test of the operand can see it, because 11 of those blocks
+// are a bare caption. The same phrase introduces an ordinary strike or insert
+// far more often, and nothing was reading it there. The Code stores a heading
+// apart from its body, so `apply()` searches text the heading is not in — and
+// where the operand happens to occur in the body, the mark lands on it.
+// 26 U.S.C. 30D(d) had "Manufacturer" struck out of its own sentences for an
+// instruction renaming paragraph (3); 42 U.S.C. 300j-24(d)(2)(A) had "and
+// Reduction" inserted after the words "lead testing" in its text, for an
+// instruction amending the subsection's heading.
+//
+// 501 operations across the corpus sit behind one of these phrases and 112 of
+// them drew a mark. Every one of the 112 was read: all are the plain shape
+// below, and not one is an instruction that touches the body as well.
+//
+// The tail is bounded and may not cross a `;` or a sentence — that is what stops
+// "…in the heading; and (2) by striking ``X''" claiming the second
+// sub-instruction, which the SAME guard does for RE_HEADING_REWRITE.
+const RE_HEADING_OP = new RegExp(
+  '\\b(?:in|amend(?:ing)?)\\s+the\\s+' +
+    '(?:(?:sub)?(?:section|paragraph|clause|item|part|chapter|title|division|subpart)\\s+)?' +
+    'heading\\b' +
+    '(?:\\s+(?:of|for)\\s+(?:such\\s+)?(?:the\\s+)?(?:[a-z]+\\s+)?(?:\\([A-Za-z0-9]{1,8}\\))*)?' +
+    '\\s*,?\\s*(?:as\\s+so\\s+(?:re)?designated\\s*,?\\s*)?(?:by\\s+)?[^;.]{0,40}$',
+  'i'
+);
+
+// …and the same phrase written AFTER the operand: "by striking ``Fees'' in the
+// heading and inserting ``Charges''". The pairing cannot help here, because a
+// gap holding "in the heading" is not one RE_REPLACES admits — so the strike is
+// unpaired and the backward look above sees only the insert.
+//
+// The gap admits no comma and no open paren, and both are load-bearing. A bill
+// separates sub-instructions with ", and (2)" and ", (C)" as readily as with a
+// semicolon, so a looser class reached over the boundary and flagged the
+// PREVIOUS sub-instruction's operand from the next one's heading phrase:
+// "(1) by striking ``in 2021 or 2022'' and inserting ``after December 31,
+// 2020…'', and (2) by striking ``2021 and 2022'' in the heading" withdrew three
+// correct marks in the Inflation Reduction Act and the 2018 farm bill. The
+// backward pattern above cannot use the same class — its own tail is ", by
+// striking …" — and is bounded by the phrase instead.
+const RE_HEADING_AFTER = new RegExp(
+  '^(?:\'\'|’’|["”])?[^;.,(]{0,40}?\\b(?:in|of)\\s+the\\s+' +
+    '(?:(?:sub)?(?:section|paragraph|clause|item|part|chapter|title|division|subpart)\\s+)?' +
+    'heading\\b',
+  'i'
+);
+
+/**
+ * Flag every operation an instruction aims at a provision's HEADING.
+ *
+ * Read in three directions, because the phrase sits in three places. Before the
+ * verb ("in the heading, by striking ``X''"), after the operand ("by striking
+ * ``X'' in the heading and inserting ``Y''"), and — for the half of a pair that
+ * is behind neither — along the `replaces` link, which is why this runs after
+ * placeOps().
+ */
+function markHeadingOps(text, ops) {
+  const flagged = new Set();
+  for (const op of ops) {
+    if (op.start == null || (op.type !== 'strike' && op.type !== 'insert')) continue;
+    const back = text.slice(Math.max(0, op.start - 200), op.start).replace(/\s+/g, ' ');
+    const fwd = text.slice(op.end, op.end + 200).replace(/\s+/g, ' ');
+    if (RE_HEADING_OP.test(back) || RE_HEADING_AFTER.test(fwd)) {
+      op.headingOnly = true;
+      flagged.add(op.start);
+    }
+  }
+  if (!flagged.size) return;
+  for (const op of ops) {
+    if (op.replaces == null) continue;
+    if (flagged.has(op.replaces)) op.headingOnly = true;
+    else if (op.headingOnly) {
+      const partner = ops.find((o) => o.start === op.replaces);
+      if (partner) partner.headingOnly = true;
+    }
+  }
+}
+
 function placeOps(text, ops) {
   const spans = ops.filter((o) => o.start != null).sort((a, b) => a.start - b.start);
   for (let i = 0; i < spans.length; i++) {
@@ -3864,6 +3947,7 @@ export function extractAmendments(text, citations, divisions = [], sections = []
     }
     dropRunawayOperands(ops);
     placeOps(text, ops);
+    markHeadingOps(text, ops);
 
     RE_REDESIG.lastIndex = 0;
     let rm;

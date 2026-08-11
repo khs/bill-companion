@@ -734,6 +734,58 @@ section('redline on the current law');
        'the term means the old amount');
   }
 
+  // A HEADING is not the provision's text, and the Code stores the two apart —
+  // so an operand aimed at a heading can only ever match in the BODY, and where
+  // it does the mark is false. 112 across the corpus, e.g. "Manufacturer" struck
+  // out of 26 U.S.C. 30D(d)'s sentences for an instruction renaming paragraph (3).
+  {
+    eq('an operation aimed at a heading is not drawn',
+       show(seg([{ type: 'strike', text: 'Manufacturer', start: 1, end: 13, headingOnly: true }],
+                'the Manufacturer shall certify')),
+       'the Manufacturer shall certify');
+    eq('  while the same operand without the flag is',
+       show(seg([{ type: 'strike', text: 'Manufacturer', start: 1, end: 13 }],
+                'the Manufacturer shall certify')),
+       'the [del:Manufacturer] shall certify');
+  }
+  // A CASE-ONLY amendment folds to a no-op. `fold()` lowercases, so the struck
+  // and inserted text are the same string, the strike is found, and the insert is
+  // drawn beside it reading identically — the same words twice, with no visible
+  // difference. 46 pairs of 6,455 across the corpus.
+  {
+    const pair = () => [
+      { type: 'strike', text: "the council's functions", start: 1, end: 24 },
+      { type: 'insert', text: "the Council's functions", start: 30, end: 53, replaces: 1 },
+    ];
+    eq('a case-only amendment is not drawn at all',
+       show(createRedline(pair()).apply("govern the council's functions here")),
+       "govern the council's functions here");
+    ok('  and both halves are reported as such',
+       createRedline(pair()).caseOnly().length === 2);
+    // The negative: a real substitution still draws, so this cannot swallow the
+    // ordinary case where the two differ.
+    const real = [
+      { type: 'strike', text: 'fee', start: 1, end: 4 },
+      { type: 'insert', text: 'charge', start: 9, end: 15, replaces: 1 },
+    ];
+    eq('  while a real substitution still is',
+       show(createRedline(real).apply('the fee applies')),
+       'the [del:fee][ins:charge] applies');
+  }
+  // The apostrophe. The bill writes U+0027 and the Code U+2019, and every
+  // already-happened test compares folded strings — so 26 U.S.C. 3402(a)(2) could
+  // not be recognised as in force over one character out of 112.
+  {
+    const ops = [
+      { type: 'strike', text: 'means the amount', start: 1, end: 17, runToEnd: true },
+      { type: 'insert', text: "means the amount by which the wages exceed the taxpayer's allowance",
+        start: 20, end: 86, replaces: 1 },
+    ];
+    eq('a curly apostrophe folds to a straight one',
+       show(createRedline(ops).apply('the term means the amount by which the wages exceed the taxpayer’s allowance')),
+       'the term [was:means the amount by which the wages exceed the taxpayer’s allowance]');
+  }
+
   // A block is listed, not woven. An operand over 400 characters is a provision
   // rather than a phrase, and the corpus divides there exactly: of 601 inline
   // green inserts drawn before the block reader existed, none was longer, and

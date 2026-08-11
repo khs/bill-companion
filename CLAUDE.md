@@ -5213,7 +5213,8 @@ LVXXXVI--FEDERAL MARITIME
    the mechanical audit above and no independent read. That is why the mechanical
    audit is stated in full rather than summarised.
 
-87. **Two defects found while auditing item 86 and NOT fixed.** Both pre-date it
+87. **Two defects found while auditing item 86 and NOT fixed** (both closed by
+   item 88 the same day, along with a third they exposed). Both pre-date it
    and both were confirmed against the shipped shards.
 
    - **An insert into a subsection HEADING is drawn into its body.** H.R. 3684
@@ -5233,3 +5234,79 @@ LVXXXVI--FEDERAL MARITIME
      Nation's") and `fold` is what `occurrences()` matches every operand with. It
      wants its own measured pass over the whole already-happened population, not
      a character added to a class.
+
+88. **Both of item 87's defects are closed, and the second one uncovered a
+   third.** (2026-08-11.) All three are the same family: a mark drawn on words
+   that are not the words the bill is talking about.
+
+   - **An operation aimed at a HEADING is refused.** Item 60 established that the
+     tell is in the instruction and that no test of the operand can see it. It
+     wired that up for a whole-provision rewrite and left the ordinary case live,
+     which is far commoner: "in the subsection heading, by striking ``In
+     General'' and inserting ``Reference''". The Code stores a heading apart from
+     its body, so `apply()` searches text the words are not in — and where the
+     operand happens to occur in the body, the mark lands there. 26 U.S.C. 30D(d)
+     had "Manufacturer" struck out of its own sentences for an instruction
+     renaming paragraph (3); 42 U.S.C. 300j-24(d)(2)(A) had "and Reduction"
+     inserted after the words "lead testing" in its text.
+     `markHeadingOps()` reads the phrase in **three** directions and all three
+     are needed. Before the verb ("in the heading, by striking …"); AFTER the
+     operand ("by striking ``Fees'' in the heading and inserting …"), which the
+     pairing cannot reach because a gap holding "in the heading" is not one
+     `RE_REPLACES` admits; and along `replaces` for the half of a pair that is
+     behind neither. 513 ops flagged, **135 of them unreachable by the backward
+     look alone**, and **112 drawn marks → 0**.
+     The forward pattern admits no comma and no open paren in its gap, and that
+     was found by measuring rather than by reasoning: a bill separates
+     sub-instructions with ", and (2)" and ", (C)" as readily as with a
+     semicolon, and a looser class flagged the PREVIOUS sub-instruction's operand
+     from the next one's heading phrase — three correct marks withdrawn in the
+     Inflation Reduction Act and the 2018 farm bill. With the tighter class the
+     forward look costs exactly **0** marks and gains 135 flags.
+     Refused by exclusion from `work`, so `placed()` is right without being told;
+     `headingRewrites()` widens from `replace` to any type.
+   - **`fold()` normalises the apostrophe.** The bill writes U+0027 and the Code
+     U+2019, and every already-happened test compares folded strings — so
+     26 U.S.C. 3402(a)(2) could not be recognised as in force over one character
+     out of 112. Safe because the DOUBLED forms are consumed above it: a lone
+     curly single reaching the single-character branch is never a delimiter.
+     **20 marks added, 8 withdrawn**, and the two populations are the same fact:
+     15 of the 20 are `was` marks on phrases carrying a curly apostrophe
+     ("taxpayer’s", "Federal Employees’ Retirement System", "patients’
+     perspective", "the prisoner’s"), and 6 of the 8 withdrawn are the green
+     `ins` those replaced — an operation moving from "pending" to "already in
+     force" at the same offset.
+   - **…and the third, which the second exposed: a CASE-ONLY amendment folds to a
+     no-op.** "by striking ``the council's functions'' and inserting ``the
+     Council's functions''" capitalises one letter. `fold()` lowercases — it has
+     to, the two sources disagree about case constantly — so the struck and
+     inserted text are the SAME folded string, the strike is found, and the
+     insert is drawn beside it reading identically. The reader is shown a change
+     with no visible difference, and on an enacted bill a claim that it is
+     pending. **46 pairs of 6,455**, most of them the Consolidated Appropriations
+     Act's "Indian tribes" → "Indian Tribes" sweep; **59 identical del/ins pairs
+     withdrawn**, 118 marks, and 0 added.
+     The `spans` test cannot reach these and that is structural rather than a
+     miss: it asks whether the new phrase reaches PAST the struck words, and here
+     it occupies exactly the same span. Neither half is drawn and the panel says
+     "✓ changes capitalisation only" — because "not found verbatim" is false
+     about a strike whose operand is demonstrably right there, and "shown above"
+     is false about a mark that was not drawn.
+
+   Marks, cumulatively over items 86–88: **3,125 → 2,913, with 287 withdrawn, 75
+   added and 0 extended.** Every withdrawal falls in one of four measured
+   families — a run's opening phrase (73), a heading operand (89), a case-only
+   pair (118), and 7 that moved from green to already-in-force — and every
+   addition is a `was` mark on an enrolled bill.
+
+   Corpus does not move for any of the three: a flag is not a span, and `opSpans`
+   keys on `type:start-end`. selftest 734 → 739, rendertest 501 → 507, proptest
+   clean.
+
+   Rendered per item 60, on both provisions item 87 named. 26 U.S.C. 30D(d) shows
+   zero `del` and zero `ins`, with four rows reading `✓ changes this provision's
+   heading, not its text` for "Qualified Plug-in Electric Drive Motor",
+   "Manufacturer", "Clean" and "Qualified manufacturer". 26 U.S.C. 3402(a)(2)
+   shows zero of each and one `was` mark over the whole 112-character sentence,
+   with both op rows reading `✓ already in the law — marked above` — the case
+   item 86 could not recognise and item 87 recorded as the reason.
