@@ -980,7 +980,21 @@ function placeOps(text, ops) {
   for (let i = 0; i < spans.length; i++) {
     const op = spans[i];
     if (op.type === 'strike') {
-      const after = text.slice(op.end, op.end + 60);
+      // Sixty characters of TEXT, not of source. A bill hard-wraps at 72
+      // columns and indents its continuation lines, so a fixed slice of the
+      // raw string sees a different amount of the sentence depending on how
+      // deep the instruction is nested — and the phrase that qualifies a
+      // strike is regularly written after the INSERT that replaces it:
+      //
+      //     (i) by striking ``$10,000'' and inserting ``$20,000''
+      //             each place it appears;
+      //
+      // is 63 raw characters from the strike's end and 50 once the wrap is
+      // folded out, so the same sentence was read at one indent and cut in
+      // half at another. Only the boolean is decided here — no offset is
+      // computed against the folded copy — which is what makes folding safe;
+      // the same reason inline() may fold a slice it has already cut.
+      const after = text.slice(op.end, op.end + 400).replace(/\s+/g, ' ').slice(0, 60);
       // "striking ``A'' each place it appears" — struck throughout, not once.
       if (RE_EACH_PLACE.test(after)) op.all = true;
       // "by striking ``and'' at the end" — the operand is a word that occurs all

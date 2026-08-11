@@ -1682,6 +1682,26 @@ section('operand placement');
   ok('"each place it appears" marks the strike', each.find((o) => o.type === 'strike').all === true);
   ok('  and still pairs the replacement', each.find((o) => o.type === 'insert').replaces != null);
 
+  // …and it is read in sixty characters of TEXT, not of source. The phrase is
+  // regularly written after the INSERT that replaces the struck words, and a
+  // bill wraps at 72 columns and indents its continuation lines — so a fixed
+  // slice of the raw string saw a different amount of the sentence at every
+  // nesting depth. hr1892 writes exactly this at 12 spaces and the phrase fell
+  // outside the window; the same sentence at 4 was read. 4 across the corpus.
+  {
+    const depths = [0, 4, 8, 12, 16, 20, 24];
+    const read = (n) => {
+      const ops = p(
+        'Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking\n' +
+        "``$10,000'' and inserting ``$20,000''\n" + ' '.repeat(n) + 'each place it appears.\n'
+      );
+      const s = ops.find((o) => o.type === 'strike');
+      return s ? Boolean(s.all) : false;
+    };
+    ok('  at every continuation indent, not just the shallow ones',
+       depths.every(read), JSON.stringify(depths.map((n) => `${n}:${read(n)}`)));
+  }
+
   const atEnd = p('Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking ``and\'\' at the end.\n');
   ok('"at the end" marks the strike', atEnd.find((o) => o.type === 'strike').atEnd === true);
 
