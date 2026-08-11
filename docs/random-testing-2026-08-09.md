@@ -218,7 +218,7 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 
 ### Tier 4 — cosmetic
 
-**C1. A citation overrunning a rendered paragraph boundary spills body text into the paragraph that starts it** — a citation is drawn whole by the paragraph that *starts* it (the "one chip per citation" invariant), so hr4173 @622376 renders `p.sec-head` as "…SEC. 376. SECURITIES EXCHANGE ACT OF 1934. The Securities Exchange Act of 1934" and the next paragraph begins " (15 U.S.C. 78a et seq.) is amended--". **12 overrun paragraphs across 8 of 30 bills; 2 leave the following paragraph rendering a lone "."; 2 corrupt a section heading.** No text lost or duplicated; 0 located internal references land in the vanished prefix.
+**C1. A citation overrunning a rendered paragraph boundary spills body text into the paragraph that starts it** — FIXED 2026-08-10, CLAUDE.md item 80 — a citation is drawn whole by the paragraph that *starts* it (the "one chip per citation" invariant), so hr4173 @622376 renders `p.sec-head` as "…SEC. 376. SECURITIES EXCHANGE ACT OF 1934. The Securities Exchange Act of 1934" and the next paragraph begins " (15 U.S.C. 78a et seq.) is amended--". **12 overrun paragraphs across 8 of 30 bills; 2 leave the following paragraph rendering a lone "."; 2 corrupt a section heading.** No text lost or duplicated; 0 located internal references land in the vanished prefix.
 **Worth more than the cosmetic label:** the same mechanism makes rendertest's *"rendered text preserves the source exactly"* identity **false on 4 of the 30 plain-text bills** (hr6395 +2, hr3590 +2, hr2617 +1, hr3734 +1 characters). It passes today only because it runs on one fixture. Note the hr4173 instance is downstream of W13.
 
 ---
@@ -480,16 +480,13 @@ Seven more fixed. CLAUDE.md items 75–79 carry the reasoning and the audits.
   W10 fixed  item 77   an operand budget that re-matches instead of truncating
   W13 fixed  item 78   a harvested name that runs into its own sentence
   L5  fixed  item 79   every amendment beginning in a paragraph announces itself
+  C1  fixed  item 80   a line head only there because the line wrapped
 ```
 
-**Still open: W14, W16, L3, L8, L9, C1 — 6, plus L2's other half.**
+**Still open: W14, W16, L3, L8, L9 — 5, plus L2's other half.**
 
 Ranked by what they cost a reader:
 
-- **C1** is labelled cosmetic and is worth more than that: the same mechanism
-  makes rendertest's "rendered text preserves the source exactly" identity FALSE
-  on 4 of 30 plain-text bills. It passes today only because it runs on one
-  fixture. 12 overrun paragraphs across 8 bills; 2 corrupt a section heading.
 - **L2's remaining half with L3**, still entangled and still wanting `inScope()`
   to take a SET — `reScope()`, `scopeAdditions()` and the panel all read
   `op.scope` as a string.
@@ -502,7 +499,7 @@ Ranked by what they cost a reader:
 - **L8** and **L9** are latent: measured at 3 and 1 occurrences with 0
   demonstrated reader-visible cost.
 
-**Three things to carry into any of them**, on top of the two the second pass
+**Four things to carry into any of them**, on top of the two the second pass
 recorded:
 
 - **Audit what a change WITHDRAWS, and classify it rather than sampling it.**
@@ -517,3 +514,18 @@ recorded:
 - **The corpus is blind to a span REPLACEMENT.** `opSpans` is the size of a
   `type:start-end` key set, so W10's 14 corrected spans moved it by zero. Diff
   the keys, not the count.
+- **A defect with several causes wants each cause measured on its own before
+  any of them is fixed.** C1 had four, and they were 71, 8, 4,550 and 2 sites.
+  The 4,550 was invisible from the nine reported symptoms and is the one that
+  actually changed what the pane looks like; the 2-site one turned out to belong
+  to a different defect (it truncates a heading, so it is TODO 7's) and is left
+  where it belongs rather than half-fixed here.
+
+**Left from C1, deliberately:** a division heading set in mixed case whose
+wrapped tail is therefore not all-caps — `Subtitle A--National Agricultural
+Research, Extension, and Teaching` / `Policy Act of 1977`.
+`isHeadingContinuationLine` refuses any line carrying lower case, which is right
+for a caps heading and wrong for this one. 2 sites in one bill, and the heading
+TEXT is truncated as well as the paragraph split, so this is TODO 7's family.
+Indentation is the instrument, as it is for appropriations headings — govinfo
+sets a centred heading at ~27 columns and body text at 4.

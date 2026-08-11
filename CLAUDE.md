@@ -4662,3 +4662,128 @@ LVXXXVI--FEDERAL MARITIME
 
    Corpus unchanged; this is rendering. selftest 712, rendertest 461 -> 467,
    proptest clean.
+
+80. **A line head is not a line head if it is only there because the line
+   wrapped.** (2026-08-10, C1 of item 65 — labelled cosmetic and worth more
+   than that.) A citation overrunning a rendered paragraph is drawn WHOLE by
+   the paragraph that STARTS it — the "one chip per citation" invariant, which
+   is right — so the chip's tail renders in that paragraph and the next one
+   begins mid-phrase:
+
+   ```
+   .sec-head   SEC. 376. SECURITIES EXCHANGE ACT OF 1934. The Securities
+               Exchange Act of 1934
+   next para    (15 U.S.C. 78a et seq.) is amended--
+   ```
+
+   18 overrun paragraphs across 8 of 30 bills; 2 leave the following paragraph
+   rendering a lone "."; 2 put body text inside a `.sec-head`. And the
+   *"rendered text preserves the source exactly"* identity was **false on 4 of
+   the 30 plain-text bills** by 1 or 2 characters — the space the paragraph
+   join puts where the source has none. It passed only because it ran on one
+   fixture.
+
+   **In 8 of the 9 the citation was right and the BOUNDARY was wrong**, which
+   is what decides the fix: bending a boundary to keep a chip whole is the
+   tracked mistake that cost section headings their `#sec-N` anchors, but a
+   boundary that is wrong judged without reference to any citation is simply
+   wrong. Four shapes, each of them a line head that is only there because the
+   line wrapped. Three fixed:
+
+   - **`RE_ADDRESS_TAIL` read ONE marker before the "of".** The address's own
+     head is regularly a list and the break falls anywhere in it — "under
+     subsection (c), (d),\n(i), or (k) of section 1915 of such Act". Item 76's
+     own argument one step along: a provision reading "(i), or (k) of section
+     1915 of such Act (42 U.S.C. 1396n)" is not a provision either. 71 more
+     phantoms, every one read, not one a provision. A member may itself be
+     compound — "(b)(9), and (e) of section 466" — so the marker RUN is part of
+     the member rather than a separator.
+   - **A four-digit number is a year, not a list marker**, and a number after a
+     line ending in a hyphen is the tail of a hyphenated word ("dies from
+     COVID-" / "19. The Secretary"). Measured rather than tuned: all 34 real
+     numbered items in the corpus are single digits and all 8 four-digit heads
+     are years. A separate spelling from `isWrappedMarkerLine` on purpose —
+     that one answers for parenthesised markers, which resolution reads too,
+     and this shape exists only in `RE_PARA_START`.
+   - **A quotation at a line head is not always a block of new law.** A bill
+     wraps at 72 columns, so the operand of a strike lands at a line head
+     whenever the instruction breaks in front of it — "by striking\n``2021'' and
+     inserting ``2025''" — and splitting there cuts a sentence in half and
+     presents the back half as statute the bill is inserting. **4,550 across
+     the corpus, against 6,351 real block openers and 57,423 interior lines of
+     a block already open.** `quotedBlocks()` is the one spelling of where new
+     law begins and already tells the two apart (real new law carries an
+     outline marker at the head of one of its lines; a phrase lifted out of a
+     sentence carries none), so it is asked rather than re-derived — the same
+     reason `isWrappedMarkerLine` has one home. **-4,371 paragraphs.**
+
+   The fourth is left and is not this: a **mixed-case division heading whose
+   wrapped tail is not all-caps** — `Subtitle A--National Agricultural Research,
+   Extension, and Teaching` / `Policy Act of 1977`. `isHeadingContinuationLine`
+   refuses any line carrying lower case, which is right for a caps heading and
+   wrong for this one. 2 sites, one bill, and it truncates the heading TEXT as
+   well as splitting the paragraph, so it belongs with TODO 7. Indentation is
+   the instrument, the way it is for appropriations headings.
+
+   **And one bad citation, which was the report's named example.** Three
+   harvested popular names ran on from the sentence in front of them — item 78's
+   family, missed because these three resolve to the *right* Act:
+
+   ```
+   'Securities Exchange Act of 1934.--The Securities Exchange Act of 1934'
+   'Bankruptcy Code or the Securities Investor Protection Act of 1970'
+   'Bankruptcy Code, the Securities Investor Protection Act of 1970'
+   ```
+
+   The first is a section HEADING run into the sentence below it, which is how
+   body text came to be inside a `.sec-head`. Deleted, because a clean entry for
+   the same Act already existed; the other two are trimmed into one clean SIPA
+   entry rather than deleted, because SIPA had no other entry — the same trade
+   item 78 made for the Investment Company Act. `selftest` now rejects a name
+   that ENDS with another entry's name behind a connective or a sentence break,
+   and the two legitimate containments are kept by it: a real qualifier
+   ("Richard B. Russell National School Lunch Act") and a year added as a suffix
+   put no connective in front of the contained name.
+
+   **Overrun paragraphs 18 -> 2, and the source identity now holds exactly on
+   all 30 corpus bills.** The 2 left are the division heading above.
+
+   Audited by where every internal cross-reference LANDS — the corpus is blind
+   to all of this, since it is layout and resolution. **6 of 42,739 change**, and
+   every one is coming off a phantom:
+
+   - hr1319 moves from `(c)(3)` to `(d)(3)`, which is what the reference says.
+     Subsection (d) opens at 187430 and the old answer sat at 186251, under (c);
+     the phantom `(g)` at 186312 — the wrapped tail of "sections 212(a) and\n(g)
+     of the Act" — is letter-style, so it had been read as a SUBSECTION and
+     corrupted the outline between (c) and (d).
+   - 3 in s1177 move off a phantom sitting inside quoted STRUCK language,
+     2 of them from an unhedged answer to an honest guess.
+   - 1 hedge improves, same offset. 1 is withdrawn — its only match in the bill
+     section was a phantom, and blank beats wrong.
+
+   Corpus, composed to the unit: `byKind.act` and `citations` **+6 on 2 bills**
+   — 7 malformed spans became 12 clean chips on hr4173 and 1 became 2 on the
+   CLARITY substitute, with the two Bankruptcy-prefixed spans shrinking to their
+   Act's own name — and **`targeted` +1**, the instruction at hr4173 897591
+   ("The Securities Exchange Act of 1934 is amended by adding the following
+   section after section 3A"), whose target had been swallowed by the chip that
+   began in the sub-heading above it. Nothing else moved.
+
+   **The test that could not fail, and the one that can.** The identity now runs
+   on a second real fixture, which is the difference between an identity and a
+   fixture-shaped assertion — but that fixture passes either way, so it proves
+   nothing about this. Three synthetic fixtures do, one per shape, and each
+   fails against the old renderer. `every quoted block starts its own paragraph`
+   was counting raw quoted LINES, which conflated a block with an operand, so it
+   could only ever have been satisfied by splitting mid-sentence; it is over the
+   lines that are not a lone operand now, and asserts the operand count too so a
+   fixture cannot satisfy it by containing none.
+
+   Rendered per item 60, in a browser, on the named example: `.sec-head`
+   @622376 reads "SEC. 376. SECURITIES EXCHANGE ACT OF 1934." with one chip on
+   the Act name, and the paragraph below opens "The Securities Exchange Act of
+   1934 (15 U.S.C. 78a et seq.) is amended--" under a `▸ amends 15 U.S.C. 78a
+   et seq.` tag it did not have before.
+
+   selftest 713, rendertest 478, proptest clean.
