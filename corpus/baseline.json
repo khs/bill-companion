@@ -892,13 +892,13 @@
   "refs": 167,
   "relative": 274,
   "ops": {
-   "strike": 165,
+   "strike": 164,
    "insert": 252,
    "redesignate": 11,
    "add-at-end": 56,
    "replace": 34
   },
-  "opSpans": 507,
+  "opSpans": 506,
   "uncoveredVerbs": 8,
   "badOffsets": 0,
   "overlaps": 0,

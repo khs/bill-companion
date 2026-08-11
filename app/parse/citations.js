@@ -975,6 +975,53 @@ function markSectionAdditions(ops) {
   }
 }
 
+/**
+ * A quoted operand may not run past the start of the next one.
+ *
+ * The source itself can be malformed. The govinfo rendition of Pub. L. 107-56
+ * writes the USA PATRIOT Act's § 814(c) with two backticks and ONE apostrophe:
+ *
+ *     (iii) by striking ``and' at the end;
+ *         (B) in subparagraph (B), by inserting ``or an attempt to
+ *     commit an offense punishable under this subparagraph,'' after …
+ *
+ * so the scan for a closer walks past the whole next sub-instruction and finds
+ * the one belonging to ITS operand. The strike came out 148 characters long,
+ * swallowing the navigation to subparagraph (B), and `render-context.js`
+ * printed that instruction fragment at the reader as language struck from
+ * 18 U.S.C. 1030(c)(2)(A).
+ *
+ * Pairing the quotes does not help — the pair for `` IS '' and the '' it found
+ * is a real one, just somebody else's. Neither does any test of the operand's
+ * CONTENT, and that was measured rather than assumed. Of 7,886 quoted strike
+ * operands, three contain a quote opener and three an amendatory verb, and
+ * four of those six are legitimate: hr6395 strikes two lines of statute
+ * including the ``(1)'' GPO puts at the head of the second, s1177 fixes a typo
+ * in the law by striking the literal ``clause ``(i)''``, and hr2 strikes
+ * statutory text reading "The Secretary shall insert".
+ *
+ * What IS exact is the overlap. Two operands of one instruction occupy
+ * disjoint spans by construction, and across the corpus this is the ONLY
+ * overlapping pair in 22,874 ops — so the guard is provably inert everywhere
+ * else. The runaway is dropped rather than trimmed: where its closer came from
+ * is unknown, and an operand guessed to a length is worse than none.
+ * `proptest.mjs` asserts the property this restores.
+ */
+function dropRunawayOperands(ops) {
+  const spans = ops.filter((o) => o.start != null && o.end != null).sort((a, b) => a.start - b.start);
+  const bad = new Set();
+  for (let i = 1; i < spans.length; i++) {
+    if (spans[i].start < spans[i - 1].end) bad.add(spans[i - 1]);
+  }
+  if (!bad.size) return;
+  for (const o of [...bad]) {
+    ops.splice(ops.indexOf(o), 1);
+    // Its replacement is left alone: the insert is correctly delimited, and
+    // dropping it too would lose the language the bill actually adds.
+    for (const other of ops) if (other.replaces === o.start) delete other.replaces;
+  }
+}
+
 function placeOps(text, ops) {
   const spans = ops.filter((o) => o.start != null).sort((a, b) => a.start - b.start);
   for (let i = 0; i < spans.length; i++) {
@@ -3688,6 +3735,7 @@ export function extractAmendments(text, citations, divisions = [], sections = []
         });
       }
     }
+    dropRunawayOperands(ops);
     placeOps(text, ops);
 
     RE_REDESIG.lastIndex = 0;

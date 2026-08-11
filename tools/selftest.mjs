@@ -1705,6 +1705,45 @@ section('operand placement');
   const atEnd = p('Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking ``and\'\' at the end.\n');
   ok('"at the end" marks the strike', atEnd.find((o) => o.type === 'strike').atEnd === true);
 
+  // A quoted operand may not run past the start of the next one. The SOURCE can
+  // be malformed: govinfo's rendition of Pub. L. 107-56 writes the USA PATRIOT
+  // Act's §814(c) with two backticks and one apostrophe, so the scan for a
+  // closer walks past the whole next sub-instruction and takes the one
+  // belonging to its operand. 148 characters of instruction were reported to
+  // the reader as language struck from 18 U.S.C. 1030(c)(2)(A).
+  //
+  // No test of the operand's CONTENT separates this, and that was measured: of
+  // 7,886 quoted strike operands three contain a quote opener and three an
+  // amendatory verb, and four of those six are legitimate. The overlap is what
+  // is exact — one pair in 22,874 ops.
+  {
+    const bad = p(
+      'Section 1030 of title 18, United States Code, is amended--\n' +
+      "        (A) in subparagraph (A), by striking ``and' at the end;\n" +
+      "        (B) in subparagraph (B), by inserting ``or an attempt'' after \n" +
+      "    ``subsection (a)(2),''.\n"
+    );
+    const spans = bad.filter((o) => o.start != null).sort((x, y) => x.start - y.start);
+    const overlaps = spans.filter((o, i) => i && o.start < spans[i - 1].end);
+    eq('an operand running past the next one is dropped, not reported', overlaps.length, 0,
+       JSON.stringify(bad.map((o) => `${o.type}:${JSON.stringify(o.text).slice(0, 40)}`)));
+    // The correctly-delimited insert survives: dropping it too would lose the
+    // language the bill actually adds.
+    ok('  and its correctly delimited neighbour survives',
+       bad.some((o) => o.type === 'insert' && o.text === 'or an attempt'),
+       JSON.stringify(bad.map((o) => `${o.type}:${o.text}`)));
+    // …and the same instruction written correctly keeps both.
+    const good = p(
+      'Section 1030 of title 18, United States Code, is amended--\n' +
+      "        (A) in subparagraph (A), by striking ``and'' at the end;\n" +
+      "        (B) in subparagraph (B), by inserting ``or an attempt'' after \n" +
+      "    ``subsection (a)(2),''.\n"
+    );
+    eq('  while the well-formed source keeps its strike',
+       good.filter((o) => o.type === 'strike' && o.text === 'and').length, 1,
+       JSON.stringify(good.map((o) => `${o.type}:${o.text}`)));
+  }
+
   // Every quote convention, everywhere — the tracked invariant, asserted where
   // it had been broken. `extractSteps` skips a line of quoted inserted law, and
   // the run was closed by an ALTERNATION over three conventions of four. The

@@ -89,6 +89,23 @@ for (const bill of bills) {
         if (mk[i] === mk[i - 1]) fail('P6 doubled marker in scope', `${bill.id} ${o.type} ${o.scope}`);
       }
     }
+    // P12 no two op spans of one amendment OVERLAP. Two operands of one
+    // instruction occupy disjoint spans by construction, so an overlap means a
+    // quoted operand ran past its own closer and found somebody else's — which
+    // is what the govinfo rendition of Pub. L. 107-56 produces, writing
+    // "by striking ``and' at the end;" with two backticks and one apostrophe.
+    // The strike came out 148 characters long, swallowing the next
+    // sub-instruction, and the panel printed that fragment as language struck
+    // from 18 U.S.C. 1030(c)(2)(A). One pair in 22,874 ops before the guard;
+    // sharing a START (P4) does not catch it, because the two begin apart.
+    const laid = (am.ops || []).filter((o) => o.start != null).sort((a, b) => a.start - b.start);
+    for (let i = 1; i < laid.length; i++) {
+      if (laid[i].start < laid[i - 1].end) {
+        fail('P12 overlapping op spans',
+             `${bill.id} ${laid[i - 1].type}@${laid[i - 1].start}-${laid[i - 1].end} ` +
+             `over ${laid[i].type}@${laid[i].start}`);
+      }
+    }
   }
   // P7 the same, for composed addresses the reader clicks.
   for (const c of expanded.filter((x) => x.relative)) {
