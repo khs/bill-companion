@@ -2119,7 +2119,10 @@ section('internal cross-references');
   {
     const { resolveActSection } = await imp('app/resolve/act-sections.js');
     const { POPULAR_NAMES } = await imp('app/resolve/popular-names.js');
-    ok('the table has grown past 180 names', POPULAR_NAMES.length >= 180, `${POPULAR_NAMES.length}`);
+    // 178 rather than 180: three harvested entries took the sentence in front
+    // of the name with them and were removed, two of them trimmed into one
+    // clean SIPA entry. See the containment check below.
+    ok('the table has grown past 178 names', POPULAR_NAMES.length >= 178, `${POPULAR_NAMES.length}`);
     ok('  and most of them resolve their own section numbers',
        POPULAR_NAMES.filter((a) => a.enactedAs).length >= 150,
        `${POPULAR_NAMES.filter((a) => a.enactedAs).length} with enactedAs`);
@@ -2138,6 +2141,26 @@ section('internal cross-references');
        POPULAR_NAMES.filter((a) => !a.title).map((a) => a.name).sort().join(' | '),
        'Inflation Reduction Act of 2022 | Infrastructure Investment and Jobs Act | ' +
          'National Defense Authorization Act');
+    // A harvested name can run into the sentence around it, and the tell is
+    // that the name ENDS with another entry's name behind a connective or a
+    // sentence break: "Bankruptcy Code or the Securities Investor Protection
+    // Act of 1970", "Securities Exchange Act of 1934.--The Securities Exchange
+    // Act of 1934". The chip then opens on words that are not the Act's name,
+    // and where the break was a section heading it drew body text inside the
+    // .sec-head. Legitimate containment is the other way round — a longer name
+    // with the shorter as a PREFIX ("… Act" / "… Act of 1975"), or a real
+    // qualifier ("Richard B. Russell National School Lunch Act"), neither of
+    // which puts a connective in front of the contained name.
+    const RUN_ON = /(?:^|[\s.,;:-])(?:or|and|the|a|an|of|in|to|by|for|under|The)\s+$|(?:--|[—–])\s*\w*\s*$/;
+    const runOn = POPULAR_NAMES.filter((a) =>
+      POPULAR_NAMES.some(
+        (b) => b !== a && b.name.length > 15 && a.name.endsWith(b.name) &&
+               RUN_ON.test(a.name.slice(0, a.name.length - b.name.length))
+      )
+    );
+    eq('  and no name runs on from the sentence in front of it',
+       runOn.length, 0, JSON.stringify(runOn.map((a) => a.name)));
+
     // A pattern is spliced into a \b…\b match, so a capturing group inside one
     // would shift every later group in the composed regexes.
     const capturing = POPULAR_NAMES.filter((a) => /\((?!\?)/.test(a.pattern));

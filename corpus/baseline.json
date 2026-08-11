@@ -88,9 +88,9 @@
   "chars": 475095,
   "sections": 63,
   "divisions": 9,
-  "citations": 763,
+  "citations": 764,
   "byKind": {
-   "act": 176,
+   "act": 177,
    "usc": 202,
    "publaw": 3,
    "internal": 380,
@@ -683,9 +683,9 @@
   "chars": 2738522,
   "sections": 544,
   "divisions": 54,
-  "citations": 6091,
+  "citations": 6096,
   "byKind": {
-   "act": 1402,
+   "act": 1407,
    "publaw": 26,
    "usc": 1409,
    "internal": 3237,
@@ -693,7 +693,7 @@
    "cfr": 6
   },
   "amendments": 575,
-  "targeted": 549,
+  "targeted": 550,
   "distributed": 0,
   "steps": 526,
   "refs": 700,

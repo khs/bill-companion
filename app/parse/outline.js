@@ -85,9 +85,22 @@ const RE_LEAD_ONLY = new RegExp(`^${LEAD}$`);
  * every one read: not one is a provision. 93 break after a list separator and
  * 25 after "through", which is why the tell is the tail rather than the head —
  * requiring both would have kept a quarter of the phantoms.
+ *
+ * The address's own head may be a LIST rather than one marker, and the break
+ * falls anywhere in it — "under subsection (c), (d),\n(i), or (k) of section
+ * 1915". Reading only a single marker before the "of" missed 71 more, which is
+ * the same fragment argument one step along: a provision reading "(i), or (k)
+ * of section 1915 of such Act (42 U.S.C. 1396n)" is not a provision either.
+ * Every one read; not one is a provision. A member may itself be compound —
+ * "(b)(9), and (e) of section 466" — so the marker run is part of the member
+ * rather than a separator in its own right.
  */
+const MARKER = '\\([A-Za-z0-9]{1,8}\\)';
+const MEMBER = `${MARKER}(?:${MARKER})*`;
+const LIST_SEP = '(?:\\s*,\\s*(?:(?:and|or)\\s+)?|\\s+(?:and|or|through|to)\\s+)';
 const RE_ADDRESS_TAIL = new RegExp(
-  `^${LEAD}\\([A-Za-z0-9]{1,8}\\)\\s+of\\s+(?:the\\s+|this\\s+|such\\s+|that\\s+)*` +
+  `^${LEAD}${MEMBER}(?:${LIST_SEP}${MEMBER})*` +
+    '\\s+of\\s+(?:the\\s+|this\\s+|such\\s+|that\\s+)*' +
     '(?:sub)?(?:section|paragraph|clause|item|chapter|title|part|subtitle|division|Act|Code)\\b',
   'i'
 );

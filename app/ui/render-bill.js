@@ -5,7 +5,7 @@
 // character count — so every citation offset computed against the raw text stays
 // valid and no offset remapping table is needed.
 
-import { isWrappedMarkerLine } from '../parse/outline.js';
+import { isWrappedMarkerLine, quotedBlocks } from '../parse/outline.js';
 import { isHeadingContinuationLine } from '../parse/bill.js';
 
 // A line opening a quotation starts a new paragraph: that is a block of statute
@@ -17,6 +17,9 @@ import { isHeadingContinuationLine } from '../parse/bill.js';
 // lines in the sample bill, 509 in the CLARITY Act substitute.
 const RE_PARA_START =
   /^\s*(?:\([A-Za-z0-9]{1,8}\)|SECTION\s+\d|SEC\.\s|TITLE\s+[IVXLC]|Subtitle\s+[A-Z]|DIVISION\s+|CHAPTER\s+|``|‘‘|["“]|\d+\.\s)/;
+
+/** The leading whitespace before a quote opener, or -1 if the line has none. */
+const RE_QUOTE_LEAD = /^[ \t]*(?=``|‘‘|["“])/;
 const RE_HEAD = /^\s*(SECTION|SEC\.)\s+(\d+[A-Za-z]*)\.\s*(.*)$/;
 const RE_DIV = /^\s*(DIVISION\s+[A-Z0-9]+|TITLE\s+[IVXLC]+|Subtitle\s+[A-Z]|CHAPTER\s+[IVXLC0-9]+)\s*(?:--|[—–-])\s*(.+?)\s*$/;
 
@@ -25,6 +28,28 @@ const RE_DIV = /^\s*(DIVISION\s+[A-Z0-9]+|TITLE\s+[IVXLC]+|Subtitle\s+[A-Z]|CHAP
 // paragraph; a bare one only does when it is a real marker rather than the
 // tail of a reference that wrapped across the measure.
 const RE_BARE_MARKER = /^\s*\([A-Za-z0-9]{1,8}\)/;
+
+// "1. product chemistry and/or" is a numbered list item; "2025. The annual
+// capacity limitation …" is the tail of "for calendar year" that ran off the
+// measure, and splitting there cut a sentence in half and dressed the back half
+// up as a new item. Two tells, both provable rather than tuned:
+//
+//   - a FOUR-digit number is a year, never a list marker. Across the corpus
+//     every one of the 34 real items is a single digit and all 8 four-digit
+//     heads are years;
+//   - a number after a line ending in a hyphen is the tail of a hyphenated
+//     word — "dies from COVID-" / "19. The Secretary shall …".
+//
+// Same family as isWrappedMarkerLine, but a separate spelling on purpose: that
+// one answers for parenthesised outline markers, which resolution reads too,
+// and this shape exists only in RE_PARA_START.
+const RE_NUM_HEAD = /^\s*(\d+)\.\s/;
+function isWrappedNumberLine(prevLine, line) {
+  const m = line.match(RE_NUM_HEAD);
+  if (!m) return false;
+  if (m[1].length === 4) return true;
+  return prevLine != null && /-$/.test(prevLine.trimEnd());
+}
 
 /**
  * Group the raw text into paragraph ranges over the original offsets.
@@ -39,6 +64,29 @@ function paragraphs(text, secByStart) {
   const lines = text.split('\n');
   let cur = null;
   let off = 0;
+
+  // A quotation at a line head is not always a block of new law. A bill
+  // hard-wraps at 72 columns, so the operand of a strike lands at a line head
+  // whenever the instruction breaks in front of it —
+  //
+  //     ... in subsection (c)(2), by striking
+  //   ``2021'' and inserting ``2025''; and
+  //
+  // — and splitting there cuts a sentence in half and presents the back half as
+  // a block of statute the bill is inserting. 4,550 across the corpus, against
+  // 6,351 real block openers and 57,423 interior lines of a block already open.
+  // Worse than untidy where a citation spans the break: "Carl Levin and Howard
+  // P. ``Buck'' McKeon National Defense Authorization Act" broke at the
+  // NICKNAME, so the chip ran past the paragraph and its tail was rendered as
+  // one.
+  //
+  // quotedBlocks() is the one spelling of where new law begins and already
+  // tells the two apart — real new law carries an outline marker at the head of
+  // one of its lines, a phrase lifted out of a sentence carries none. Asked
+  // here rather than re-derived, for the reason isWrappedMarkerLine is: a
+  // second spelling puts resolution and layout out of step.
+  const phraseOpens = new Set();
+  for (const b of quotedBlocks(text)) if (b.phrase) phraseOpens.add(b.start);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -71,8 +119,15 @@ function paragraphs(text, secByStart) {
     // the marker is the tail of a wrapped cross-reference, not a new item.
     // Breaking there cut a sentence in half and dressed the back half up as an
     // enumerated provision. See app/parse/outline.js.
+    const prevLine = i > 0 ? lines[i - 1] : null;
+    // A line opening with a quote can only have matched RE_PARA_START on the
+    // quote alternative — every other branch needs a marker or a keyword in
+    // front — so testing the opener settles the whole line.
+    const qm = line.match(RE_QUOTE_LEAD);
     const wrapped =
-      RE_BARE_MARKER.test(line) && isWrappedMarkerLine(i > 0 ? lines[i - 1] : null, line);
+      (RE_BARE_MARKER.test(line) && isWrappedMarkerLine(prevLine, line)) ||
+      isWrappedNumberLine(prevLine, line) ||
+      (qm != null && phraseOpens.has(start + qm[0].length));
     // Start a fresh paragraph on a heading, on an enumerator, or when the
     // previous line ended in a way that closes a sentence block.
     // `cur.head` closes a heading paragraph after one line — right for a real

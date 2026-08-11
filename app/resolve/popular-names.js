@@ -283,9 +283,17 @@ export const POPULAR_NAMES = [
   { name: 'Barry Goldwater Scholarship and Excellence in Education Act of 1986', pattern: 'Barry[\\s\\-]+Goldwater[\\s\\-]+Scholarship[\\s\\-]+and[\\s\\-]+Excellence[\\s\\-]+in[\\s\\-]+Education[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1986', title: '20', section: '4701', range: '4701 et seq.', enactedAs: 'Pub. L. 99–661' },
   { name: 'Federal Columbia River Transmission System Act', pattern: 'Federal[\\s\\-]+Columbia[\\s\\-]+River[\\s\\-]+Transmission[\\s\\-]+System[\\s\\-]+Act', title: '16', section: '838', range: '838 et seq.', enactedAs: 'Pub. L. 93–454' },
   { name: 'Depository Institutions Management Interlocks Act', pattern: 'Depository[\\s\\-]+Institutions[\\s\\-]+Management[\\s\\-]+Interlocks[\\s\\-]+Act', title: '12', section: '3201', range: '3201 et seq.', enactedAs: 'Pub. L. 95–630' },
-  { name: 'Bankruptcy Code or the Securities Investor Protection Act of 1970', pattern: 'Bankruptcy[\\s\\-]+Code[\\s\\-]+or[\\s\\-]+the[\\s\\-]+Securities[\\s\\-]+Investor[\\s\\-]+Protection[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1970', title: '15', section: '78aaa', range: '78aaa et seq.', enactedAs: 'Pub. L. 91–598' },
-  { name: 'Bankruptcy Code, the Securities Investor Protection Act of 1970', pattern: 'Bankruptcy[\\s\\-]+Code,[\\s\\-]+the[\\s\\-]+Securities[\\s\\-]+Investor[\\s\\-]+Protection[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1970', title: '15', section: '78aaa', range: '78aaa et seq.', enactedAs: 'Pub. L. 91–598' },
-  { name: 'Securities Exchange Act of 1934.--The Securities Exchange Act of 1934', pattern: 'Securities[\\s\\-]+Exchange[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1934\\.[\\s\\-]+The[\\s\\-]+Securities[\\s\\-]+Exchange[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1934', title: '15', section: '78a', range: '78a et seq.', enactedAs: 'June 6, 1934, ch. 404' },
+  // A harvested "Securities Exchange Act of 1934.--The Securities Exchange Act
+  // of 1934" was deleted outright: the harvest ran a section HEADING into the
+  // sentence below it, so the chip covered the heading, its terminating period
+  // and the first words of the body — rendering body text inside the .sec-head.
+  // The clean entry above resolves the same Act to the same provision.
+  //
+  // Trimmed from two harvested spellings, "Bankruptcy Code or the …" and
+  // "Bankruptcy Code, the …" — the harvest took the sentence in front of the
+  // name. Trimmed rather than deleted, the way the Investment Company Act was:
+  // SIPA has no other entry, so deleting these would lose the Act outright.
+  { name: 'Securities Investor Protection Act of 1970', pattern: 'Securities[\\s\\-]+Investor[\\s\\-]+Protection[\\s\\-]+Act[\\s\\-]+of[\\s\\-]+1970', title: '15', section: '78aaa', range: '78aaa et seq.', enactedAs: 'Pub. L. 91–598' },
   { name: 'Sikes Act', pattern: 'Sikes[\\s\\-]+Act', title: '16', section: '670', range: '670 et seq.', enactedAs: 'Pub. L. 86–797' },
   { name: 'Defense Base Act', pattern: 'Defense[\\s\\-]+Base[\\s\\-]+Act', title: '42', section: '1651', range: '1651 et seq.', enactedAs: 'Aug. 16, 1941, ch. 357' },
   { name: 'International Economic Emergency Powers Act', pattern: 'International[\\s\\-]+Economic[\\s\\-]+Emergency[\\s\\-]+Powers[\\s\\-]+Act', title: '50', section: '1701', range: '1701 et seq.', enactedAs: 'Pub. L. 95–223' },

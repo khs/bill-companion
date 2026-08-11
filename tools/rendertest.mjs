@@ -319,11 +319,36 @@ if (existsSync(samplePath)) {
   // openers, so in a govinfo plain-text bill — which quotes ``like this'' — none
   // of them did: 209 inserted blocks were glued to the preceding paragraph.
   // Asserted as an exact identity against the source rather than a floor.
+  //
+  // The identity is over the quoted lines that are NOT a lone operand. A bill
+  // wraps at 72 columns, so the operand of a strike lands at a line head
+  // whenever the instruction breaks in front of it — "by striking\n``2021'' and
+  // inserting ``2025''" — and that is one sentence, not two paragraphs. The
+  // count came from the raw lines, which conflated the two, so this assertion
+  // could only ever have been satisfied by splitting mid-sentence. Both halves
+  // are asserted, or the fixture could satisfy it by containing no operands.
+  const { quotedBlocks: qb } = await imp('app/parse/outline.js');
+  const phraseAt = new Set(qb(text).filter((b) => b.phrase).map((b) => b.start));
+  const RE_QL = /^[ \t]*(?=``|‘‘|["“])/;
+  let quotedLines = 0;
+  let operandLines = 0;
+  {
+    let off = 0;
+    for (const l of text.split('\n')) {
+      const m = l.match(RE_QL);
+      if (m && /^[ \t]*(?:``|‘‘|["“])/.test(l)) {
+        quotedLines++;
+        if (phraseAt.has(off + m[0].length)) operandLines++;
+      }
+      off += l.length + 1;
+    }
+  }
   const quotedParas = [...el.querySelectorAll('p')]
     .filter((p) => /^\s*(?:``|‘‘|["“])/.test(p.textContent)).length;
-  const quotedLines = text.split('\n').filter((l) => /^\s*(?:``|‘‘|["“])/.test(l)).length;
   ok('the sample really does contain quoted blocks', quotedLines > 100, `${quotedLines} lines`);
-  eq('every quoted block starts its own paragraph', quotedParas, quotedLines);
+  ok('  and quoted operands at a line head too', operandLines > 5, `${operandLines} lines`);
+  eq('every quoted block starts its own paragraph', quotedParas, quotedLines - operandLines);
+  eq('  and no lone operand does', operandLines, 11);
 
   // Every paragraph publishes its span in the source. An internal
   // cross-reference resolves to an offset, not to an element, so this is the
@@ -353,6 +378,90 @@ if (existsSync(samplePath)) {
               `${el.querySelectorAll('.amend').length} amendment blocks`);
 } else {
   console.log('  (samples/sample-bill.txt missing — skipped)');
+}
+
+// ---- a line head that is only there because the line wrapped ---------------
+// A citation overrunning a paragraph is drawn WHOLE by the paragraph that
+// starts it, so the tail of the chip renders there and the paragraph after it
+// begins mid-phrase — a lone ".", or body text inside a .sec-head. Run over the
+// corpus, the source-preservation identity was false on 4 of 30 plain-text
+// bills by 1 or 2 characters, the space the paragraph join puts where the
+// source has none, and 18 paragraphs rendered past their own span.
+//
+// In every case but one the citation was RIGHT and the boundary was wrong.
+// Three line-head shapes, each of them only there because the line wrapped, and
+// each asserted below because neither real fixture contains one — sample-bill
+// has none at all and the Senate substitute passes the identity either way,
+// which is exactly the "a fixture that cannot fail at this" trap.
+{
+  const cases = [
+    // A marker LIST continuing an address. RE_ADDRESS_TAIL read one marker.
+    'SEC. 2. LISTS.\n' +
+      '    (a) In general.--Services authorized under subsection (c), (d),\n' +
+      '(i), or (k) of section 1915 of such Act (42 U.S.C. 1396n) shall continue.\n',
+    // A four-digit number is a year, not a list marker.
+    'SEC. 3. YEARS.\n' +
+      '    (a) In general.--The limitation applies for calendar year\n' +
+      '2025. The limitation for calendar year 2026 is separate.\n',
+    // A quoted NICKNAME inside a proper name, not a block of inserted law.
+    'SEC. 4. NICKNAMES.\n' +
+      '    (a) In general.--Section 1209 of the Carl Levin and Howard P.\n' +
+      "``Buck'' McKeon National Defense Authorization Act for Fiscal Year 2015\n" +
+      '(Public Law 113-291; 128 Stat. 3451) is amended.\n',
+  ];
+  for (const [i, raw] of cases.entries()) {
+    const text = normalizeText(raw);
+    const bill = parseBill(text);
+    const cites = extractCitations(text);
+    const el = renderBill(bill, cites, extractAmendments(text, cites, bill.divisions, bill.sections),
+                          () => {}, () => {});
+    const paras = [...el.querySelectorAll('p')];
+    // The heading and one body paragraph. A wrapped line head made three.
+    eq(`wrap case ${i + 1} renders one body paragraph`, paras.length, 2);
+    const spill = paras.filter((p) => {
+      const c = p.cloneNode(true);
+      for (const w of c.querySelectorAll('.sec-where')) w.remove();
+      return c.textContent.replace(/\s+/g, ' ').trim() !==
+        text.slice(Number(p.dataset.start), Number(p.dataset.end)).replace(/\s+/g, ' ').trim();
+    });
+    eq(`  and case ${i + 1} spills nothing past a paragraph span`, spill.length, 0);
+  }
+}
+
+// ---- the same identity, on a bill this suite had never rendered ------------
+// One more fixture is not the corpus, but it is the difference between an
+// identity and a fixture-shaped assertion, and this one is a Senate substitute
+// with a different quoting convention and different wrapping.
+{
+  const other = join(ROOT, 'samples/hr3633rs-clarity-act-senate-substitute.txt');
+  if (existsSync(other)) {
+    const text = normalizeText(readFileSync(other, 'utf8'));
+    const bill = parseBill(text);
+    const cites = extractCitations(text);
+    const el = renderBill(bill, cites, extractAmendments(text, cites, bill.divisions, bill.sections),
+                          () => {}, () => {});
+    const clone = el.cloneNode(true);
+    for (const chrome of clone.querySelectorAll('.sec-where, .amend-tag, .amend-ops')) chrome.remove();
+    const rendered = [...clone.querySelectorAll('p')]
+      .map((p) => p.textContent).join(' ').replace(/\s+/g, ' ').trim();
+    const source = text.replace(/\s+/g, ' ').trim();
+    eq('a second bill also preserves its source exactly', rendered.length, source.length);
+    ok('  and character for character', rendered === source,
+       rendered === source ? '' : firstDiff(rendered, source));
+    // No paragraph may render past its own declared span either. That is the
+    // same defect stated locally, and it is what the length identity misses
+    // wherever the join's space happens to land where the source had one.
+    const spill = [...el.querySelectorAll('p')].filter((p) => {
+      const c = p.cloneNode(true);
+      for (const w of c.querySelectorAll('.sec-where')) w.remove();
+      return c.textContent.replace(/\s+/g, ' ').trim() !==
+        text.slice(Number(p.dataset.start), Number(p.dataset.end)).replace(/\s+/g, ' ').trim();
+    });
+    eq('  and no paragraph renders past its own span', spill.length, 0,
+       spill.slice(0, 2).map((p) => p.dataset.start).join(','));
+  } else {
+    console.log('  (samples/hr3633rs-clarity-act-senate-substitute.txt missing — skipped)');
+  }
 }
 
 // --- redline ---------------------------------------------------------------
