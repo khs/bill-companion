@@ -4900,3 +4900,97 @@ LVXXXVI--FEDERAL MARITIME
    and a member that is not in the tree draws nothing and says nothing. That is
    the same gap `scopeLost` fills for a single scope, and it wants the panel to
    say "the bill also names (d), which this provision does not have".
+
+83. **The last four of the 27, and two of them are refusals.** (2026-08-10.
+   L8, W16, W14 fixed; L9 measured and declined.) All four were filed as latent
+   — small counts, no visible symptom — and reading them turned up one thing
+   worth more than the fixes: **the reason a defect is latent is worth checking,
+   because it is often wrong even when the conclusion is right.**
+
+   - **L8 — "each place it appears" is sixty characters of TEXT, not of
+     source.** A bill hard-wraps at 72 columns and indents its continuation
+     lines, so a fixed slice of the raw string sees a different amount of the
+     sentence at every nesting depth — and the phrase that qualifies a strike
+     is regularly written after the INSERT that replaces it:
+
+     ```
+     (i) by striking ``$10,000'' and inserting ``$20,000''
+             each place it appears;
+     ```
+
+     63 raw characters from the strike's end and 50 once the wrap is folded
+     out, so the same sentence was read at 0, 4 and 8 spaces of indent and cut
+     in half at 12, 16, 20 and 24. Only a boolean is decided from the folded
+     copy — no offset is computed against it — which is what makes folding safe
+     here, the same reason `inline()` may fold a slice it has already cut.
+     4 ops, every one read and every one genuinely saying it. `atEnd`,
+     `statedUnit` and `statedPath` share the window and **not one moved**, which
+     is the check that widening the effective budget disturbed nothing. 0 marks
+     change: each operand occurs once in the provision it is scoped to.
+
+   - **W16 — every quote convention, everywhere, including the one that closes
+     itself.** `extractSteps` skips a line of quoted inserted law, and the run
+     was closed by an ALTERNATION over three conventions of four. The missing
+     one is the STRAIGHT double, where the same character opens and closes: a
+     `"` line opened a run that could never end, every later line was skipped
+     as inserted law, and every later operation kept the FIRST walk's scope — a
+     different provision, not a blank. Re-spelled that way, hr2 falls from 898
+     navigation steps to 436.
+
+     Adding `"` to the class is not the fix, and the report said so: with a
+     symmetric delimiter the opening line of a multi-paragraph block also closes
+     it. The run remembers the closer BELONGING to its opener — `QUOTE_PAIRS`,
+     already in the file for `readAddedBlock` and for exactly this argument —
+     and searches past the opener on the line that opened it. That also stops a
+     block opened with ``` `` ``` being closed by a curly double appearing
+     inside it, which the alternation allowed. 0 shipped incidence; `ingest()`
+     is the exposure, and text pasted from a web page or a word processor is
+     where straight quotes arrive. Asserted as an IDENTITY across the four
+     conventions plus the right answer, since agreeing on a wrong one would
+     satisfy an identity by itself.
+
+   - **W14 — a quoted operand may not run past the start of the next one.** The
+     source itself can be malformed. govinfo's rendition of Pub. L. 107-56
+     writes the USA PATRIOT Act's § 814(c) with two backticks and ONE
+     apostrophe, so the scan for a closer walks past the whole next
+     sub-instruction and finds the one belonging to its operand: a 148-character
+     strike that swallowed the navigation to subparagraph (B), printed at the
+     reader as language struck from 18 U.S.C. 1030(c)(2)(A).
+
+     **Pairing does not help and no content test works, and both were measured
+     rather than assumed.** The pair for ``` `` ``` IS `''` and the one it found
+     is real, just somebody else's. Of 7,886 quoted strike operands, three
+     contain a quote opener and three an amendatory verb — and **four of those
+     six are legitimate**: hr6395 strikes two lines of statute including the
+     `` ``(1)'' `` GPO puts at the head of the second, s1177 fixes a typo in the
+     law by striking the literal `` ``clause ``(i)'' ``, and hr2 strikes
+     statutory text reading "The Secretary shall insert". A content test would
+     have withdrawn all three. What is exact is the OVERLAP: two operands of one
+     instruction occupy disjoint spans by construction, and this is the only
+     overlapping pair in 22,874 ops. Dropped rather than trimmed — where the
+     closer came from is unknown, and an operand guessed to a length is worse
+     than none — with its correctly-delimited neighbour kept, or the language
+     the bill adds goes with it. `proptest` P12 asserts the property; **P4 (no
+     shared start) cannot catch it**, because the two spans begin apart.
+
+   - **L9 — declined, and the report's reasoning corrected.** "in subsection
+     (l), in paragraph (3), by inserting …" scopes the op to (l), because
+     `isInstructionPosition` excludes the comma on purpose: a bare unit
+     reference after a comma is usually a mention. One genuine instance in
+     34 MB, and it is not even the comma shape the fix would target — hr2
+     writes `in subsection (l), in paragraph (3) (as redesignated by section
+     1601(7)(D))--`, so the tell would have to be the `--` across a
+     parenthetical. The report says the severity does not hold because "both
+     anchors occur exactly once in the whole of (l)". **That is not true** —
+     "and socially" occurs twice in 7 U.S.C. 7333(l). The conclusion survives
+     for a better reason: both occurrences are inside (l)(3), one in its
+     heading and one in its body, so the mark lands in the provision the bill
+     names either way. Declined on that, not on the count.
+
+   selftest 717 -> 722, rendertest 491, proptest 11 -> 12 properties, corpus
+   hr3162 `opSpans` 507 -> 506 and `ops.strike` 165 -> 164 (the one dropped
+   runaway) and nothing else.
+
+   **All 27 defects from `docs/random-testing-2026-08-09.md` are now closed:
+   25 fixed, 2 measured and declined (W15, L9).** Both declines are recorded
+   with their numbers so nobody re-derives them.

@@ -149,7 +149,7 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 
 ---
 
-**W14. An unbalanced quote in the source swallows the next sub-instruction**
+**W14. An unbalanced quote in the source swallows the next sub-instruction** — FIXED 2026-08-10, CLAUDE.md item 83
 
 - **Repro:** hr3162-107-enr line 6301 (USA PATRIOT Act §814(c)) — the govinfo rendition of Pub. L. 107-56 writes `by striking ``and' at the end;` with **two backticks and one apostrophe**, a genuine defect at source.
 - **Wrong:** the strike operand runs 148 characters across the next sub-instruction; the navigation to subparagraph (B) disappears; two op spans overlap by 79 characters; and `render-context.js` prints the 148-character instruction fragment as language struck from 18 U.S.C. 1030(c)(2)(A) beneath "⚠ not found verbatim".
@@ -168,7 +168,7 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 
 ---
 
-**W16. `RE_QUOTE_CLOSE` knows three of the four quote conventions** *(found independently by two campaigns; 0 shipped incidence, paste path only)*
+**W16. `RE_QUOTE_CLOSE` knows three of the four quote conventions** — FIXED 2026-08-10, CLAUDE.md item 83 *(found independently by two campaigns; 0 shipped incidence, paste path only)*
 `app/parse/citations.js:1592` — `/''|’’|[”]/`, against `:1588` `RE_QUOTED_LINE = /^\s*(?:``|‘‘|["“])/` and `:949-950` `QO`/`QC`, **both of which include the straight double**. Confirmed verbatim.
 
 - **Repro:** any two-sub-instruction amendment, QO/QC substituted. govinfo / GPO / curly all give steps=2 and scopes `[(c)(2), (c)(2), (b)]`; straight doubles give steps=1 and `[(b), (b), (b)]`.
@@ -210,9 +210,9 @@ Same `MAX_AMEND_BODY` over-reach as W2, but *within* one bill section — so fix
 
 **L7. `RE_USC_LONG` has no hyphen in its section pattern** — FIXED 2026-08-10, CLAUDE.md item 74 — `app/parse/citations.js:43` (confirmed). `Section 949p-4 of title 10, United States Code, is amended` produces **no citation of any kind** and therefore no target, so the pane reports the bill changes nothing. `RE_USC` twenty lines above already carries `(\d+[A-Za-z]*(?:[–—-]\s*\d+[A-Za-z]*)?)` with a comment explaining exactly this. **0 of the corpus's 3,540 long-form citations has a hyphenated section** — but the form is written almost entirely for positive-law titles (t10 772, t49 522, t18 248), and `data/usc/t10.idx.json` holds `s949p_1`…`s949p_7`.
 
-**L8. "Each place it appears" is read in a fixed 60-character window** — `const after = text.slice(op.end, op.end + 60)`. Whether the flag is set depends on the continuation indent: `all=true` at 4 and 8 spaces, `false` at 12, 16, 20. **3 real corpus occurrences, not the 10 first reported** (the original gap filter chained across the following instruction, where the phrase belongs to a later strike that does get the flag), and **0 demonstrated reader-visible cost** — driven node-by-node, none of the three changes a mark. Latent robustness defect with a clean repro.
+**L8. "Each place it appears" is read in a fixed 60-character window** — FIXED 2026-08-10, CLAUDE.md item 83 — `const after = text.slice(op.end, op.end + 60)`. Whether the flag is set depends on the continuation indent: `all=true` at 4 and 8 spaces, `false` at 12, 16, 20. **3 real corpus occurrences, not the 10 first reported** (the original gap filter chained across the following instruction, where the phrase belongs to a later strike that does get the flag), and **0 demonstrated reader-visible cost** — driven node-by-node, none of the three changes a mark. Latent robustness defect with a clean repro.
 
-**L9. A second navigation step after a comma is read as a bare reference** — `isInstructionPosition` excludes the comma deliberately (a bare unit reference after a comma is usually a mention), so `in subsection (l), in paragraph (3), by inserting …` scopes the op to `(l)`. **1 genuine instance in 34 MB** (hr2 amending 7 U.S.C. 7333(l)(3)) against 4,403 `in <unit> (m), by <verb>` mentions the guard protects. **The "wrong-provision" severity does not hold:** both anchors occur exactly once in the whole of (l), so the mark lands in (l)(3) anyway. Latent widened scope only.
+**L9. A second navigation step after a comma is read as a bare reference** — MEASURED AND DECLINED 2026-08-10, CLAUDE.md item 83 — `isInstructionPosition` excludes the comma deliberately (a bare unit reference after a comma is usually a mention), so `in subsection (l), in paragraph (3), by inserting …` scopes the op to `(l)`. **1 genuine instance in 34 MB** (hr2 amending 7 U.S.C. 7333(l)(3)) against 4,403 `in <unit> (m), by <verb>` mentions the guard protects. **The "wrong-provision" severity does not hold:** both anchors occur exactly once in the whole of (l), so the mark lands in (l)(3) anyway. Latent widened scope only.
 
 ---
 
@@ -483,11 +483,16 @@ Seven more fixed. CLAUDE.md items 75–79 carry the reasoning and the audits.
   C1  fixed  item 80   a line head only there because the line wrapped
   L3  fixed  item 81   "each place it appears" crosses a node
   L2  fixed  item 82   an op scoped to a list belongs to every member
+  L8  fixed  item 83   "each place it appears" is 60 chars of TEXT
+  W16 fixed  item 83   the quote convention that closes itself
+  W14 fixed  item 83   an operand may not overrun the next one
+  L9  declined item 83 1 site, and the mark lands right anyway
 ```
 
-**Still open: W14, W16, L8, L9 — 4.**
+**Nothing open. All 27 are closed: 25 fixed, 2 measured and declined (W15, L9).**
 
-Ranked by what they cost a reader:
+What the last four cost, for the record — all were filed as latent and all four
+turned out to be latent for a reason worth checking:
 
 - **W16 with the paste path**: adding `"` to `RE_QUOTE_CLOSE` alone is not
   enough, because with a symmetric delimiter the opening line of a
@@ -496,9 +501,13 @@ Ranked by what they cost a reader:
 - **W14** is one site in 34 MB — an unbalanced quote in the govinfo rendition of
   Pub. L. 107-56 — and nothing is drawn from it today.
 - **L8** and **L9** are latent: measured at 3 and 1 occurrences with 0
-  demonstrated reader-visible cost.
+  demonstrated reader-visible cost. L8 was 4, not 3, and the reason it is
+  latent is that each operand happens to occur once in the provision it is
+  scoped to. L9's stated reason was wrong — "and socially" occurs TWICE in
+  7 U.S.C. 7333(l), not once — but both occurrences are inside (l)(3), so the
+  conclusion holds on better evidence.
 
-**Four things to carry into any of them**, on top of the two the second pass
+**Four things to carry into the next pass**, on top of the two the second pass
 recorded:
 
 - **Audit what a change WITHDRAWS, and classify it rather than sampling it.**
