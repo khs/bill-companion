@@ -5917,3 +5917,40 @@ LVXXXVI--FEDERAL MARITIME
      stop. The bill really does strike "the period at the end", and the period on
      screen is the new one the amendment left behind. Cosmetically odd, literally
      true, and older than any of this work.
+
+98. **The claim that needed a different POPULATION, not a different seed.**
+   (2026-08-12.) Item 97's follow-up sample was twelve marks read against the
+   shards — a different draw from the same instrument over the same 28-enacted-
+   bill corpus, which is the weakest way to vary a sample and not what item 65
+   means by "vary the sample, not the number of runs". Twelve of 2,923 is 0.4%,
+   and at a 5% defect rate a twelve-draw misses it more often than not.
+
+   Two stronger questions were asked instead, and both are about the specific
+   risk item 96 introduces rather than about marks in general.
+
+   **How ambiguous is the loose cross-reference match?** Statutory prose is full
+   of parallel clauses differing only in a section number, so abstracting the
+   number could match a passage the bill never meant. Counted over the whole
+   corpus rather than sampled: of **117 operations the loose path can serve**,
+   112 have exactly one candidate in the node `apply()` searches. All 5 with more
+   are repeated copies of the SAME clause carrying the SAME translated reference
+   — 42 U.S.C. 1396a(a)(10), where the American Rescue Plan inserts its vaccine
+   clause in several places at once — which is the statute repeating itself and
+   is what `enact()`'s nearest-to-anchor rule already handles. Not one is two
+   different provisions. `looseOccurrences` is exported so `tools/dupes.mjs` can
+   ask this rather than re-spelling the pattern it measures.
+
+   **Does it put "already in the law" on a bill that is not law?** That is the
+   claim item 96 adds, and the corpus cannot test it: 28 of its 30 runs are
+   enrolled. A seeded random draw of introduced, reported and engrossed bills by
+   BILL NUMBER — 6 new ones fetched, joining the 13 from item 84's campaign, 19
+   in all and none written for this project — answers it. `paneltest --dir` reads
+   580 op rows over 21 distinct sentences with **0 contradictions**, and the
+   before/after diff across all 19 bills moves **exactly one mark**: 119s3474is
+   gains one green pending insert and no in-force mark. **Zero new in-force
+   claims outside the enacted corpus**, which is the signature this change had to
+   produce and the one thing the corpus could not show.
+
+   Still open and unfixed, so nobody reads item 96 as closing the family: 27 of
+   the original 55 remain, and three of those are the OLRC footnote marker
+   ("physician,,1 or,"), which IS strippable and was left alone.
