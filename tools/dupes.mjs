@@ -23,7 +23,7 @@ const { extractCitations, extractAmendments } = await imp('app/parse/citations.j
 const { normalizeText, parseBill } = await imp('app/parse/bill.js');
 const { unwrapPre } = await imp('tools/measure.mjs');
 const { resolve } = await imp('app/resolve/index.js');
-const { createRedline } = await imp('app/ui/redline.js');
+const { createRedline, fold, looseOccurrences } = await imp('app/ui/redline.js');
 const { flattenText } = await imp('app/resolve/provision-tree.js');
 const { subtreeText } = await imp('app/ui/render-context.js');
 
@@ -39,7 +39,9 @@ async function textOf(path) {
 }
 const words = (s) => (String(s).toLowerCase().match(/[a-z]{4,}/g) || []);
 const rows = [];
+const ambig = [];
 let drawn = 0;
+let loose = 0;
 for (const bill of bills) {
   const path = bill.local ? join(ROOT, bill.local) : join(ROOT, 'corpus/files', `${bill.id}.htm`);
   if (!existsSync(path)) continue;
@@ -85,10 +87,36 @@ for (const bill of bills) {
         ins: h.text.replace(/\s+/g, ' ').slice(0, 110),
       });
     }
+
+    // …and the other side of the same question: how much AMBIGUITY does the
+    // loose cross-reference match introduce? Statutory prose is full of parallel
+    // clauses differing only in a section number, so a rule that abstracts the
+    // number could match a passage the bill never meant. For every op the loose
+    // path can serve — the strict search finding the language nowhere — count
+    // the candidates in the node `apply()` actually searches. One is a
+    // fingerprint; several means picking one is a guess.
+    const wf = fold([res.lead || '', ...res.tree.map(subtreeText)].join('\n'));
+    for (const op of a.ops) {
+      if (op.type !== 'insert' || !op.text) continue;
+      const strict = fold(op.text).norm.trim();
+      if (!strict || wf.norm.includes(strict)) continue;
+      if (!looseOccurrences(wf, op.text).length) continue;
+      loose++;
+      let best = 0;
+      for (const n of [...nodeAt.values()]) {
+        const c = looseOccurrences(fold(n.text || ''), op.text).length;
+        if (c > best) best = c;
+      }
+      if (best > 1) ambig.push({ b: bill.id, cite: res.citation || '', n: best,
+                                 t: String(op.text).replace(/\s+/g, ' ').slice(0, 90) });
+    }
   }
 }
 rows.sort((x, y) => y.share - x.share);
 console.log('green inserts drawn:', drawn, '· of 8+ words, >=0.90 already in the node:', rows.length);
 for (const r of rows.slice(0, 14)) console.log(`  ${r.share} ${r.b} ${r.cite} [${r.p}] "${r.ins}"`);
+console.log('\nops the loose cross-reference match can serve:', loose,
+            '· with more than one candidate in the node:', ambig.length);
+for (const r of ambig.slice(0, 10)) console.log(`  ${r.n}x ${r.b} ${r.cite} "${r.t}"`);
 // Printed, not written: a report that drops a file in the repo root gets
 // committed by accident, and a stale one then reads as data.

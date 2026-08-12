@@ -192,7 +192,7 @@ const XREF = new RegExp(XREF_SRC, 'g');
 const TITLE_TAG = /\s+of\s+(?:this|such)\s+title\b/g;
 const TAG_OPT = '(?:\\s+of\\s+(?:this|such)\\s+title)?';
 const XREF_MIN_WORDS = 8;
-function looseOccurrences(folded, needle) {
+export function looseOccurrences(folded, needle) {
   const n = fold(needle).norm.trim().replace(TITLE_TAG, '');
   if (!n) return [];
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\)/g, '\\)' + TAG_OPT);
