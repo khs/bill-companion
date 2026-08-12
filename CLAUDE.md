@@ -5892,3 +5892,28 @@ LVXXXVI--FEDERAL MARITIME
    caches ES modules hard, which is item 11's second note and looks exactly like
    the fix not working: the first render after these edits showed the OLD
    behaviour until a reload.
+
+97. **A different sample, and this one came back clean.** (2026-08-11.) With
+   item 96 in, a fresh seeded draw of 12 marks (seed 8811962) was read against
+   the shipped shards, each beside the instruction that produced it. **No mark
+   is in the wrong provision.** Nine are `was` marks the law demonstrably
+   carries and one is a strike the law demonstrably still has; the
+   cross-reference and quote work shows up directly in two of them (10 U.S.C.
+   4424(a) "sections 3201 through 3205", 38 U.S.C. 7425(b)). The one that looked
+   like a mark in the wrong subparagraph — 50 U.S.C. 1702(a)(1)(B) — was read
+   against the bill and is right: sub-instruction (B)(ii) inserts exactly those
+   words in subparagraph (B), and only the sampler's 330-character truncation of
+   the instruction made it ambiguous. That is the fourth time in two days the
+   instrument, not the product, was what looked wrong.
+
+   Two things seen and deliberately not treated as defects:
+
+   - **42 U.S.C. 1395f(i)(1)(C)(ii)(VII)** draws a green insert whose words are
+     all present except its tail: the ACA inserted "subject to clause (iv)," and
+     a later Act made it "subject to clauses (iv) and (vi),". Neither claim is
+     available — the language is neither absent nor present as written — and it
+     is one of the 27 remainders item 96 classifies.
+   - **2 U.S.C. 5322a(f)** draws a strikethrough on the provision's closing full
+     stop. The bill really does strike "the period at the end", and the period on
+     screen is the new one the amendment left behind. Cosmetically odd, literally
+     true, and older than any of this work.
