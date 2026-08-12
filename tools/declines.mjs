@@ -75,12 +75,19 @@ for (const bill of bills) {
   if (MODE === 'refs') {
     // A bare internal reference the bill's own text cannot place. The pane says
     // so honestly; the question is whether the sentence around it says more.
+    // `locateInternal(bill, cite)` — the BILL first. Reversing those two makes
+    // every call fail and reports the whole population as unresolved, which is
+    // how the first run of this claimed 31,429 rather than 2,935. Check the
+    // instrument before the product.
     const { locateInternal } = await imp('app/resolve/internal.js');
     const cites = expandRelativeRefs(raw, ams);
+    // The same population impact.mjs splits by fate: a BARE cross-reference, not
+    // one that names its own section and not an Act-scoped one.
+    const bare = (c) => c.kind === 'internal' && c.scope !== 'act' && c.refType !== 'section';
     for (const c of cites) {
-      if (c.kind !== 'internal') continue;
+      if (!bare(c)) continue;
       let hit = null;
-      try { hit = locateInternal(c, text, parsed); } catch { hit = null; }
+      try { hit = locateInternal(parsed, c); } catch { hit = null; }
       if (hit && hit.start != null) continue;
       pool.push({
         bill: bill.id, what: c.text,

@@ -6115,3 +6115,25 @@ LVXXXVI--FEDERAL MARITIME
    there, so it stays true on a bill that has not passed. Recorded rather than
    suppressed: a reader of a pending bill wants to know its language is already
    on the books.
+
+   **The second mode, and what it found.** `declines.mjs refs` draws from the
+   4,584 bare cross-references `locateInternal` cannot place. Three read, three
+   different shapes, none built here because each moves `refs`/`relative` in the
+   baseline and wants its own accounting:
+
+   - **"subsection (a)(2)(B) thereof"** after "section 4081 of such Code" — the
+     anaphoric tail item 26 deferred and item 61 records as still open. The
+     answer is 26 U.S.C. 4081(a)(2)(B) and it is composable from the citation
+     three words earlier.
+   - **"subclauses (I), (II), and (III) of clause (iii)"** inside a block adding
+     clause (iv) to subparagraph (C). The referent is a SIBLING in the law, not
+     in the block, so `quotedRefs` should reach it; the chip is a dead end today.
+   - A reference inside a quoted *substitution* string, where the replacement
+     text names the Act itself. Genuinely hard, and correctly refused.
+
+   And the tool's own first run claimed a population of **31,429** because the
+   call was `locateInternal(cite, text, parsed)` where the signature is
+   `locateInternal(bill, cite)` — every call failed and every reference read as
+   unresolved. Seventh time in this project that the instrument was wrong before
+   the product was. A sampler that reports a population is making a measurement;
+   check it against one the repo already prints.
