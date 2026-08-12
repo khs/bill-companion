@@ -2130,6 +2130,42 @@ section('the Code respells what bills write');
   eq('a substituted figure is still a change, not a match',
      createRedline([changed]).apply(rate, '').filter((s) => s.type === 'was').length, 0);
 
+  // GPO opens every paragraph of a multi-paragraph operand with a quote mark.
+  // Those are structure, not words — the law has none of them — so an operand
+  // spanning two paragraphs could never be found.
+  const lawPara =
+    'The amount is equal to— (I) for a year preceding 2024, the greater of the ' +
+    'amount described in clause (ii) or 5 percent.';
+  const block = {
+    id: 'b1', type: 'insert', start: 0, end: 1, anchor: 'The amount', relation: 'after',
+    text: ' is equal to--\n``(I) for a year preceding 2024, the greater of the ' +
+          'amount described in clause (ii) or 5 percent',
+  };
+  eq('a multi-paragraph operand is found past its own quote openers',
+     createRedline([block]).apply(lawPara, '').filter((s) => s.type === 'was').length, 1);
+
+  // A punctuation strike AT THE END whose replacement now sits at the end. Once
+  // the amendment has been made the period is gone, so the strike cannot land
+  // and nothing else can see that this has plainly happened.
+  const item = '(2) $10,000,000 for each of fiscal years 2014 through 2018; and';
+  const known = new Set(['', '(e)', '(e)(1)', '(e)(2)']);
+  const repunct = (scope) => [
+    { id: 's9', type: 'strike', start: 10, end: 11, scope: '(e)(2)', atEnd: true,
+      operand: '.', text: 'striking the period at the end' },
+    { id: 'i9', type: 'insert', start: 12, end: 13, scope, replaces: 10, text: '; and' },
+  ];
+  const repunctuated = createRedline(repunct('(e)(2)'), undefined, known).apply(item, '(e)(2)');
+  eq('a punctuation strike whose replacement already ends the passage is in force',
+     repunctuated.filter((s) => s.type === 'was').length, 1);
+  eq('  and neither half is drawn as a pending change',
+     repunctuated.filter((s) => s.type === 'del' || s.type === 'ins').length, 0);
+  // …and only in the passage the STRIKE names. Every item in a list ends with
+  // the same connective, so an ancestor scope would mark the first sibling — the
+  // one paragraph the instruction is not talking about.
+  eq('  and not in a sibling that happens to end the same way',
+     createRedline(repunct('(e)'), undefined, known).apply(item, '(e)(1)')
+       .filter((s) => s.type === 'was').length, 0);
+
   // …but NOT where the renumbering IS the amendment. Both sides abstract to the
   // same thing, so a change nobody has made would report itself made.
   const renum =

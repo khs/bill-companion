@@ -139,7 +139,12 @@ export function fold(s) {
  * that is itself a word character, so punctuation operands still match.
  */
 function occurrences(folded, needle) {
-  const n = fold(needle).norm.trim();
+  // A multi-paragraph operand carries GPO's per-paragraph quote openers, and
+  // those are structure rather than words: the law has no quote mark at the head
+  // of a paragraph, so an operand spanning two of them could never be found.
+  // `alreadyIn()` has stripped them since item 36; this is the same rule in the
+  // matcher every other test goes through.
+  const n = fold(String(needle).replace(BLOCK_OPENERS, '$1$2')).norm.trim();
   const out = [];
   if (!n) return out;
   const openWord = /\w/.test(n[0]);
@@ -219,7 +224,7 @@ const XREF_MIN_WORDS = 8;
 // on this path. Every case this exists for is a sentence.
 const FLEX_MAX = 600;
 export function looseOccurrences(folded, needle) {
-  const n = fold(needle).norm.trim().replace(TITLE_TAG, '');
+  const n = fold(String(needle).replace(BLOCK_OPENERS, '$1$2')).norm.trim().replace(TITLE_TAG, '');
   if (!n || n.length > FLEX_MAX) return [];
   const esc = (s) =>
     s
@@ -1056,6 +1061,48 @@ export function createRedline(ops, fullText, knownPaths) {
             inss.push({ at: where.end, text: op.text, op });
             fired(op, hit);
           }
+          continue;
+        }
+        // A punctuation strike AT THE END whose replacement now sits at the end.
+        // "by striking the period at the end and inserting ``; or''" is the
+        // commonest way a bill re-punctuates a list, and once the amendment has
+        // been made the period is gone — so the strike cannot land, `where` is
+        // undefined, and everything above is blind to a change that has plainly
+        // happened. 139 of the corpus's 5,829 unfound operations are this shape,
+        // and the reader was told "not found verbatim" about a passage ending in
+        // the exact words the bill puts there.
+        //
+        // The evidence is the passage's own last characters — this passage ends
+        // with the new punctuation and not with the old — which is positional
+        // proof of the same kind `alreadyAt()` rests on and needs no length
+        // floor. A named punctuation operand only; a quoted phrase can be
+        // searched for and does not need this.
+        //
+        // The evidence has to be taken in the passage the STRIKE names, not
+        // wherever the insert's scope reaches. An insert is regularly scoped a
+        // level wider than the strike it replaces — 26 U.S.C. 38(b)'s ", plus"
+        // is scoped to (b) while the period it replaces is at (b)(34) — and the
+        // walk meets (b)(33) first, whose text also ends ", plus". Without this
+        // the mark lands one paragraph early, in the one the bill does not name.
+        // …and only where the strike's own scope names THIS passage. Two ways
+        // that goes wrong and both were live before the guard: `reScope()`
+        // widens an address the provision does not have (23 U.S.C. 167 has no
+        // (i)(5)(B)(ii)), and an ancestor scope reaches every child — where
+        // every item in a list ends with the same connective, so the walk meets
+        // a sibling first and the mark lands one paragraph early. "At the end"
+        // is a claim about one passage, and it can only be tested in that one.
+        if (
+          struckOp &&
+          struckOp.atEnd &&
+          !op.scopeWidened &&
+          !struckOp.scopeWidened &&
+          (struckOp.scope ?? '') === (path ?? '') &&
+          /^[.;,:]$/.test(String(struckOp.operand || '').trim()) &&
+          folded.norm.trimEnd().endsWith(fold(op.text).norm.trim())
+        ) {
+          struckOp.enacted = true;
+          struckOp.done = true;
+          enact(op, text.length, undefined, hit);
           continue;
         }
         // The strike did not land. Where EVERY strike this amendment makes is

@@ -14,6 +14,7 @@ node tools/rendertest.mjs                 # 513 checks, needs `npm i -D linkedom
 node tools/paneltest.mjs                  # 19,102 panel sentences vs the marks
 node tools/marksample.mjs <seed> <n>      # not a test - a seeded draw of marks to READ
 node tools/dupes.mjs                      # not a test - green inserts the law already has
+node tools/declines.mjs <mode> <seed> <n> # not a test - the cases the app REFUSES, to read
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 node tools/coverage.mjs                   # not a test — what the redline actually draws
@@ -1912,7 +1913,7 @@ app/resolve/bundle.js one shard out of a bundle, by HTTP Range
 tools/                ingest_usc.py · ingest_plaw.mjs · bundle.mjs · make-library.mjs ·
                       serve.py · selftest.mjs · rendertest.mjs · paneltest.mjs ·
                       measure.mjs (shared metrics) · impact.mjs · corpus.mjs ·
-                      marksample.mjs · dupes.mjs
+                      marksample.mjs · dupes.mjs · declines.mjs
 corpus/               corpus.json + baseline.json · files/ — all tracked
 data/usc/             tN.idx.json + tN.N.jsonl — 60,436 sections in 54 parts
 data/plaw/            26 Public Laws, same shape; both tracked — the data IS the site
@@ -6037,3 +6038,80 @@ LVXXXVI--FEDERAL MARITIME
 
    selftest 766 → 769, rendertest 513, proptest clean, paneltest clean at 293
    sentences and clean over the 19-bill pending directory, corpus unchanged.
+
+100. **The refusals, read for what they actually say.** (2026-08-12, from
+   Keller: *"look at laws in our existing sample where we report failure to
+   identify: see if you as an intelligent agent can identify the context and what
+   is meant, and then figure out how to capture that in a rules-based way."*)
+
+   Every other sampler here draws from what the app ASSERTS and asks whether the
+   assertion is right. `tools/declines.mjs` draws from what it REFUSES and asks a
+   different question: is the answer stated right here, in words the parser did
+   not read? That is item 26's method, and it produces shapes rather than one-off
+   corrections — a wrong answer is a bug in a rule that exists, where a refusal
+   is usually a rule that does not.
+
+   Ten cases read out of the 5,829 operations reported "not found in the
+   provision". Six were the app being right (a later Act changed the words, the
+   Space Force was codified differently, the bill has a typo). Four were shapes,
+   and measuring them across the corpus before building is what set the order:
+
+   ```
+     paired punctuation strike, replacement now at the end   275 seen, 139 real
+     multi-paragraph operand with GPO's quote openers        408 seen,  69 real
+     a word the measure broke across a hyphen or slash       364 seen,   5 real
+   ```
+
+   The third was measured and NOT built: 5 is not worth a rule, and the first
+   probe said 0 because the probe was wrong — it stripped every hyphen rather
+   than the one at the wrap. Check the instrument before concluding a family is
+   empty.
+
+   **A multi-paragraph operand carries structure, not words.** GPO opens every
+   quoted paragraph with a quote mark and the law has none of them, so an operand
+   spanning two paragraphs could never be found. `alreadyIn()` has stripped them
+   since item 36; `occurrences()` — the matcher every other test goes through —
+   never did.
+
+   **A punctuation strike at the end whose replacement now sits at the end.** "by
+   striking the period at the end and inserting ``; or''" is the commonest way a
+   bill re-punctuates a list. Once the amendment has been made the period is
+   gone, so the strike cannot land, `where` is undefined and everything above is
+   blind to a change that has plainly happened. The evidence is the passage's own
+   last characters, which is positional proof of the same kind `alreadyAt()`
+   rests on and needs no length floor.
+
+   **Two guards, and I shipped neither until the mark diff caught me needing
+   them.** This is the audit rule earning its place twice in one change:
+
+   - **A widened scope is not a position.** `reScope()` widens an address the
+     provision does not have — 23 U.S.C. 167 has no (i)(5)(B)(ii) — and the
+     widened scope reached passages the instruction never named. First diff:
+     31 marks withdrawn, only 4 replaced.
+   - **The strike's scope must name THIS passage, not an ancestor.** An insert is
+     regularly scoped a level wider than the strike it replaces — 26 U.S.C. 38(b)
+     scopes ", plus" to (b) while the period is at (b)(34) — and **every item in
+     a list ends with the same connective**, so the walk meets a sibling first.
+     Second diff: 17 withdrawn, and all 17 were a correct mark moving from the
+     paragraph the bill names to the one before it — (d)(2)(A)(ii) → (d)(2)(A)(i),
+     (g)(2)(A)(ii)(II) → (g)(2)(A)(ii)(I), (9)(D)(i)(II) → (9)(D)(i)(I).
+
+   Both were invisible to every suite: selftest, rendertest, proptest, paneltest
+   and the corpus were green at each of the three stages. Only the mark-level
+   diff could see it, and only because it pairs a withdrawal against what
+   replaces it AT THE SAME NODE — pairing by provision would have called all 17
+   accounted for.
+
+   Final: **marks 2,924 → 3,171. One withdrawn, paired at the same node
+   (42 U.S.C. 1395l(a)(2)(G)(ii)'s `del` on "and" becoming a `was` over "; and"),
+   and 248 added, every one an in-force mark on an enrolled bill.** Inline
+   coverage `shown to the reader` 25%, additions unchanged, corpus unchanged —
+   these are flags and matches, not spans.
+
+   Three of the 248 fall outside the enacted corpus, and that is a change from
+   item 98: 118s3891is gains 2 and 119s2431rs 1. The sentence is item 84's
+   wording — "Already in the law — this is the language the bill adds here" —
+   which claims the law contains the words and does NOT claim this bill put them
+   there, so it stays true on a bill that has not passed. Recorded rather than
+   suppressed: a reader of a pending bill wants to know its language is already
+   on the books.
