@@ -3,7 +3,7 @@
 // beside the provision text it landed in, so the two can be read together.
 //
 //   node sample.mjs <seed> <n>
-import { readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/[\/]$/, '');
@@ -111,4 +111,5 @@ pick.forEach((r, i) => {
   console.log(`    PROVISION:   ${r.provision}`);
   console.log('');
 });
-writeFileSync('sample.json', JSON.stringify(pick, null, 1));
+// Printed, not written: a report that drops a file in the repo root gets
+// committed by accident, and a stale one then reads as data.

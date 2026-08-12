@@ -65,7 +65,7 @@ const { extractCitations, extractAmendments } = await imp('app/parse/citations.j
 const { normalizeText, parseBill } = await imp('app/parse/bill.js');
 const { unwrapPre } = await imp('tools/measure.mjs');
 const { resolve } = await imp('app/resolve/index.js');
-const { createRedline, fold } = await imp('app/ui/redline.js');
+const { createRedline, fold, xrefKey } = await imp('app/ui/redline.js');
 const { flattenText } = await imp('app/resolve/provision-tree.js');
 const { renderContext, subtreeText } = await imp('app/ui/render-context.js');
 
@@ -262,7 +262,23 @@ for (const bill of bills) {
     // carries, or carry more than it accounts for?
     for (const [needle, t] of tally) {
       const equal = inlineMarks.filter((m) => m === needle).length;
-      const covering = inlineMarks.filter((m) => m === needle || m.includes(needle)).length;
+      // A mark may be NARROWER than the operand by exactly the punctuation
+      // joining it on. `alreadyAt()` falls back to the operand with its edge
+      // punctuation stripped, because a bill writes the comma that attaches the
+      // phrase and the Code often sets that comma on the other side of the
+      // seam — so the words are marked and the comma is not. Matching the same
+      // way the app does, and no looser: everything between the edges still has
+      // to be there.
+      // …and a mark may carry the LAW's spelling of a cross-reference where the
+      // op carries the BILL's — "section 1395x(aa)(5) of this title" against
+      // "section 1861(aa)(5)". `xrefKey` is imported rather than re-spelled, for
+      // the reason `measure.mjs` exists: a test that abstracts slightly
+      // differently from the code it tests measures something else.
+      const core = needle.replace(/^[\s;.,:"]+|[\s;.,:"]+$/g, '');
+      const key = xrefKey(core);
+      const covering = inlineMarks.filter(
+        (m) => m === needle || m.includes(core) || xrefKey(m).includes(key)
+      ).length;
       // Over-promised: more rows send the reader upward than there are marks
       // covering those characters. `covering`, not `equal`, because a strike
       // enacted through its paired insert has no mark of its own and the `was`

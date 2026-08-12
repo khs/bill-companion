@@ -55,16 +55,40 @@ export function fold(s) {
   const to = [];
   let i = 0;
   let lastWasSpace = false;
+  // One folded character standing for s[i .. i+len). Where it is a dash, the
+  // wrap that follows it is swallowed with it: a bill breaks a hyphenated word
+  // across the 72-column measure — "wildlife-\n            vehicle" — and the
+  // Code writes "wildlife-vehicle", so the two differ by the indent of the
+  // continuation line and by nothing else. Only the WHITESPACE goes; the hyphen
+  // stays, so "PAY-\nAS-YOU-GO" keeps its own and "REG-\nISTRATION" keeps its
+  // seam. A suspended hyphen is left alone — "pre- and post-award", "3- to
+  // 5-day" really do have a space there, and closing one would break a match
+  // rather than make one.
+  //
+  // The line break is NOT required, and that is deliberate: the same text
+  // reaches this function both raw and with its whitespace already collapsed to
+  // single spaces, and a rule that reads the newline gives two different answers
+  // for the same words. `alreadyAt()` folds the passage while the panel folds
+  // the mark drawn from it, so the two must agree.
+  const emit = (ch, len, wrap) => {
+    norm += ch;
+    from.push(i);
+    let end = i + len;
+    if (wrap) {
+      let j = end;
+      while (j < s.length && /\s/.test(s[j])) j++;
+      if (j > end && /[A-Za-z0-9]/.test(s[j] || '') && !/^(?:and|or|to|nor)\b/i.test(s.slice(j, j + 4))) end = j;
+    }
+    to.push(end);
+    i = end;
+    lastWasSpace = false;
+  };
   while (i < s.length) {
     const two = s.slice(i, i + 2);
-    if (two === '``' || two === "''" || two === '‘‘' || two === '’’') {
-      norm += '"'; from.push(i); to.push(i + 2); i += 2; lastWasSpace = false; continue;
-    }
+    if (two === '``' || two === "''" || two === '‘‘' || two === '’’') { emit('"', 2); continue; }
     // Two hyphens are one em dash, and take two characters of the original the
     // same way a doubled quote mark does.
-    if (two === '--') {
-      norm += '—'; from.push(i); to.push(i + 2); i += 2; lastWasSpace = false; continue;
-    }
+    if (two === '--') { emit('—', 2, true); continue; }
     const c = s[i];
     if (/\s/.test(c)) {
       // A run of whitespace folds to one space, mapped over the whole run so a
@@ -75,23 +99,31 @@ export function fold(s) {
       else { to[to.length - 1] = i; }
       continue;
     }
-    lastWasSpace = false;
     // The en dash joins the em dash: USLM prints both, and a bill writing either
-    // means the same separator. The ASCII hyphen is deliberately left alone.
-    // A LONE curly single is an apostrophe, and the two sources spell it
-    // differently: the bill writes "taxpayer's" with U+0027 and the Code
-    // "taxpayer’s" with U+2019. Every already-happened test compares folded
-    // strings, so 26 U.S.C. 3402(a)(2) could not be recognised as in force over
-    // one character out of 112. The DOUBLED forms are consumed above, which is
-    // what makes this safe: a lone one reaching here is never a delimiter.
-    norm +=
-      c === '“' || c === '”'
-        ? '"'
-        : c === '–' || c === '—'
-        ? '—'
-        : c === '’' || c === '‘'
-        ? "'"
-        : c.toLowerCase();
+    // means the same separator. An ASCII hyphen joins them only where a DIGIT is
+    // on one side of it, which is how the OLRC sets a number the bill spells
+    // with a hyphen: "Pub. L. 105–83" against the bill's "105-83", "1320f–1"
+    // against "1320f-1". Letters on both sides are left alone — nothing needs
+    // it, since both sources hyphenate a word the same way, and widening it
+    // would fold "PAY-AS-YOU-GO" onto a phrase the drafter set with dashes.
+    //
+    // Every quotation mark folds to one character, single and double alike. GPO
+    // writes a defined term inside quoted law with nested singles — `program' —
+    // where the Code prints "program", so the two spell the same words
+    // differently over four characters in a sentence that is otherwise
+    // identical. The apostrophe rides along ("taxpayer's" against "taxpayer’s")
+    // and that is harmless: the fold is applied to both sides, so a mark can
+    // only be created where the sources differ in which quotation mark they use.
+    if (
+      c === '-' &&
+      /[A-Za-z0-9]/.test(s[i - 1] || '') &&
+      /[0-9]/.test((s[i - 1] || '') + (s[i + 1] || '')) &&
+      /[A-Za-z0-9]/.test(s[i + 1] || '')
+    ) { emit('—', 1, true); continue; }
+    if (c === '–' || c === '—') { emit('—', 1, true); continue; }
+    if (c === '-') { emit('-', 1, true); continue; }
+    lastWasSpace = false;
+    norm += c === '“' || c === '”' || c === '’' || c === '‘' || c === "'" || c === '`' ? '"' : c.toLowerCase();
     from.push(i); to.push(i + 1); i++;
   }
   return { norm, from, to };
@@ -122,6 +154,88 @@ function occurrences(folded, needle) {
     at = folded.norm.indexOf(n, at + 1);
   }
   return out;
+}
+
+/**
+ * The same, but reading a cross-reference the codifier has TRANSLATED.
+ *
+ * An Act numbers its own sections and the Code renumbers them, so language
+ * lifted out of a bill and set into the Code comes back spelling its own
+ * cross-references differently:
+ *
+ *   bill:  a nurse practitioner … (as defined in section 1861(aa)(5))
+ *   law:   a nurse practitioner … (as defined in section 1395x(aa)(5) of this title)
+ *
+ * Nothing else about the sentence changes, and there is no character in it that
+ * says which of the two spellings the reader is looking at. So the strict test
+ * says no, `alreadyThere` cannot fire, and the app draws the identical sentence
+ * a second time in the insertion colour beside the words themselves — the
+ * duplication every guard in this file exists to prevent. It was 55 of 484
+ * green inserts, the top of the list holding every word already.
+ *
+ * Two things keep this from being a fuzzy match, and they are the whole of its
+ * safety. The SUBSECTION PATH is left exact: the codifier translates the number
+ * and preserves "(aa)(5)", so a reference to a different provision cannot
+ * satisfy this, and everything outside the reference has to match character for
+ * character. And the sentence has to be long enough to be a fingerprint —
+ * without that, a bill adding ", or section 45X" to a list that already reads
+ * ", or section 45Q" would report itself already done.
+ */
+const XREF_SRC =
+  '(?:sub)?sections?(?:\\s+[0-9][0-9a-z\\-—]*)?|this\\s+(?:act|chapter|subchapter|title)';
+const XREF = new RegExp(XREF_SRC, 'g');
+// "of this title" tags the WHOLE reference, so it lands after the subsection
+// path and not after the number: the Code writes "section 1395x(aa)(5) of this
+// title" where the bill wrote "section 1861(aa)(5)". Dropped from the needle and
+// made optional after every closing paren of the pattern, so neither side has to
+// be the one that carries it.
+const TITLE_TAG = /\s+of\s+(?:this|such)\s+title\b/g;
+const TAG_OPT = '(?:\\s+of\\s+(?:this|such)\\s+title)?';
+const XREF_MIN_WORDS = 8;
+function looseOccurrences(folded, needle) {
+  const n = fold(needle).norm.trim().replace(TITLE_TAG, '');
+  if (!n) return [];
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\)/g, '\\)' + TAG_OPT);
+  const parts = [];
+  let last = 0;
+  let m;
+  XREF.lastIndex = 0;
+  while ((m = XREF.exec(n))) {
+    parts.push(esc(n.slice(last, m.index)), `(?:${XREF_SRC})${TAG_OPT}`);
+    last = m.index + m[0].length;
+  }
+  if (!parts.length) return [];
+  parts.push(esc(n.slice(last)));
+  if ((n.replace(XREF, ' ').match(/[a-z]{3,}/g) || []).length < XREF_MIN_WORDS) return [];
+  const re = new RegExp(parts.join(''), 'g');
+  const out = [];
+  let h;
+  while ((h = re.exec(folded.norm))) {
+    const before = h.index > 0 ? folded.norm[h.index - 1] : '';
+    const after = folded.norm[h.index + h[0].length] || '';
+    if (!(/\w/.test(n[0]) && /\w/.test(before)) && !(/\w/.test(n[n.length - 1]) && /\w/.test(after))) {
+      out.push({ start: folded.from[h.index], end: folded.to[h.index + h[0].length - 1] });
+    }
+    re.lastIndex = h.index + 1;
+  }
+  return out;
+}
+
+/**
+ * A passage with every provision it names abstracted away — the comparison key
+ * behind the loose match above. Exported because the panel test has to ask the
+ * same question the redline does: a mark drawn through this route carries the
+ * LAW's spelling of a reference and the op carries the BILL's, so the two are
+ * not character-equal and a test that demands they be reports every one as a
+ * promise the provision does not keep.
+ */
+export function xrefKey(s) {
+  return fold(String(s)).norm.trim().replace(TITLE_TAG, '').replace(XREF, '§');
+}
+
+/** Do two passages differ ONLY where they name a provision? */
+function sameButForXref(a, b) {
+  return xrefKey(a) === xrefKey(b);
 }
 
 /**
@@ -791,8 +905,14 @@ export function createRedline(ops, fullText, knownPaths) {
      * language repeats, and the first match is regularly a different sentence.
      */
     const enact = (op, near, known, member) => {
-      const hits = known ? [known] : occurrences(folded, op.text);
-      if (!hits.length) return false;
+      const all = known ? known : occurrences(folded, op.text);
+      if (!all.length) return false;
+      // A span another op has already marked cannot carry this one too —
+      // `segments()` keeps one mark per stretch, so pushing it there sets
+      // `enacted` and draws nothing, and the panel then says "marked above"
+      // over a passage where these words carry no mark of their own.
+      const free = all.filter((h) => !dels.some((d) => h.start < d.end && d.start < h.end));
+      const hits = free.length ? free : all;
       let pick = hits[0];
       if (near != null) {
         for (const h of hits) {
@@ -854,7 +974,18 @@ export function createRedline(ops, fullText, knownPaths) {
           // The test for a run is therefore that the new language BEGINS where
           // the run begins, which is where the replacement put it. This is the
           // ONLY thing a run draws — see the strike loop for why.
-          const spans = occurrences(folded, op.text).find((h) =>
+          // …and where the strict search finds the language nowhere, the loose
+          // one asks whether the Code is spelling this bill's own cross-
+          // references its own way. NOT where the amendment's whole business is
+          // the reference — "by striking ``section 1234'' and inserting
+          // ``section 5678''" abstracts to the same thing on both sides, and a
+          // renumbering that has not happened would report itself done.
+          const strict = occurrences(folded, op.text);
+          const cands =
+            strict.length || (struckOp && sameButForXref(struckOp.operand || struckOp.text, op.text))
+              ? strict
+              : looseOccurrences(folded, op.text);
+          const spans = cands.find((h) =>
             isRun
               ? h.start === where.start
               : h.start <= where.start &&
@@ -869,7 +1000,7 @@ export function createRedline(ops, fullText, knownPaths) {
               if (dels[i].op.start === op.replaces) dels.splice(i, 1);
             }
             if (struckOp) { struckOp.enacted = true; struckOp.done = true; }
-            enact(op, null, spans, hit);
+            enact(op, null, [spans], hit);
             continue;
           }
           // A run's replacement is not drawn either, and for the same reason
@@ -901,7 +1032,8 @@ export function createRedline(ops, fullText, knownPaths) {
           // That is positional proof and needs no length floor — it used to be
           // grounds for drawing nothing at all, which told the reader the
           // anchor could not be found when the truth was the opposite.
-          if (alreadyThere(text, at, op.text)) { enact(op, at, undefined, hit); continue; }
+          const already = alreadyAt(folded, text, at, op.text);
+          if (already) { enact(op, at, already, hit); continue; }
           if (stale || String(op.text).length > INLINE_MAX) continue;
           inss.push({ at, text: op.text, op });
           fired(op, hit);
@@ -1320,21 +1452,45 @@ function alreadyIn(fullText, added) {
 }
 
 /**
- * Are these words already sitting at the point they would be inserted?
+ * Are these words already sitting at the point they would be inserted, and if
+ * so, where? The spans, in original offsets, or null.
  *
  * The narrower companion to the staleness check above: an amendment with no
  * strikes at all cannot be tested that way, but an insertion whose language is
  * already immediately before or after the anchor has plainly been applied
  * already. Checked on the folded text, so quoting and line wrapping don't hide
  * the match.
+ *
+ * It returns the SPAN rather than a yes, and that is load-bearing. This used to
+ * answer a boolean and leave `enact()` to find the words for itself — two
+ * searches with two different needles, because the test strips the punctuation
+ * joining the operand to its neighbour and a plain occurrence search does not.
+ * Where they disagreed the panel said "✓ shown above" over a passage carrying no
+ * mark at all: the op was settled by a test that had found the words and drawn
+ * nothing. One search, and the span reported IS an occurrence, so a mark can
+ * always be put on it.
+ *
+ * The gap between the anchor and the match may hold punctuation and nothing
+ * else. A bill writes the operand with the comma that joins it on; the Code may
+ * set that comma on the other side of the seam.
  */
-function alreadyThere(text, at, insertText) {
-  const needle = fold(insertText).norm.trim().replace(/^[\s;.,:]+|[\s;.,:]+$/g, '');
-  if (needle.length < 4) return false;
-  const span = needle.length + 40;
-  const after = fold(text.slice(at, at + span)).norm.replace(/^[\s;.,:]+/, '');
-  const before = fold(text.slice(Math.max(0, at - span), at)).norm.replace(/[\s;.,:]+$/, '');
-  return after.startsWith(needle) || before.endsWith(needle);
+function alreadyAt(folded, text, at, insertText) {
+  const raw = String(insertText).trim();
+  const trimmed = raw.replace(/^[\s;.,:]+|[\s;.,:]+$/g, '');
+  if (fold(trimmed).norm.trim().length < 4) return null;
+  // The WHOLE operand first, so the mark covers everything the bill wrote; the
+  // trimmed form only as a fallback. Reversing that narrows every mark to the
+  // words inside the punctuation and reports an operand as undrawn.
+  const tries = raw === trimmed ? [raw] : [raw, trimmed];
+  for (const needle of [...tries.map((t) => [occurrences, t]), [looseOccurrences, trimmed]]) {
+    const at_ = needle[0](folded, needle[1]).filter(
+      (h) =>
+        (h.start >= at && /^[\s;.,:]*$/.test(text.slice(at, h.start))) ||
+        (h.end <= at && /^[\s;.,:]*$/.test(text.slice(h.end, at)))
+    );
+    if (at_.length) return at_;
+  }
+  return null;
 }
 
 /** Weave deletions and insertions into a flat run of segments. */

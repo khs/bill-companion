@@ -2052,6 +2052,72 @@ section('reaching the redline');
   eq('  and nothing is drawn outside that scope', elsewhere.filter((s) => s.type !== 'keep').length, 0);
 }
 
+// ------------------------------------------- the Code respells what bills write
+// The same words, set by two different hands. A bill hard-wraps at 72 columns,
+// writes a nested quote with singles and a number with a hyphen; the Code closes
+// the wrap, prints curly doubles and an en dash, and renumbers every
+// cross-reference into its own scheme. Nothing in the sentence says which of the
+// two spellings is on screen, so the strict test answers "not there" and the app
+// draws the identical sentence a second time in the insertion colour — 55 of 484
+// green inserts, the top of the list holding every word already.
+section('the Code respells what bills write');
+{
+  const { fold, createRedline } = await imp('app/ui/redline.js');
+  const f = (s) => fold(s).norm;
+
+  eq('a hyphen the measure broke a word across closes up',
+     f('wildlife-\n            vehicle collisions'), f('wildlife-vehicle collisions'));
+  eq('  but a suspended hyphen keeps its space',
+     f('pre-\n            and post-award'), 'pre- and post-award');
+  eq('a nested single quote is the Code\'s double',
+     f('(referred to in this section as the `Secretary\')'),
+     f('(referred to in this section as the “Secretary”)'));
+  eq('a hyphen between digits is the Code\'s en dash',
+     f('Public Law 115-282'), f('Public Law 115–282'));
+  eq('  and between letters it is left alone', f('PAY-AS-YOU-GO'), 'pay-as-you-go');
+
+  // The substance. The bill names the Social Security Act's own § 1861; the Code
+  // prints 42 U.S.C. 1395x and tags it "of this title". The subsection path
+  // survives the translation and the number does not, which is what makes this
+  // safe to match loosely: the path is compared exactly, so a reference to some
+  // other provision cannot satisfy it.
+  const enacted =
+    'or, in the case of services described in subparagraph (C), a physician, ' +
+    'a nurse practitioner or clinical nurse specialist (as those terms are ' +
+    'defined in section 1395x(aa)(5) of this title) who is working in ' +
+    'accordance with State law, who is enrolled under this part;';
+  const nurse = {
+    id: 'o1', type: 'insert', start: 0, end: 1, anchor: 'a physician', relation: 'after',
+    text: ', a nurse practitioner or clinical nurse specialist (as those terms are ' +
+          'defined in section 1861(aa)(5)) who is working in accordance with State law',
+  };
+  const drawn = createRedline([nurse]).apply(enacted, '');
+  eq('language the Code respelled is marked as already in force',
+     drawn.filter((s) => s.type === 'was').length, 1);
+  eq('  and not drawn a second time as a pending insertion',
+     drawn.filter((s) => s.type === 'ins').length, 0);
+  ok('  the mark carries the LAW\'s spelling of the reference',
+     /section 1395x\(aa\)\(5\) of this title/.test(drawn.find((s) => s.type === 'was')?.text || ''),
+     drawn.find((s) => s.type === 'was')?.text);
+
+  // …but NOT where the renumbering IS the amendment. Both sides abstract to the
+  // same thing, so a change nobody has made would report itself made.
+  const renum =
+    'The Secretary shall make payment to the eligible home infusion therapy ' +
+    'supplier described in section 1234 of this title for each item furnished.';
+  const ops = [
+    { id: 's1', type: 'strike', start: 0, end: 1,
+      text: 'payment to the eligible home infusion therapy supplier described in section 1234' },
+    { id: 'i1', type: 'insert', start: 2, end: 3, replaces: 0,
+      text: 'payment to the eligible home infusion therapy supplier described in section 5678' },
+  ];
+  const renumbered = createRedline(ops).apply(renum, '');
+  eq('an amendment that only renumbers a reference is still pending',
+     renumbered.filter((s) => s.type === 'was').length, 0);
+  eq('  so the strike and its replacement are both drawn',
+     renumbered.filter((s) => s.type === 'del').length + renumbered.filter((s) => s.type === 'ins').length, 2);
+}
+
 // ------------------------------------------------- internal cross-references
 // The commonest citation kind in a modern bill — 162 of the 164 internal refs
 // in the CLARITY Act's House print are the bare "clause (ii)" form — and until

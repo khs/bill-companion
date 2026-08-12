@@ -5753,3 +5753,142 @@ LVXXXVI--FEDERAL MARITIME
    script printed the amendment's head rather than the op's own instruction, and
    the mark belongs to a correctly scoped `(b)(1)` insert three sub-instructions
    later. Check the instrument before the product, for the fifth time this day.
+
+96. **The Code respells what a bill writes, and the app drew the sentence
+   twice.** (2026-08-11, item 95 built.) A bill hard-wraps at 72 columns, writes
+   a nested quote with singles and a number with a hyphen; the Code closes the
+   wrap, prints curly doubles and an en dash, and renumbers every
+   cross-reference into its own scheme. Same words, two hands:
+
+   ```
+   bill  , a nurse practitioner … (as defined in section 1861(aa)(5)) who is …
+   law   , a nurse practitioner … (as defined in section 1395x(aa)(5) of this
+         title) who is …
+   ```
+
+   Nothing in the sentence says which spelling is on screen, so `alreadyThere`
+   answered "not there" and the identical sentence was drawn a second time in
+   the insertion colour beside the words themselves — **55 of 484 green
+   inserts, 11%**, the top of the list at every word present. That is the
+   duplication every guard in this file exists to prevent, at a ninth of
+   everything the app draws in green.
+
+   **Measuring the 55 before designing anything is what shaped the fix**, and it
+   split them four ways rather than the one way item 95 predicted. Most of it is
+   not semantic at all:
+
+   - **A hyphen the measure broke a word across.** `wildlife-\n
+     vehicle` against `wildlife-vehicle`. The whitespace goes and the hyphen
+     stays, so `PAY-\nAS-YOU-GO` keeps its own and `REG-\nISTRATION` keeps its
+     seam. A suspended hyphen is left alone — "pre- and post-award", "3- to
+     5-day" really do have a space there, and closing one would break a match
+     rather than make one.
+   - **A nested single quote.** GPO writes a defined term inside quoted law as
+     `` `program' `` where the Code prints `“program”`, so every quotation mark
+     now folds to one character, single and double alike. The apostrophe rides
+     along ("taxpayer's" against "taxpayer’s"), which is harmless because the
+     fold is applied to both sides: a mark can only appear where the two sources
+     differ in which quotation mark they use.
+   - **A hyphen between digits.** The OLRC sets "Pub. L. 105–83" and "1860D–13"
+     with an en dash where the bill writes a hyphen. Only where a DIGIT is on one
+     side of it — letters on both sides need nothing, since both sources
+     hyphenate a word the same way, and widening it would fold "PAY-AS-YOU-GO"
+     onto a phrase set with dashes.
+   - **The translated cross-reference**, which is the semantic one.
+
+   **The line break is deliberately NOT required for the wrap rule**, and that
+   cost a round to find out. The same text reaches `fold()` both raw and with its
+   whitespace already collapsed — `alreadyAt()` folds the passage while the panel
+   folds the mark drawn from it — so a rule that reads the newline gives two
+   different answers for the same words, and paneltest reported four sentences
+   promising a mark that was not there.
+
+   **The loose match, and the two things that keep it from being a fuzzy one.**
+   Where the strict search finds the language nowhere, the needle is turned into
+   a pattern with each reference it names as a wildcard. The SUBSECTION PATH is
+   left exact — the codifier translates the number and preserves "(aa)(5)", so a
+   reference to a different provision cannot satisfy it — and everything outside
+   the reference has to match character for character. The sentence must also
+   carry **8 words of its own** outside the references, or a bill adding
+   ", or section 45X" to a list already reading ", or section 45Q" would report
+   itself already done. And the `of this title` tag attaches to the whole
+   reference rather than to the number, so it is dropped from the needle and made
+   optional after every closing paren of the pattern; without that half the
+   feature reached only 6 of the 45.
+
+   The guard that matters: **not where the renumbering IS the amendment.** "by
+   striking ``section 1234'' and inserting ``section 5678''" abstracts to the
+   same thing on both sides, and a change nobody has made would report itself
+   made. `sameButForXref` declines those, and the selftest for it fails against a
+   build with the guard removed — a guard test that cannot fail is worth nothing.
+
+   **Marks 2,892 → 2,923, and the accounting closes exactly.** 53 withdrawn and
+   84 added, in two passes, and **every one of the 53 withdrawals is at a node
+   that gains an "already in the law" mark** — not one mark was lost, each is the
+   same words moving from a pending green insertion to the bill's completed work.
+   Of the 84 added, **79 are `was` marks and all 79 are on an enrolled bill**,
+   which is the signature an in-force claim needs. The other 5 are a strike and
+   four inserts on the CLARITY substitute — a PENDING bill, where the nested
+   single quote is what made the operand findable at all, so a proposed change
+   that was invisible is now drawn.
+
+   Read against the shipped shards, the translations the loose match relies on
+   are the Act-to-Code mappings the Code states about itself: SSA 1861→1395x,
+   1902→1396a, 1905→1396d, 1834→1395m, 1866→1395cc, 1848→1395w-4,
+   1860D-13→1395w-113, 1135→1320b-5, 1128B→1320a-7b; FFDCA 301→331, 515C→360e-4;
+   Food Security Act 1231A→3831a, 1271C→3871c. Every one correct.
+
+   **`alreadyThere` returns the SPAN now, not a yes**, and that is load-bearing
+   rather than tidying. It used to answer a boolean and leave `enact()` to find
+   the words for itself — two searches with two different needles, because the
+   test strips the punctuation joining an operand to its neighbour and a plain
+   occurrence search does not. Where they disagreed the panel said "✓ shown
+   above" over a passage carrying no mark at all. One search, and the span
+   reported IS an occurrence, so a mark can always be put on it. The WHOLE
+   operand is tried first and the trimmed form only as a fallback; reversing that
+   narrows every mark to the words inside its punctuation and reported 365
+   operands as undrawn.
+
+   `enact()` also declines a span another op has already marked. `segments()`
+   keeps one mark per stretch by design, so pushing a second one there sets
+   `enacted` and draws nothing — the same "dealt with but deliberately not drawn"
+   trap this file has now watched break six times, arriving through a function
+   that had no flag at all.
+
+   **`xrefKey` is exported and paneltest imports it**, for the reason
+   `measure.mjs` exists. A mark drawn through this route carries the LAW's
+   spelling of a reference and the op carries the BILL's, so a test that demands
+   the two be character-equal reports every one of them as a promise the
+   provision does not keep — 27 false failures on the first run.
+
+   Left, and classified rather than counted: **27 of the 55 remain**, and roughly
+   a third of those are the instrument rather than the app. 26 U.S.C. 6426(e)
+   differs by one letter — "(a), (c), or (f)" against "(a), (c), or (e)" — and
+   word containment cannot see a letter; five Space Force provisions in the FY21
+   NDAA were codified differently from what the bill wrote; 42 U.S.C. 1395ww's
+   fiscal years have been amended since. Three are an **OLRC footnote marker**
+   interpolated into the text ("physician,,1 or,", "(e),1 an assessment"), which
+   is editorial apparatus in the same family as the `<<NOTE:>>` markers and could
+   be stripped, carefully. One is the codifier **reordering** a clause, which
+   nothing here can match. The rest are positional — the words are in the
+   provision but not against the anchor — where the guards are deliberately
+   conservative.
+
+   Rendered in a browser per item 60, on a case CLAUDE.md item 43 already
+   documents: 26 U.S.C. 59(j)(2)(B) shows **zero `del`, zero `ins` and one `was`**
+   reading `for “2016” in subparagraph (A)(ii)`, titled "Already in the law —
+   this is the language the bill adds here". The bill wrote `` `2016' `` and the
+   Code prints `“2016”`.
+
+   Corpus unchanged — none of this is parsing. selftest 756 → 766, rendertest
+   513, proptest clean, paneltest clean at 293 sentences over 19,037 op rows.
+
+   **A gotcha that cost twenty minutes, for the next agent.** `python
+   tools/serve.py` from the Bash tool does not survive the call, however it is
+   backgrounded — `&`, `nohup`, `Start-Process`, `Start-Job` all get reaped, and
+   the sandbox blocks the listening socket besides. `.claude/launch.json` is
+   checked in now and `preview_start` is the route that works; where a server is
+   already up, `preview_start` with the URL attaches to it. And the browser
+   caches ES modules hard, which is item 11's second note and looks exactly like
+   the fix not working: the first render after these edits showed the OLD
+   behaviour until a reload.

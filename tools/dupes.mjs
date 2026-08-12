@@ -1,7 +1,7 @@
 // How often does the app draw a GREEN pending insert into a provision that
 // already substantially contains those words? Graded with word containment,
 // which the redline does not use, so agreement is evidence and not tautology.
-import { readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/[\/]$/, '');
@@ -90,4 +90,5 @@ for (const bill of bills) {
 rows.sort((x, y) => y.share - x.share);
 console.log('green inserts drawn:', drawn, '· of 8+ words, >=0.90 already in the node:', rows.length);
 for (const r of rows.slice(0, 14)) console.log(`  ${r.share} ${r.b} ${r.cite} [${r.p}] "${r.ins}"`);
-writeFileSync('dupes.json', JSON.stringify(rows, null, 1));
+// Printed, not written: a report that drops a file in the repo root gets
+// committed by accident, and a stale one then reads as data.
