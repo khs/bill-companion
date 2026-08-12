@@ -560,7 +560,29 @@ function listedProvisions(text, from, to) {
 // anything longer than a short connective means these are two unrelated
 // instructions that happen to be adjacent, and pairing them would show a
 // replacement the bill never wrote.
-const RE_REPLACES = /^\s*(?:''|’’|["”])?\s*(?:,\s*)?(?:each\s+place\s+(?:it|they)\s+(?:appears?|occurs?)\s*)?(?:,\s*)?and\s+insert(?:ing)?(?:\s+in\s+lieu\s+thereof)?\s*(?:``|‘‘|["“])?\s*$/i;
+//
+// Three things may sit in that gap besides the connective, and each of them is
+// a fact about WHERE rather than a second instruction: "each place it appears",
+// "in the heading", and the stated scope "in paragraph (3)". The last two were
+// not admitted, so `replaces` was null and the insert reached apply() with
+// neither a paired strike nor an anchor — it fell through both branches and
+// drew nothing, while the strike beside it was drawn alone. The phrases are the
+// same ones markHeadingOps() and markTailScopes() read; admitting them here is
+// what lets the pair travel together.
+const REPL_WHERE =
+  '(?:in\\s+the\\s+(?:\\w+\\s+)?heading' +
+  '|in\\s+(?:sub)?(?:section|paragraph|clause|item)s?\\s+' +
+  '\\([A-Za-z0-9]{1,8}\\)(?:\\([A-Za-z0-9]{1,8}\\))*' +
+  '(?:\\s*(?:,\\s*(?:and|or)?|and|or|through)\\s*' +
+  '\\([A-Za-z0-9]{1,8}\\)(?:\\([A-Za-z0-9]{1,8}\\))*)*)';
+const RE_REPLACES = new RegExp(
+  '^\\s*(?:\'\'|’’|["”])?\\s*(?:,\\s*)?' +
+    '(?:each\\s+place\\s+(?:it|they)\\s+(?:appears?|occurs?)\\s*)?' +
+    `(?:${REPL_WHERE}\\s*)?` +
+    '(?:,\\s*)?and\\s+insert(?:ing)?(?:\\s+in\\s+lieu\\s+thereof)?' +
+    '\\s*(?:``|‘‘|["“])?\\s*$',
+  'i'
+);
 const RE_EACH_PLACE = /each\s+place\s+(?:it|they)\s+(?:appears?|occurs?)/i;
 // …and the same gap when a RUN sits in it.
 //

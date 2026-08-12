@@ -1767,15 +1767,20 @@ section('operand placement');
     eq('  and travels to the operand it replaces',
        JSON.stringify(scoped("by striking ``fee'' and inserting ``charge'' in paragraph (3).")),
        JSON.stringify(['strike:(3)', 'insert:(3)']));
-    // Written the other way round the pairing cannot see across the phrase —
-    // a gap holding "in paragraph (3)" is not one RE_REPLACES admits, the same
-    // rule item 88 hit with "in the heading" — so `replaces` is null and the
-    // scope has nothing to travel along. The insert is undrawable either way:
-    // with no paired strike and no anchor it falls through both branches of
-    // apply(). Asserted as it is rather than as it should be.
-    eq('  written the other way round, the strike alone carries it',
+    // Written the other way round the phrase sits in the pairing's own gap, so
+    // RE_REPLACES has to admit it — the same rule item 88 hit with "in the
+    // heading". Without that the insert is unpaired, reaches apply() with
+    // neither a paired strike nor an anchor, and draws nothing at all.
+    eq('  written the other way round, the pair still travels together',
        JSON.stringify(scoped("by striking ``fee'' in paragraph (3) and inserting ``charge''.")),
-       JSON.stringify(['strike:(3)', 'insert:']));
+       JSON.stringify(['strike:(3)', 'insert:(3)']));
+    eq('  and the heading phrase in the same gap keeps the pair',
+       JSON.stringify(
+         p("Section 2 of the Widget Act (15 U.S.C. 2601) is amended by striking " +
+           "``fee'' in the heading and inserting ``charge''.\n")
+           .filter((o) => o.type === 'strike' || o.type === 'insert')
+           .map((o) => `${o.type}:${o.headingOnly ? 'heading' : '?'}`)),
+       JSON.stringify(['strike:heading', 'insert:heading']));
     // A list names every member. `scope` stays the first, because reScope() and
     // every panel message read it as a string.
     const list = p('Section 2 of the Widget Act (15 U.S.C. 2601) is amended by ' +

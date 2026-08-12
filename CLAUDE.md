@@ -12,6 +12,8 @@ python tools/serve.py                     # http://localhost:8000  (NOT file://)
 node tools/selftest.mjs                   # 744 checks, no dependencies
 node tools/rendertest.mjs                 # 513 checks, needs `npm i -D linkedom`
 node tools/paneltest.mjs                  # 19,102 panel sentences vs the marks
+node tools/marksample.mjs <seed> <n>      # not a test - a seeded draw of marks to READ
+node tools/dupes.mjs                      # not a test - green inserts the law already has
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 node tools/coverage.mjs                   # not a test — what the redline actually draws
@@ -1909,7 +1911,8 @@ app/ui/               render-bill.js · render-context.js · redline.js · style
 app/resolve/bundle.js one shard out of a bundle, by HTTP Range
 tools/                ingest_usc.py · ingest_plaw.mjs · bundle.mjs · make-library.mjs ·
                       serve.py · selftest.mjs · rendertest.mjs · paneltest.mjs ·
-                      measure.mjs (shared metrics) · impact.mjs · corpus.mjs
+                      measure.mjs (shared metrics) · impact.mjs · corpus.mjs ·
+                      marksample.mjs · dupes.mjs
 corpus/               corpus.json + baseline.json · files/ — all tracked
 data/usc/             tN.idx.json + tN.N.jsonl — 60,436 sections in 54 parts
 data/plaw/            26 Public Laws, same shape; both tracked — the data IS the site
@@ -5657,3 +5660,96 @@ LVXXXVI--FEDERAL MARITIME
    strike, no anchor), so this costs a panel message and not a mark. Widening
    `RE_REPLACES` changes pairing, which moves the redline, and wants its own
    measured pass. Asserted as it is rather than as it should be.
+
+94. **The pairing gap admits the phrase that says WHERE.** (2026-08-11, item
+   93's leftover.) `RE_REPLACES` looks for "and inserting" between a strike and
+   the insert that replaces it, and already admits "each place it appears" in
+   that gap. Two more facts about WHERE sit there and were not admitted:
+
+   ```
+   by striking ``fee'' in the heading and inserting ``charge''
+   by striking ``X'' in subsections (b)(6)(B), (c)(1), and (e)(3) and inserting …
+   ```
+
+   So `replaces` was null, the insert reached `apply()` with neither a paired
+   strike nor an anchor, fell through both branches and drew nothing — while the
+   strike beside it was drawn alone. The phrases are the ones
+   `markHeadingOps()` and `markTailScopes()` already read; admitting them in
+   `REPL_WHERE` is what lets the pair travel together.
+
+   Marks 2,881 -> 2,892: **13 added and 2 withdrawn**, and the shape of that is
+   the whole result. **11 of the 13 are `was` marks** — "already in the law",
+   the conservative claim — and both withdrawals are a `del` replaced by a `was`
+   covering the whole replacement phrase at the same node: 26 U.S.C. 151(d)(4)
+   goes from a red strike on "in the case of" to "Except as provided in
+   paragraph (5), in the case of" marked as language this bill put there, and
+   408(p)(2)(C)(ii)(I) the same. That is item 75's mechanism — a bill rewrites a
+   phrase by quoting it back with something in front of it — reachable at last
+   because the pair is paired. The one new green insert is 26 U.S.C.
+   172(b)(1)(A)(ii)(I), correctly scoped to clause (ii); its words are absent
+   because the CARES Act rewrote that provision after the TCJA.
+
+   Corpus does not move: `replaces` is a field on an op, not a span, and
+   `opSpans` keys on `type:start-end`. selftest 755 -> 756, rendertest 513,
+   proptest clean, paneltest clean.
+
+   Measured at the same time and NOT a bug: **an operation scoped to a LIST
+   whose members the provision does not all have is 0 of the corpus**, so item
+   82's "silent narrowing" has no live instance. Recorded so nobody hunts it.
+
+95. **A different sample, and it found the worst category there is.**
+   (2026-08-11.) With every suite green — selftest 756, rendertest 513, proptest,
+   paneltest at 292 sentences, corpus at baseline — a seeded random draw of 24
+   marks was read against the shipped shards, printing each mark beside the
+   instruction that produced it and the provision it landed in. Not a
+   consistency check: paneltest asks whether the panel's sentence agrees with
+   the mark, and a mis-drawn mark with an agreeing sentence passes it.
+
+   Two of the sixteen read were wrong, both the same way:
+
+   ```
+   ``(5 years, in the case of a waiver described in section 1915(h)(2))''
+     42 U.S.C. 1315(f)(6) already reads "…not to exceed 3 years (5 years, in
+     the case of a waiver described in section 1396n(h)(2) of this title)"
+
+   ``subclause (VIII) of section 1902(a)(10)(A)(i) or under''
+     42 U.S.C. 1396u-7(a)(1)(B) already reads "…eligible under subclause (VIII)
+     of section 1396a(a)(10)(A)(i) of this title or under…"
+   ```
+
+   **The codifier translates a cross-reference inside the inserted language**,
+   so `alreadyThere` cannot match and the app draws the identical sentence a
+   second time in green, beside the words themselves. Item 86 names this cause
+   in a list of four things that defeat comparing an insert against a passage;
+   what was not known is how much of the drawing it accounts for.
+
+   Measured, with a test the redline does not use so agreement is evidence
+   rather than tautology — word containment of the inserted language in the node
+   it was drawn into, 8-word floor: **55 of 484 green inserts (11%) land in a
+   provision that already holds at least 90% of their words, and the top of that
+   list is at 1.00 — every word present.** 42 U.S.C. 4332(2)(C), 26 U.S.C.
+   4101(a)(1), 23 U.S.C. 516(b)(6), five separate CARES Act nurse-practitioner
+   inserts across 42 U.S.C. 1395f/1395n/1395x/1395fff.
+
+   This is the duplication every guard in this file exists to prevent, at 11% of
+   everything the app draws in green, and it is **not** the same as the 1,348
+   coincidental matches item 75 deliberately leaves alone: those are cases where
+   the amendment is demonstrably still pending, and these are enrolled bills
+   whose language is on the screen twice.
+
+   Before building anything, three things the evidence already says. The signal
+   cannot be word containment alone — that is the instrument, and using it as
+   the guard would re-import the false positives item 74's W15 measurement
+   rejected. It probably wants `fold()` to normalise a codified cross-reference
+   the way it already normalises quotes and dashes ("section 1915(h)(2)" against
+   "section 1396n(h)(2) of this title" is an Act-to-Code translation the Act
+   index can perform), which is a narrow, derivable rule rather than a fuzzy
+   match. And it moves what is drawn, so it needs a mark-level audit of what it
+   WITHDRAWS, per this file's own rule — 55 marks is enough that a sample of the
+   withdrawals has to be read, not counted.
+
+   One case in the 24 looked like a mark in the wrong subsection —
+   10 U.S.C. 9020(b)(1) — and was **the sampler's fault, not the app's**: the
+   script printed the amendment's head rather than the op's own instruction, and
+   the mark belongs to a correctly scoped `(b)(1)` insert three sub-instructions
+   later. Check the instrument before the product, for the fifth time this day.
