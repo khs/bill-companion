@@ -190,12 +190,46 @@ const XREF = new RegExp(XREF_SRC, 'g');
 // made optional after every closing paren of the pattern, so neither side has to
 // be the one that carries it.
 const TITLE_TAG = /\s+of\s+(?:this|such)\s+title\b/g;
-const TAG_OPT = '(?:\\s+of\\s+(?:this|such)\\s+title)?';
+// …and the OLRC's other two interpolations. A bracketed Code translation is
+// printed after an Act reference the bill wrote plain — "of the Social Security
+// Act [42 U.S.C. 1320e–1(c), (d)])" — and a FOOTNOTE reference is set as a bare
+// numeral in the flow of the sentence: "patient abuse prevention training 3,",
+// "under subparagraph (E),1 an assessment", "for the physician 2 the nurse
+// practitioner". `itertext()` has no way to tell either from a word, so both
+// arrive inside the language the bill wrote and break an otherwise exact match.
+//
+// Admitted as OPTIONAL tokens in the pattern rather than stripped from the law,
+// and that is the whole safety of it: everything around them still has to match
+// character for character, so an option can admit a numeral the bill did not
+// write but can never change one it did. Stripping digits out of the Code's text
+// is the version of this that would break the figure guard.
+const BRACKET_OPT = '(?:\\s*\\[[^\\]]{0,90}\\])?';
+const TAG_OPT = '(?:\\s+of\\s+(?:this|such)\\s+title)?' + BRACKET_OPT;
+const FOOT_GAP = '(?:[0-9]{1,2})? (?:[0-9]{1,2} )?';
+// The same two interpolations as removals rather than as optional tokens, for
+// `xrefKey` — which has to answer "are these the same words?" where the pattern
+// answers "does this text match?". No lookbehind: the app has no build step, and
+// a SyntaxError at parse time takes the whole module with it on older Safari.
+const BRACKET_TAG = /\s*\[[^\]]{0,90}\]/g;
+const FOOT_TOKEN = /([\s,;.)])[0-9]{1,2}(?=[\s,;.)])/g;
 const XREF_MIN_WORDS = 8;
+// A pattern costs three optional groups per word, so a needle the length of a
+// whole new subsection builds a regex the engine refuses outright — and a block
+// that long is placed structurally rather than woven in, so it has no business
+// on this path. Every case this exists for is a sentence.
+const FLEX_MAX = 600;
 export function looseOccurrences(folded, needle) {
   const n = fold(needle).norm.trim().replace(TITLE_TAG, '');
-  if (!n) return [];
-  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\)/g, '\\)' + TAG_OPT);
+  if (!n || n.length > FLEX_MAX) return [];
+  const esc = (s) =>
+    s
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      // Before the paren as well as after it: the OLRC sets its translation
+      // INSIDE the parenthetical the bill wrote — "(… of the Social Security Act
+      // [42 U.S.C. 1320e–1(c), (d)])" — so the bracket lands in front of the
+      // closer, where a suffix rule cannot see it.
+      .replace(/\\\)/g, BRACKET_OPT + '\\)' + TAG_OPT)
+      .replace(/ /g, FOOT_GAP);
   const parts = [];
   let last = 0;
   let m;
@@ -204,10 +238,12 @@ export function looseOccurrences(folded, needle) {
     parts.push(esc(n.slice(last, m.index)), `(?:${XREF_SRC})${TAG_OPT}`);
     last = m.index + m[0].length;
   }
-  if (!parts.length) return [];
   parts.push(esc(n.slice(last)));
   if ((n.replace(XREF, ' ').match(/[a-z]{3,}/g) || []).length < XREF_MIN_WORDS) return [];
-  const re = new RegExp(parts.join(''), 'g');
+  // Built from text the reader pasted, so a pattern the engine will not accept
+  // is a page that fails to render rather than a mark that fails to appear.
+  let re;
+  try { re = new RegExp(parts.join(''), 'g'); } catch { return []; }
   const out = [];
   let h;
   while ((h = re.exec(folded.norm))) {
@@ -230,7 +266,14 @@ export function looseOccurrences(folded, needle) {
  * promise the provision does not keep.
  */
 export function xrefKey(s) {
-  return fold(String(s)).norm.trim().replace(TITLE_TAG, '').replace(XREF, '§');
+  return fold(String(s))
+    .norm.trim()
+    .replace(TITLE_TAG, '')
+    .replace(BRACKET_TAG, '')
+    .replace(FOOT_TOKEN, '$1')
+    .replace(XREF, '§')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /** Do two passages differ ONLY where they name a provision? */
@@ -1483,10 +1526,14 @@ function alreadyAt(folded, text, at, insertText) {
   // words inside the punctuation and reports an operand as undrawn.
   const tries = raw === trimmed ? [raw] : [raw, trimmed];
   for (const needle of [...tries.map((t) => [occurrences, t]), [looseOccurrences, trimmed]]) {
+    // The gap between the anchor and the match may hold a footnote numeral as
+    // well as punctuation: 42 U.S.C. 1395fff(c)(1) reads "for the physician 2
+    // the nurse practitioner", and the words the bill adds begin after the 2.
+    const GAP = /^[\s;.,:]*(?:[0-9]{1,2}[\s;.,:]*)?$/;
     const at_ = needle[0](folded, needle[1]).filter(
       (h) =>
-        (h.start >= at && /^[\s;.,:]*$/.test(text.slice(at, h.start))) ||
-        (h.end <= at && /^[\s;.,:]*$/.test(text.slice(h.end, at)))
+        (h.start >= at && GAP.test(text.slice(at, h.start))) ||
+        (h.end <= at && GAP.test(text.slice(h.end, at)))
     );
     if (at_.length) return at_;
   }

@@ -5954,3 +5954,86 @@ LVXXXVI--FEDERAL MARITIME
    Still open and unfixed, so nobody reads item 96 as closing the family: 27 of
    the original 55 remain, and three of those are the OLRC footnote marker
    ("physician,,1 or,"), which IS strippable and was left alone.
+
+99. **The OLRC's own apparatus, and the three it was hiding.** (2026-08-12,
+   closing the fixable part of item 96's remainder.) Two more things the Code
+   prints inside the sentence a bill wrote, neither of them law:
+
+   ```
+   footnote   …patient abuse prevention training 3, (ii) minimum hours…
+              …under subparagraph (E),1 an assessment of not more than…
+              …the unique identifier for the physician 2 the nurse practitioner…
+   bracket    …of the Social Security Act [42 U.S.C. 1320e–1(c), (d)]), and…
+   ```
+
+   A footnote reference is set as a bare numeral in the flow of the text and a
+   Code translation is bracketed after an Act reference the bill wrote plain.
+   `itertext()` cannot tell either from a word, so both arrive inside the
+   language being matched and hide an otherwise exact match — the same family as
+   the `<<NOTE:>>` markers and the Statutes at Large page furniture, and stripped
+   at the same place they are: at match time, not at ingest.
+
+   **Admitted as OPTIONAL TOKENS in the pattern rather than removed from the
+   text, and that is the whole safety of it.** Everything around them still has
+   to match character for character, so an option can admit a numeral the bill
+   did not write and can never excuse one it did — which is the version of this
+   that would have broken item 63's figure guard. Asserted both ways: a footnote
+   between two words does not hide the match, and "not more than 5 percent"
+   against the law's "7 percent" is still a change.
+
+   Three placements, each found by a case that needed it. The footnote may sit in
+   the gap between two of the needle's words, or in the gap between the ANCHOR
+   and the match — 42 U.S.C. 1395fff(c)(1) reads "for the physician 2 the nurse
+   practitioner", so the words the bill adds begin after the 2. And the bracket
+   lands INSIDE the parenthetical the bill wrote, in front of the closer, where a
+   suffix rule cannot see it.
+
+   Two guards the first attempt needed. A needle the length of a whole new
+   subsection builds a pattern the engine refuses outright — three optional
+   groups per word — so the flexible path is capped at 600 characters, which is
+   twice the longest real case and well under any block that would be placed
+   structurally anyway. And the `RegExp` construction is wrapped: it is built
+   from text the reader pasted, so a pattern the engine will not take should cost
+   a mark, not the page.
+
+   Marks 2,923 → 2,924: **8 withdrawn, every one replaced by an "already in the
+   law" mark at the same node, and 9 added, all of them in-force marks on
+   enrolled bills.** The one pure gain is 12 U.S.C. 3414(a)(5)(A), whose
+   footnote sits in the middle of the inserted sentence: "sought for foreign
+   counter intelligence 2 purposes". Across the 19 introduced, reported and
+   engrossed bills the marks are **byte-identical** — no new claim outside the
+   enacted corpus, which is the property item 98 established and this had to
+   preserve. Duplicated green inserts 27 → 23; the loose match's ambiguity is
+   unchanged at 5 of 129, all of them repeated copies of one clause.
+
+   **What is left is 23, and the honest count is that most of it is not a bug.**
+   Fifteen are the law genuinely not containing the bill's words — a later Act
+   changed them (42 U.S.C. 1395ww(d)(12)(B)'s fiscal years, 1395f(i)(1)(C)'s
+   "clause (iv)" now reading "clauses (iv) and (vi)", 18 U.S.C. 1956(c)(7)(D)
+   gaining ", 932, or 933"), or the codifier wrote something different from what
+   the bill did (the five Space Force provisions in the FY21 NDAA), or the bill
+   itself has a typo ("section 922(1)" for 922(l)). 26 U.S.C. 6426(e) differs by
+   ONE LETTER — "(a), (c), or (f)" against "(a), (c), or (e)" — which word
+   containment cannot see and which no rule here should paper over. Those are the
+   instrument flagging, not the app failing.
+
+   Three were measured and declined, with the numbers:
+
+   - **A codifier REORDERING a clause.** 42 U.S.C. 1320b-7(a)(3) sets "(as
+     defined in section 653a(a)(2)(B) of this title) (including State and local
+     governmental entities and labor organizations)" where the bill wrote the two
+     the other way round. Matching that needs a fuzzy comparison, which is what
+     item 74's W15 measurement rejected on evidence.
+   - **A cross-ACT translation.** 21 U.S.C. 356c has "section 319 of the Public
+     Health Service Act" against the Code's "section 247d of title 42".
+     Abstracting that tail would let "section 5 of the Clean Air Act" satisfy
+     "section 5 of title 42" — it abstracts away WHICH Act is named, which is the
+     `sectionsMatchCode` invariant arriving from a new direction. One case, and
+     the wrong kind of risk to take for it.
+   - **Positional.** The remaining few have the words in the provision but not
+     against the anchor the instruction names. The guards are deliberately
+     conservative there, and loosening them is how the 1,348 coincidental matches
+     item 75 leaves alone would start being drawn.
+
+   selftest 766 → 769, rendertest 513, proptest clean, paneltest clean at 293
+   sentences and clean over the 19-bill pending directory, corpus unchanged.

@@ -2100,6 +2100,36 @@ section('the Code respells what bills write');
      /section 1395x\(aa\)\(5\) of this title/.test(drawn.find((s) => s.type === 'was')?.text || ''),
      drawn.find((s) => s.type === 'was')?.text);
 
+  // The OLRC's other two interpolations. A footnote reference is set as a bare
+  // numeral in the flow of the sentence and a Code translation is bracketed after
+  // an Act reference; `itertext()` cannot tell either from a word, so both arrive
+  // inside the language the bill wrote and hide an otherwise exact match.
+  const footnoted =
+    'civil money penalties of not more than $25,000 for each determination under ' +
+    'paragraph (1), except with respect to a determination under subparagraph (E),1 ' +
+    'an assessment of not more than the amount claimed by such plan or plan sponsor ' +
+    'based upon the misrepresentation or falsified information involved, and';
+  const penalty = {
+    id: 'o2', type: 'insert', start: 0, end: 1, anchor: 'paragraph (1)', relation: 'after',
+    text: ', except with respect to a determination under subparagraph (E), an assessment of ' +
+          'not more than the amount claimed by such plan or plan sponsor based upon the ' +
+          'misrepresentation or falsified information involved',
+  };
+  const footed = createRedline([penalty]).apply(footnoted, '');
+  eq('a footnote numeral in the flow of the sentence does not hide the match',
+     footed.filter((s) => s.type === 'was').length, 1);
+  eq('  and the sentence is not drawn a second time', footed.filter((s) => s.type === 'ins').length, 0);
+
+  // An option may ADMIT a numeral the bill did not write. It may never excuse one
+  // it did — a rewrite that changes a figure is the commonest rewrite there is.
+  const rate = 'the tax imposed under this section shall be not more than 7 percent of the amount involved';
+  const changed = {
+    id: 'o3', type: 'insert', start: 0, end: 1, anchor: 'this section', relation: 'after',
+    text: ' shall be not more than 5 percent of the amount involved',
+  };
+  eq('a substituted figure is still a change, not a match',
+     createRedline([changed]).apply(rate, '').filter((s) => s.type === 'was').length, 0);
+
   // …but NOT where the renumbering IS the amendment. Both sides abstract to the
   // same thing, so a change nobody has made would report itself made.
   const renum =
