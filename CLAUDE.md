@@ -6204,3 +6204,50 @@ LVXXXVI--FEDERAL MARITIME
 
    Verify both before building; the same lens's first finding needed three guards
    that its own measurement did not predict.
+
+102. **`alreadyIn()` never learned anything the inline side did, and 418 block
+   additions were drawn into provisions that already contain them.** (2026-08-12,
+   from a dataset the stopped agent hunt had already computed and left on disk.)
+   Items 96 and 99 taught the INLINE matcher every way the Code respells what a
+   bill wrote — a translated cross-reference, the `of this title` tag, a bracketed
+   translation, curly quotes for GPO's doubled singles, an en dash for a hyphen
+   between digits, a footnote numeral in the flow of the sentence. `alreadyIn()`
+   is the block addition's `alreadyThere` and got none of it: it folds and
+   compares an exact **80-character prefix**.
+
+   ```
+   bill  (36) vaccines described in section 1905(a)(13)(B) and the administration …
+   law   (36) vaccines described in section 1396d(a)(13)(B) of this title and the …
+
+   bill  (35) the sustainable aviation fuel credit determined under section 40B.
+   law   (35) the sustainable aviation fuel credit determined under section 40B,
+   ```
+
+   The second is the whole difference: the bill's final full stop is the law's
+   comma the moment a later Act appends another paragraph.
+
+   The fix is to ask `looseOccurrences` where the strict prefix fails, on a
+   PREFIX cut at a word boundary — the matcher matches whole, so a needle ending
+   mid-word could never land, and a block is regularly past `FLEX_MAX`. Trailing
+   punctuation is trimmed with it.
+
+   **47 additions move, every one of them `drawn` → `already in the law` (43) or
+   `stranded` → `already in the law` (4). Nothing moves the other way, and every
+   one is on an enrolled bill.** Graded with word containment — a test the redline
+   does not use, so agreement is evidence rather than tautology — **45 of 47 sit
+   at ≥0.95 and the other 2 at 0.85–0.95; none is below.** Additions drawn
+   830 → 787, already in the law 1811 → 1858, not on screen 333 → 329, total
+   unchanged at 2,974.
+
+   Inline marks do not move at all (3,171 either way): a block addition is drawn
+   by `additionsAt()`, not by `apply()`, so the mark-level diff is blind to this
+   family and the addition buckets are the measurement. Corpus unchanged.
+   selftest 777 → 779, rendertest 513, proptest clean, paneltest clean.
+
+   Worth knowing: the agent dataset counted **418** blocks whose provision looks
+   to contain them at ≥0.90 word containment, and only 47 are fixed here. The
+   rest are the instrument, not the app — 26 U.S.C. 45Q(f)(9) scores 0.992 while
+   reading "For purposes of subsection (a)(3)" where the bill wrote "For purposes
+   of paragraphs (3) and (4) of subsection (a)", which is a later amendment and
+   not a respelling. Word containment cannot see a reordered clause, and no rule
+   here should paper over one.

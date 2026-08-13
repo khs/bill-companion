@@ -2182,6 +2182,26 @@ section('the Code respells what bills write');
      renumbered.filter((s) => s.type === 'was').length, 0);
   eq('  so the strike and its replacement are both drawn',
      renumbered.filter((s) => s.type === 'del').length + renumbered.filter((s) => s.type === 'ins').length, 2);
+
+  // …and the BLOCK-addition side of the same rule. `alreadyIn()` compares an
+  // exact 80-character prefix and was never given any of this, so every
+  // respelling above defeated it: 418 green block additions were being drawn
+  // into provisions that already contain them.
+  const listLaw =
+    'The following are excluded: (35) tobacco cessation counselling; and ' +
+    '(36) vaccines described in section 1396d(a)(13)(B) of this title and the ' +
+    'administration of such vaccines, subject to the requirements of this subsection; and';
+  const addOp = (t) => ({ id: 'z1', type: 'add-at-end', start: 0, end: 1, scope: '', text: t });
+  eq('a block addition the Code respells is recognised as already in the law',
+     createRedline([addOp(
+       '(36) vaccines described in section 1905(a)(13)(B) and the administration of ' +
+       'such vaccines, subject to the requirements of this subsection.'
+     )], [listLaw]).appliedAdditions().length, 1);
+  eq('  and one the law does not contain is still an addition',
+     createRedline([addOp(
+       '(37) hearing aids described in section 1905(a)(29) and the fitting of such ' +
+       'devices, subject to the requirements of this subsection.'
+     )], [listLaw]).appliedAdditions().length, 0);
 }
 
 // ------------------------------------------------- internal cross-references

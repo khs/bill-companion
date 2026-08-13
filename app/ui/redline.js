@@ -1536,9 +1536,30 @@ function rewriteInForce(provisionText, block) {
 const BLOCK_OPENERS = /(^|\n)([ \t]*)(?:``|‘‘|["“])/g;
 function alreadyIn(fullText, added) {
   if (typeof fullText !== 'string' || !fullText) return false;
-  const needle = fold(String(added).replace(BLOCK_OPENERS, '$1$2')).norm.trim().slice(0, 80).trim();
+  const body = String(added).replace(BLOCK_OPENERS, '$1$2');
+  const needle = fold(body).norm.trim().slice(0, 80).trim();
   if (needle.length < 24) return false;
-  return fold(fullText).norm.includes(needle);
+  if (fold(fullText).norm.includes(needle)) return true;
+  // …and the same opening, read through the matcher the INLINE tests use.
+  //
+  // This function is the block addition's `alreadyThere`, and it was never given
+  // any of what that side learned: it folds and compares an exact 80-character
+  // prefix, so every respelling items 96 and 99 catalogue defeats it. The Code
+  // writes an Act's cross-reference in its own numbering ("section 1905(a)(13)(B)"
+  // against "section 1396d(a)(13)(B) of this title"), sets the last item of a
+  // list with a comma where the bill wrote a full stop, prints curly quotes for
+  // GPO's doubled singles, and interpolates its own footnote numerals. 418 green
+  // block additions were being drawn into provisions that already contain them —
+  // the duplication every guard in this file exists to prevent, and at half again
+  // the scale of the inline family item 96 fixed.
+  //
+  // A PREFIX, cut at a word boundary: `looseOccurrences` matches whole, so a
+  // needle ending mid-word could never land, and the whole block is regularly
+  // past FLEX_MAX. Trailing punctuation goes with it — the bill's final "." is
+  // the law's "," as soon as a later Act appends another paragraph.
+  const cut = body.trim().slice(0, 300);
+  const flex = cut.slice(0, Math.max(cut.lastIndexOf(' '), 0) || cut.length).replace(/[\s;.,:]+$/, '');
+  return flex.length >= 24 && looseOccurrences(fold(fullText), flex).length > 0;
 }
 
 /**
