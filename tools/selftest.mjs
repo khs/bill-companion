@@ -3287,6 +3287,52 @@ section('internal cross-references');
     eq('  every target lands on a marker or a section head', bad.length, 0);
     console.log(`  · sample bill: ${hits.length}/${rc.length} internal refs located`);
   }
+
+  // An appropriations section opens its first subsection on the same line as its
+  // own number, so that marker is not at a line head and outline() could not see
+  // it. Every reference to it declined — with a note saying the provision "lives
+  // in the U.S. Code rather than in the bill text", about a subsection three
+  // lines above. 410 references across the corpus.
+  const runInBill =
+    'SEC. 1. SHORT TITLE.\n\n    This Act may be cited as the ``Test Act\'\'.\n\n' +
+    '    Sec. 20605. (a) The Federal share of assistance provided under section 407\n' +
+    'of the Stafford Act shall be 90 percent of the eligible costs.\n' +
+    '    (b) The Federal share provided by subsection (a) shall apply to assistance\n' +
+    'provided before, on, or after the date of enactment of this Act.\n';
+  {
+    const t = normalizeText(runInBill);
+    const b = parseBill(t);
+    const cite = extractCitations(t).find((c) => c.kind === 'internal' && /subsection \(a\)/.test(c.text));
+    ok('a run-in section\'s first subsection is a citation', Boolean(cite), '');
+    const at = cite ? locateInternal(b, cite) : null;
+    ok('  and it locates the (a) that opens the run-in section',
+       Boolean(at) && t.slice(at.start, at.start + 3) === '(a)' && at.start < cite.start,
+       JSON.stringify(at));
+    // …and it is the one on the "Sec. 20605." line, not some later (a).
+    ok('  namely the one on the section head line',
+       Boolean(at) && t.slice(0, at.start).endsWith('Sec. 20605. '),
+       at ? JSON.stringify(t.slice(Math.max(0, at.start - 24), at.start)) : 'no hit');
+  }
+
+  // …but a run-in marker must never displace an answer that already exists: it
+  // is a candidate of last resort, because it was invisible until now.
+  {
+    const t = normalizeText(
+      'SEC. 1. SHORT TITLE.\n\n    This Act may be cited as the ``Test Act\'\'.\n\n' +
+      '    Sec. 30. (a) In General.--Title II is amended by inserting the following:\n' +
+      '``SEC. 213A. (a) Enforceability.--No affidavit may be accepted.\'\'.\n' +
+      '    (b) Effective Date.--The amendment made by subsection (a) shall apply\n' +
+      'to affidavits executed after the date of enactment.\n'
+    );
+    const b = parseBill(t);
+    const cite = extractCitations(t).find(
+      (c) => c.kind === 'internal' && /subsection \(a\)/.test(c.text) && c.start > t.indexOf('Effective Date')
+    );
+    const at = cite ? locateInternal(b, cite) : null;
+    ok('  a quoted new section\'s run-in (a) does not steal the bill\'s own',
+       Boolean(at) && at.start < t.indexOf('``SEC. 213A.'),
+       `${at && at.start} vs block at ${t.indexOf('``SEC. 213A.')}`);
+  }
 }
 
 // --------------------------------- references inside quoted inserted law

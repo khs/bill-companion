@@ -6137,3 +6137,70 @@ LVXXXVI--FEDERAL MARITIME
    unresolved. Seventh time in this project that the instrument was wrong before
    the product was. A sampler that reports a population is making a measurement;
    check it against one the repo already prints.
+
+101. **A run-in section's first subsection was invisible, and the pane said it
+   was in the U.S. Code.** (2026-08-12.) An appropriations section opens its
+   first subsection on the same line as its own number:
+
+   ```
+       Sec. 20605. (a) The Federal share of assistance … shall be 90 percent …
+       (b) The Federal share provided by subsection (a) shall apply to …
+   ```
+
+   `LINE_HEAD` requires a marker at the head of a line, so (b) was found and (a)
+   was not. Every reference to the opening subsection of a run-in section
+   declined — and the note the pane prints says the provision "lives in the U.S.
+   Code rather than in the bill text", which is false twice over about a
+   subsection three lines above. **410 references across 6 bills.** These are the
+   sections `parseBill` already marks `runIn` (item 3).
+
+   **The fix is three lines of pattern and three guards, and every guard came
+   from the audit rather than from reasoning.** The first cut gained 437 answers
+   and MOVED 41 that already had one:
+
+   - **A run-in marker must not be a boundary.** Emitting it changed what
+     `parentSpan` calls the enclosing provision. Tagged `runIn` and filtered out
+     there — it is a candidate to land on, not a boundary to reason from. 41 → 7.
+   - **Never inside quoted new law.** GPO writes an inserted section the same
+     way — ``SEC. 213A. (a) Enforceability.--…'' — so the prefix reached the NEW
+     section's (a) and put it in competition with the bill's own. "(c) Effective
+     Date.--Subsection (a) of section 213A …, as inserted by subsection (a) of
+     this section" was answered with the § 213A(a) it inserts instead of the
+     bill's (a) that inserts it. 7 → 3.
+   - **A candidate of LAST RESORT.** A run-in marker is dropped from
+     `markerStarts` whenever a plain one is available. It was invisible until
+     now, so any reference that already had an answer must keep it. 3 → 0.
+
+   Final: **410 gained, 0 lost, 0 moved** — provably non-perturbing, which is the
+   only shape worth shipping here. All five subsection-level moves in the first
+   cut were read and four were regressions of the worst kind (a right answer
+   replaced by a wrong one); the counts alone said "+437/-0" and looked like a
+   clean win.
+
+   Corpus unchanged, and that is worth noting rather than assuming: `outline()`
+   is imported by `citations.js` as well as by the resolver, so this could have
+   moved the baseline and did not. selftest 773 → 777, rendertest 513, proptest
+   clean, paneltest clean.
+
+   **On the process.** This came out of a ten-lens agent hunt that was stopped
+   early; one lens completed and reported three measured findings. The other two
+   are recorded here unbuilt, with the reporter's own measurements, and neither
+   has been independently verified — the adversarial pass was cut:
+
+   - **`quotedRefs()` never reads the "by striking X and inserting the following"
+     replacement block.** 274 of the 4,584 declined references sit in one, and
+     all 274 are that shape (0 are read-as-follows, which quotedRefs does read).
+     Routing `replace` blocks through `blockRefs` was measured on a patched copy
+     at +54 composed addresses, 54 of 54 reaching a node that exists, 0 removed.
+   - **`RE_STRIKE_AND_INSERT` consumes the address the bill states.** "by
+     striking subsection (c)(1)(B) and inserting the following:" gives the unit
+     and marker path in non-capturing groups, so `scopeReplacements()` composes
+     from the walk instead. 114 of 345 shipped scopes disagree with the stated
+     address; graded by word containment, 14 name a different single node and at
+     least one is a provable mis-mark (42 U.S.C. 1395cc-4: the pane marks
+     (a)(2)(B), "the term 'applicable condition' means 1 or more of 10
+     conditions", where the bill names (c)(1)(B), "The Secretary may … expand the
+     duration and scope of the pilot program", which the block matches at 0.90).
+
+   Verify both before building; the same lens's first finding needed three guards
+   that its own measurement did not predict.

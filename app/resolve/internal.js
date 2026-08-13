@@ -100,6 +100,32 @@ export function refDepth(cite) {
 // the ones that matter. All four conventions, as everywhere else here.
 const LINE_HEAD = '(?:^|\\n)[ \\t]*(?:``|‘‘|["“])?[ \\t]*';
 
+// …and an appropriations section opens its first subsection on the same line as
+// its own number, so that marker is not at a line head at all:
+//
+//     Sec. 20605. (a) The Federal share of assistance … shall be 90 percent …
+//         (b) The Federal share provided by subsection (a) shall apply to …
+//
+// (b) was found and (a) was not, so every reference to the opening subsection of
+// a run-in section declined — and the note the pane prints says the provision
+// "lives in the U.S. Code rather than in the bill text", which is false twice
+// over about a subsection three lines above. 355 references across 6 bills.
+// These are the sections `parseBill` already marks `runIn` (item 3).
+//
+// Optional, so a plain line-head marker still matches, and the offset is taken
+// from the marker run itself rather than from the match, so nothing shifts.
+//
+// The marker must follow the section NUMBER directly, with no heading between.
+// That is the appropriations run-in shape and only that: allowing a heading
+// ("Sec. 101. Short title. (a) …") also matched an ordinary section whose (a)
+// is already at a line head, which changed what `parentSpan` calls the
+// enclosing provision and MOVED 41 references that were already answered. One
+// of the four read was moved onto the next section's (a) — hr2617's "(b)
+// Effective Date.--The amendment made by subsection (a)", which points
+// backwards into its own section and was being sent forwards. A fix that adds
+// answers must not move answers that were right.
+const RUN_IN = '(?:(?:SEC|Sec|SECTION)\\.?[ \\t]*\\d+[A-Za-z]*\\.[ \\t]*)?';
+
 /**
  * Every line-start marker in [from, to), with its offset and depth.
  *
@@ -123,7 +149,7 @@ export function outline(text, from, to) {
   // Revealing only the first is worse than revealing neither: the parent becomes
   // findable while the child it introduces stays missing, so the walk now has a
   // scope to search and still cannot find the thing in it.
-  const re = new RegExp(`${LINE_HEAD}((?:\\([A-Za-z0-9]{1,8}\\))+)(?=[ \\t\\n]|$)`, 'g');
+  const re = new RegExp(`${LINE_HEAD}${RUN_IN}((?:\\([A-Za-z0-9]{1,8}\\))+)(?=[ \\t\\n]|$)`, 'g');
   const out = [];
   // Start at the head of the line `from` sits on, not at `from` itself.
   //
@@ -162,11 +188,29 @@ export function outline(text, from, to) {
       re.lastIndex = Math.max(re.lastIndex, end);
       continue;
     }
+    // A marker that is only reachable through the run-in prefix is TAGGED, and
+    // the tag is what keeps this from perturbing anything. It is a real
+    // provision and belongs among the candidates a reference may land on, but
+    // it must not change what `parentSpan` calls the enclosing provision:
+    // emitting it there moved 41 references that already had an answer, and all
+    // five of the subsection-level ones read were moved into the quoted new law
+    // the bill's own subsection (a) inserts — "(c) Effective Date.--… as
+    // inserted by subsection (a) of this section" sent to the new § 213A(a).
+    // Answers that exist are never displaced; only blanks are filled.
+    const runIn = m[0].lastIndexOf(m[1]) > m[0].search(/[^\s`‘"“]/);
+    // …and never inside quoted new law. GPO writes an inserted section the same
+    // way — ``SEC. 213A. (a) Enforceability.--…'' — so the run-in prefix reaches
+    // the NEW section's (a) and puts it in competition with the bill's own.
+    // "(c) Effective Date.--Subsection (a) of section 213A …, as inserted by
+    // subsection (a) of this section" then answered with the § 213A(a) it
+    // inserts instead of the bill's (a) that inserts it. A quoted block's own
+    // line-head markers are found without this and are unaffected.
+    if (runIn && /``|‘‘|["“]/.test(m[0])) { re.lastIndex = Math.max(re.lastIndex, end); continue; }
     let off = at;
     for (const marker of m[1].match(/\([A-Za-z0-9]{1,8}\)/g) || []) {
       // A run may straddle the boundary — "(3) in paragraph (2)" is the bill's,
       // but a quoted "``(l)(1)" opening a block is the block's own pair.
-      if (off >= from) out.push({ at: off, marker, depth: markerDepth(marker) });
+      if (off >= from) out.push({ at: off, marker, depth: markerDepth(marker), runIn });
       off += marker.length;
     }
     // Overlapping line starts are impossible, but a zero-width step is not.
@@ -177,7 +221,13 @@ export function outline(text, from, to) {
 
 /** Offsets in [from, to) where a line begins with exactly `marker`. */
 function markerStarts(text, from, to, marker) {
-  return outline(text, from, to).filter((o) => o.marker === marker).map((o) => o.at);
+  const hits = outline(text, from, to).filter((o) => o.marker === marker);
+  // A run-in marker is a candidate of LAST RESORT. It is a real provision, but
+  // it was invisible until now, so any reference that already had an answer must
+  // keep it — otherwise a fix that fills 410 blanks also moves three answers,
+  // and one of the three was right before and wrong after.
+  const plain = hits.filter((o) => !o.runIn);
+  return (plain.length ? plain : hits).map((o) => o.at);
 }
 
 /** The markers in a path: "(b)(1)" -> ["(b)", "(1)"]. */
@@ -200,7 +250,9 @@ function markersOf(path) {
  * tiebreak either — references point forward as often as back.
  */
 function parentSpan(text, from, to, offset, depth) {
-  const marks = outline(text, from, to);
+  // Run-in markers are excluded here and only here — see outline(). They are
+  // candidates to land on, not boundaries to reason from.
+  const marks = outline(text, from, to).filter((o) => !o.runIn);
   let start = from;
   let parentDepth = -1;
   for (const m of marks) {
