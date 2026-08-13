@@ -6251,3 +6251,42 @@ LVXXXVI--FEDERAL MARITIME
    of paragraphs (3) and (4) of subsection (a)", which is a later amendment and
    not a respelling. Word containment cannot see a reordered clause, and no rule
    here should paper over one.
+
+103. **A whole-provision replacement has two spellings and `quotedRefs()`
+   scanned one.** (2026-08-12, the second finding the stopped hunt reported,
+   verified before building.) `markReplacements()` reads the pair
+   `[RE_READ_AS_FOLLOWS, RE_STRIKE_AND_INSERT]` together; `quotedRefs()` scanned
+   only the first. So
+
+   ```
+   Section 1860D-43 … (42 U.S.C. 1395w-153) is amended--
+       (B) by striking subsection (b) and inserting the following:
+   ``(b) Effective Date.--Paragraphs (1)(A), (2)(A), and (3) of subsection (a)
+   shall apply to covered part D drugs dispensed … before January 1, 2025.''
+   ```
+
+   composed nothing, and the pane said "the instruction around it doesn't name a
+   U.S. Code section this could be read against" — about an instruction whose
+   resolved target is 42 U.S.C. 1395w-153. **274 of the 4,584 declined
+   cross-references sit inside a `replace` block, and all 274 are this shape; 0
+   are read-as-follows.** That asymmetry is the tell, and it is what a
+   population split finds and a sample does not.
+
+   The loop body uses nothing but the match position, so the fix is to iterate
+   both patterns — the same pair, in the same order, as the function that creates
+   the ops.
+
+   Corpus, accounted to the unit: **`refs` +241 and `relative` +241 across 17
+   bills, equal on every bill, and nothing else moved at all** — not citations,
+   amendments, targeted, opSpans, diffSpans, steps, overlaps or badOffsets. Equal
+   deltas are the signature of pure addition: each new reference becomes one new
+   composed citation and displaces none. Graded against the shipped shards, **235
+   of the 241 reach a node that exists (97.5%)**, 6 reach the section but not the
+   path, and **0 reach nothing**. The 6 are the renumbering family — 10 U.S.C.
+   2684a is one item 62 already names — where the Code moved the level after the
+   bill passed.
+
+   Not one mark moves: this adds citations and cannot draw anything.
+   selftest 779 → 781 (the read-as-follows half passes either way, which is
+   right — it was already read — and the other half fails against the old build),
+   rendertest 513, proptest clean, paneltest clean.

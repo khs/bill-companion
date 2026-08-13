@@ -3355,6 +3355,36 @@ section('internal cross-references');
   }
 }
 
+// A whole-provision replacement has TWO spellings and `quotedRefs()` scanned
+// one. 274 of the 4,584 declined cross-references sat inside the other, and all
+// 274 were that shape — the asymmetry is the tell.
+section('both spellings of a whole-provision replacement');
+{
+  const O = '``';
+  const C = "''";
+  const mk = (phrase) =>
+    'SEC. 1. SHORT TITLE.\n\n' +
+    'SEC. 2. AMENDMENT.\n' +
+    `    Section 1860D-43 of the Social Security Act (42 U.S.C. 1395w-153) is\n` +
+    `amended ${phrase}\n` +
+    `${O}(b) Effective Date.--Subsection (a) shall apply to covered part D drugs\n` +
+    `dispensed on or after January 1, 2011.${C}.\n`;
+  for (const [name, phrase] of [
+    ['to read as follows', 'to read as follows:'],
+    ['striking and inserting', 'by striking subsection (b) and inserting the following:'],
+  ]) {
+    const t = normalizeText(mk(phrase));
+    const raw = extractCitations(t);
+    const ams = extractAmendments(t, raw);
+    const composed = expandRelativeRefs(raw, ams).find(
+      (c) => c.relative && /Subsection \(a\)/i.test(c.text)
+    );
+    ok(`${name}: the block's cross-reference composes`,
+       Boolean(composed) && `${composed.title}:${composed.section}${composed.subsection}` === '42:1395w-153(a)',
+       composed ? `${composed.title}:${composed.section}${composed.subsection}` : 'not composed');
+  }
+}
+
 // --------------------------------- references inside quoted inserted law
 // A bill's own sentences and the statute it is writing are the same characters
 // in the same file. Telling them apart decides where a cross-reference points,

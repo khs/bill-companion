@@ -3048,9 +3048,16 @@ function quotedRefs(text, ops, target, steps, headBase, from, to) {
   // …''" replaces a clause of (c)(1)(B), and reading the head would put it at
   // (c). Measured over the corpus, 102 of 445 of these blocks open with a marker
   // that does NOT match the head's last one, and every one sampled was a walk.
-  RE_READ_AS_FOLLOWS.lastIndex = from || 0;
+  // BOTH phrases, the same pair `markReplacements()` reads. Scanning only
+  // "to read as follows" left the other spelling of the same act unread: 274 of
+  // the 4,584 declined cross-references sit inside a "by striking <unit> <path>
+  // and inserting the following:" block, and all 274 are that shape — the
+  // asymmetry is the tell. The loop body uses nothing but the match position, so
+  // one pattern or two makes no other difference.
+  for (const rePhrase of [RE_READ_AS_FOLLOWS, RE_STRIKE_AND_INSERT]) {
+  rePhrase.lastIndex = from || 0;
   let pm;
-  while ((pm = RE_READ_AS_FOLLOWS.exec(text)) && pm.index < to) {
+  while ((pm = rePhrase.exec(text)) && pm.index < to) {
     const block = readAddedBlock(text, pm.index + pm[0].length);
     if (!block) continue;
     // The last step written before the phrase is where the walk had got to —
@@ -3068,6 +3075,7 @@ function quotedRefs(text, ops, target, steps, headBase, from, to) {
     // above the block's own marker are that section's — the same reason the
     // steps and refs beside it carry the move.
     if (sec) for (let i = before; i < out.length; i++) Object.assign(out[i], sec);
+  }
   }
 
   for (const op of ops) {
