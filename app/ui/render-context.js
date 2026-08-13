@@ -199,6 +199,30 @@ export function renderContext(res, handlers) {
       )
     );
   }
+  // "8 U.S.C. 1101 note" is not section 1101. A note is uncodified law — an
+  // effective-date provision, a savings clause, a whole uncodified section of
+  // the Act — printed BENEATH the section it relates to, and the pane answered
+  // with the section itself: 601 citations over 262 distinct sections on 27 of
+  // the 30 corpus bills, none of them saying "note" anywhere. Item 14 fixed the
+  // amendment TARGET and left the chip behind, which is item 33's rule on the
+  // very family item 14 was written for.
+  //
+  // The section is still shown, because it is the right context and it is what
+  // the citation points at — but the card says the reader is looking at the
+  // provision the note is printed under, not the note. The shard's own `notes`
+  // are listed below by the notes card, so the way on is already there.
+  else if (res.isNote) {
+    root.appendChild(
+      card(
+        'A note, not the section',
+        `The bill cited a NOTE printed under ${res.title} U.S.C. ${res.section} — ` +
+          `uncodified law such as an effective date, a savings clause, or a section ` +
+          `of the Act that was never codified. The section itself is shown below for ` +
+          `context; the note is not part of it.`,
+        ''
+      )
+    );
+  }
   // "15 U.S.C. 2601 et seq." is the Toxic Substances Control Act, not § 2601.
   // The bill named a RANGE and the pane answered with one section — silently,
   // under a heading that named it alone. 2,620 citations across 28 corpus bills.

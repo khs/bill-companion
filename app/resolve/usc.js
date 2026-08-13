@@ -82,13 +82,20 @@ export async function resolveUsc(cite) {
   if (!data) {
     return {
       source: 'U.S. Code',
-      citation: `${title} U.S.C. ${section}${subsection}${cite.etSeq ? ' et seq.' : ''}`,
+      citation: `${title} U.S.C. ${section}${subsection}${cite.etSeq ? ' et seq.' : ''}${cite.note ? ' note' : ''}`,
       // Set here too: whether the bill named a range is a fact about the
       // CITATION, not about whether we happen to hold the section it starts at.
       // Only the missing-section card renders in this branch, but a flag that is
       // true on one path and undefined on the other is the kind of divergence
       // that makes a later consumer work in testing and not in the app.
       isRangeStart: Boolean(cite.etSeq),
+    // A NOTE is uncodified law printed BENEATH a section, not the section. The
+    // parser has flagged it since item 14 and no consumer read it, so 601
+    // citations over 262 distinct sections showed the live section with nothing
+    // to say it was not the thing cited. Same shape as `isRangeStart`: a fact
+    // about the CITATION, carried on both branches so a later consumer cannot
+    // find it defined on one path and undefined on the other.
+    isNote: Boolean(cite.note),
       missing: true,
       // Three different failures, three different fixes. Conflating the first
       // with the second sent someone looking for missing data that was sitting
@@ -154,7 +161,7 @@ export async function resolveUsc(cite) {
     // the Toxic Substances Control Act. 2,620 citations across 28 corpus bills
     // are this shape. Carrying "et seq." into the heading costs nothing and is
     // the difference between showing a section and claiming one.
-    citation: `${title} U.S.C. ${section}${subsection}${cite.etSeq ? ' et seq.' : ''}`,
+    citation: `${title} U.S.C. ${section}${subsection}${cite.etSeq ? ' et seq.' : ''}${cite.note ? ' note' : ''}`,
     // Carried as data beside the display string, so nothing downstream has to
     // parse the one to get the other. The level ladder used to take the last
     // word of `citation` as the section number, which held right up until the
@@ -163,6 +170,13 @@ export async function resolveUsc(cite) {
     section: String(section),
     // The pane says what a range is and what it is showing; see rangeStartCard().
     isRangeStart: Boolean(cite.etSeq),
+    // A NOTE is uncodified law printed BENEATH a section, not the section. The
+    // parser has flagged it since item 14 and no consumer read it, so 601
+    // citations over 262 distinct sections showed the live section with nothing
+    // to say it was not the thing cited. Same shape as `isRangeStart`: a fact
+    // about the CITATION, carried on both branches so a later consumer cannot
+    // find it defined on one path and undefined on the other.
+    isNote: Boolean(cite.note),
     heading: data.heading || '',
     // The section's flush lead-in text, above any subsection. For a section that
     // was never subdivided this is the entire operative provision — 15 U.S.C.

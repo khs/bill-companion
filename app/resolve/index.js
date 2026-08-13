@@ -185,6 +185,10 @@ function cacheKey(c) {
   // whole difference between a heading that says § 2601 and one that says the
   // Toxic Substances Control Act. Without it the first of the two clicked
   // answers for both, and the failure is silent in either direction.
+  // `note` for the SEVENTH. 142 sections are cited both as a note and as
+  // themselves — "42 U.S.C. 1395ww note" and "42 U.S.C. 1395ww" agree on kind,
+  // title, section and subsection — so without it whichever is clicked first
+  // answers for both, and any fix to the note card is silently dead.
   // `subFromHead` for the SIXTH. Two citations can agree on title, section and
   // subsection and still differ in whether that subsection was written down by
   // the drafter or carried from the instruction head — and only the second may
@@ -195,7 +199,7 @@ function cacheKey(c) {
   return [c.kind, c.title, c.part, c.section, c.subsection, c.congress, c.law, c.volume, c.page,
           c.act && c.act.name, c.actSection, c.division, c.where && c.where.join('>'),
           c.shortTitle, c.actTitle && `t${c.actTitle}`, c.etSeq ? 'etseq' : '',
-          c.subFromHead ? 'head' : '']
+          c.subFromHead ? 'head' : '', c.note ? 'note' : '']
     .filter(Boolean)
     .join('|');
 }

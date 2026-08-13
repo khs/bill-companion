@@ -1543,6 +1543,26 @@ section('Act-relative derivation');
     const plainEl = rc({ ...rangeRes, citation: '15 U.S.C. 2601', isRangeStart: false }, { onScope: () => {} });
     eq('an ordinary section says nothing about ranges',
        [...plainEl.querySelectorAll('.card')].filter((x) => /A range, not one section/i.test(x.textContent)).length, 0);
+
+    // …and the same shape for a NOTE. "8 U.S.C. 1101 note" is uncodified law
+    // printed BENEATH § 1101, not § 1101 — 601 citations over 262 sections were
+    // showing the live section with nothing to say so. Item 33's rule on the
+    // family item 14 was written for.
+    const noteRes = {
+      ...rangeRes, citation: '8 U.S.C. 1101 note', isRangeStart: false, isNote: true,
+      title: '8', section: '1101', heading: 'Definitions',
+    };
+    const noteEl = rc(noteRes, { onScope: () => {} });
+    const noteCard = [...noteEl.querySelectorAll('.card')].find((x) => /A note, not the section/i.test(x.textContent));
+    ok('a note citation says it is a note', Boolean(noteCard), noteEl.textContent.slice(0, 160));
+    const ntxt = noteCard ? noteCard.textContent.replace(/\s+/g, ' ') : '(no card)';
+    ok('  naming the section it is printed under', /8 U\.S\.C\. 1101/.test(ntxt), ntxt);
+    ok('  and saying the section is context, not the thing cited',
+       /not part of it/i.test(ntxt), ntxt);
+    // The negative, or the card would be claiming this of every section.
+    eq('an ordinary section says nothing about notes',
+       [...rc({ ...noteRes, citation: '8 U.S.C. 1101', isNote: false }, { onScope: () => {} })
+         .querySelectorAll('.card')].filter((x) => /A note, not the section/i.test(x.textContent)).length, 0);
   }
   {
     // THE cache hazard, which this codebase has paid for four times before.
@@ -1565,6 +1585,21 @@ section('Act-relative derivation');
     const bareAfter = await resolve({ ...bare, id: 'c4', section: '2602' });
     eq('the same holds when the range is clicked first',
        `${rangeFirst.citation} | ${bareAfter.citation}`, '15 U.S.C. 2602 et seq. | 15 U.S.C. 2602');
+
+    // …and for the SEVENTH incarnation, `note`. 142 sections across the corpus
+    // are cited both as a note and as themselves, so without it in the key the
+    // note card is silently dead for whichever is clicked second.
+    const nBare = { id: 'n1', kind: 'usc', title: '8', section: '1101', subsection: '' };
+    const nNote = { id: 'n2', kind: 'usc', title: '8', section: '1101', subsection: '', note: true };
+    const b1 = await resolve(nBare);
+    const n1 = await resolve(nNote);
+    eq('a note cite is not served the bare section\'s cached answer',
+       `${b1.citation} | ${n1.citation}`, '8 U.S.C. 1101 | 8 U.S.C. 1101 note');
+    ok('  nor its flag', n1.isNote === true && !b1.isNote, `${b1.isNote} / ${n1.isNote}`);
+    const n2 = await resolve({ ...nNote, id: 'n3', section: '1182' });
+    const b2 = await resolve({ ...nBare, id: 'n4', section: '1182' });
+    eq('  and the same when the note is clicked first',
+       `${n2.citation} | ${b2.citation}`, '8 U.S.C. 1182 note | 8 U.S.C. 1182');
   }
 
   // ---- the crumbs are a way out, not a caption ---------------------------

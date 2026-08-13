@@ -6460,3 +6460,42 @@ LVXXXVI--FEDERAL MARITIME
    wrote a govinfo quoted operand into a single-quoted JS literal and the `''`
    closed the string early — the gotcha this file already documents twice. The
    fixture did not need a quoted operand at all.
+
+107. **A note is not the section it is printed under, and the pane never said
+   so.** (2026-08-12, the third finding of the re-run citation lens, and the last
+   of the three.) Item 14 established the rule — "8 U.S.C. 1101 note" is
+   uncodified law printed BENEATH § 1101, not § 1101 — and fixed the amendment
+   TARGET. The chip was left behind. `cite.note` reaches `rankOfCite`, the target
+   chain and `impliedSuch`, and **`resolveUsc`, `resolve` and `render-context.js`
+   never looked at it**, so **601 citations over 262 distinct sections on 27 of
+   the 30 corpus bills** showed the live section with nothing to say it was not
+   the thing cited: "(22 U.S.C. 2220a note)" → *General provisions*,
+   "(49 U.S.C. 40101 note)" → *Policy*. That is item 33's rule — a field the
+   parser sets and no consumer reads is a feature that does not exist — on the
+   very family item 14 was written for.
+
+   Built to item 38's pattern, which is the same shape one qualifier along:
+   `isNote` is carried on BOTH branches of `resolveUsc` beside `isRangeStart`
+   (a flag true on one path and undefined on the other is the divergence that
+   makes a consumer work in testing and not in the app), the display citation
+   gains " note", and the pane states what the reader is looking at. The section
+   is still shown, because it is the right context and the shard's own `notes`
+   are listed below it — but the card says the note is not part of it.
+
+   **`cacheKey` needed `note`, for the SEVENTH time this pattern has cost
+   something.** 142 sections across the corpus are cited both as a note and as
+   themselves, and they agree on kind, title, section and subsection — so the
+   first clicked answered for both and any fix to the card would have been
+   silently dead for the other. Asserted in both orders, because a memo is
+   order-dependent by nature; against the old build the check reports
+   `8 U.S.C. 1101 | 8 U.S.C. 1101`, which is the hazard itself.
+
+   Corpus unchanged, marks unchanged, paneltest clean — this is resolution and
+   rendering. selftest 791, rendertest 513 → 520, and all six new checks fail
+   against the old build.
+
+   **Verified in a DOM, not in a browser.** `renderContext` was rendered directly
+   for a note citation and for the same section cited plainly, in both orders, and
+   the card, the heading and the cache behaviour read correctly — but the dev
+   server was unreachable from the browser tooling in this session, so no one has
+   looked at this card on screen. Worth a glance next time someone has the app up.
