@@ -3383,6 +3383,37 @@ section('both spellings of a whole-provision replacement');
        Boolean(composed) && `${composed.title}:${composed.section}${composed.subsection}` === '42:1395w-153(a)',
        composed ? `${composed.title}:${composed.section}${composed.subsection}` : 'not composed');
   }
+
+  // …and the same phrase states the provision it replaces, inside itself. The
+  // unit and marker path were consumed in non-capturing groups, so the scope
+  // came from the walk — wherever the PREVIOUS sub-instruction stopped.
+  const stated = normalizeText(
+    'SEC. 1. SHORT TITLE.\n\nSEC. 2. X.\n' +
+    '    Section 3021 of the Social Security Act (42 U.S.C. 1315a) is amended--\n' +
+    '        (1) in paragraph (a)(2)(B), by striking ' + O + '8 conditions' + C +
+    ' and inserting ' + O + '10 conditions' + C + '; and\n' +
+    '        (2) by striking subsection (c)(1)(B) and inserting the following:\n' +
+    O + '(B) Expansion.--The Secretary may expand the duration and scope.' + C + '.\n'
+  );
+  const repOp = (extractAmendments(stated, extractCitations(stated))[0]?.ops || [])
+    .find((o) => o.type === 'replace');
+  ok('the phrase\'s own address beats the walk', repOp && repOp.scope === '(c)(1)(B)',
+     repOp ? String(repOp.scope) : 'no replace op');
+
+  // …but only where it AGREES with the block's own leading marker. The phrase
+  // names what is STRUCK, and the block is not always numbered the same: strike
+  // paragraph (2), insert a block that opens (3), and the law reads it at (3).
+  const disagree = normalizeText(
+    'SEC. 1. SHORT TITLE.\n\nSEC. 2. X.\n' +
+    '    Section 4.9 of the Farm Credit Act of 1971 (12 U.S.C. 2160) is amended--\n' +
+    '        (A) in subsection (d)--\n' +
+    '            (i) by striking paragraph (2) and inserting the following:\n' +
+    O + '(3) Representation of board.--The Corporation shall not have representation.' + C + '.\n'
+  );
+  const repOp2 = (extractAmendments(disagree, extractCitations(disagree))[0]?.ops || [])
+    .find((o) => o.type === 'replace');
+  ok('  and the block\'s own marker wins where they disagree',
+     repOp2 && repOp2.scope === '(d)(3)', repOp2 ? String(repOp2.scope) : 'no replace op');
 }
 
 // --------------------------------- references inside quoted inserted law

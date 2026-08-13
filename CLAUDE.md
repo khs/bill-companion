@@ -6290,3 +6290,54 @@ LVXXXVI--FEDERAL MARITIME
    selftest 779 → 781 (the read-as-follows half passes either way, which is
    right — it was already read — and the other half fails against the old build),
    rendertest 513, proptest clean, paneltest clean.
+
+104. **The phrase states the provision it replaces, inside itself, and the
+   pattern threw it away.** (2026-08-12, the third finding the stopped hunt
+   reported.) `RE_STRIKE_AND_INSERT` consumed the unit word and the marker path
+   in NON-capturing groups:
+
+   ```
+   Section 3021 of the Social Security Act (42 U.S.C. 1315a) is amended--
+       (1) in paragraph (a)(2)(B), by striking ``8 conditions'' …; and
+       (2) by striking subsection (c)(1)(B) and inserting the following:
+   ``(B) Expansion.--The Secretary may … expand the duration and scope …''
+   ```
+
+   `RE_AMENDING_UNIT` reads the other spelling ("by amending subsection (d)(2)
+   to read as follows") from the 90 characters IN FRONT of the phrase, where
+   this shape has nothing to find — so the scope came from the walk, which is
+   wherever the previous sub-instruction stopped. The pane marked 42 U.S.C.
+   1395cc-4(a)(2)(B), "the term 'applicable condition' means 1 or more of 10
+   conditions", as rewritten by a block about expanding the pilot program, and
+   left (c)(1)(B) — which reads that block back at 0.91 word containment —
+   unmarked. **114 of 345 shipped scopes disagreed with the address the bill
+   states.**
+
+   **The guard is a coherence test between two independent signals, and the
+   audit is what forced it.** The first cut moved 9 marks: 4 better and **5
+   worse**, three of them a correct mark at containment 1.00 becoming no mark at
+   all. Two causes, both real:
+
+   - **The phrase names what is STRUCK, and the block is not always numbered the
+     same.** 12 U.S.C. 2160 strikes paragraph (2) and inserts a block opening
+     "(3)", and the law's (d)(3) reads that block word for word.
+   - **The Code is flatter than the bill in places.** 29 U.S.C. 1024 strikes
+     "paragraph (2)(A)" where the shard has (a)(2) and no (A) beneath it; the
+     stated path names nothing, `reScope()` falls back and sets `scopeWidened`,
+     and item 62's identity guard then refuses the mark.
+
+   So the stated address is used only where its LAST marker equals the block's
+   own leading marker — the other independent signal for the same fact. With it:
+   **5 marks move, all 5 better, 0 worse.** Four gain a mark at containment 1.00
+   where there was none (42 U.S.C. 295f-1(b)(1), 256a(d)(3), 26 U.S.C.
+   904(b)(3)(D) and (E)) and 1395cc-4 goes 0.42 → 0.91.
+
+   Inline marks are byte-identical at 3,171 and the corpus does not move: a scope
+   is invisible to `opSpans`, which keys on `type:start-end`, which is exactly why
+   this needed a node-level dump of which provision each replacement marks — a
+   population no existing report covers. selftest 781 → 783, rendertest 513,
+   proptest clean, paneltest clean.
+
+   **All three findings from the one lens that finished are now shipped** (items
+   101, 103, 104), each with the audit that found a regression the counts hid.
+   The other nine lenses were killed mid-run and their conclusions are lost.

@@ -2892,8 +2892,14 @@ const RE_READ_AS_FOLLOWS = /\bto\s+read\s+as\s+follows\s*:/gi;
 // "by striking paragraph (3) and inserting ``replacement''" replaces the
 // paragraph with eleven characters, and the insert machinery has always handled
 // it. Making the phrase optional swept those up too.
+// The unit and the marker path are CAPTURED. This shape states the provision it
+// replaces inside its own phrase — "by striking subsection (c)(1)(B) and
+// inserting the following:" — and throwing that away left `scopeReplacements()`
+// composing from the walk instead, which is wherever the previous
+// sub-instruction happened to stop. 114 of 345 shipped scopes disagreed with the
+// address the bill states.
 const RE_STRIKE_AND_INSERT = new RegExp(
-  `\\bby\\s+striking\\s+(?:the\\s+)?(?:${UNIT_WORDS})\\s+(?:${MARKER_PATH})` +
+  `\\bby\\s+striking\\s+(?:the\\s+)?(${UNIT_WORDS})\\s+(${MARKER_PATH})` +
     '\\s+and\\s+inserting\\s+(?:in\\s+lieu\\s+thereof\\s+)?the\\s+following\\s*[^\\S\\n]*:?',
   'gi'
 );
@@ -2949,7 +2955,20 @@ function markReplacements(text, ops, from, to) {
       // arrived as a bare "(13)" that exists nowhere and was reported lost.
       // Captured here, where the phrase is already in hand, and composed in
       // scopeReplacements().
-      const stated = text.slice(Math.max(0, m.index - 90), m.index).match(RE_AMENDING_UNIT);
+      //
+      // …and the OTHER shape states it inside its own phrase rather than before
+      // it: "by striking subsection (c)(1)(B) and inserting the following:" is
+      // the address, and `RE_AMENDING_UNIT` looks only at the 90 characters in
+      // front of the match, where there is nothing to find. So the phrase's own
+      // captures answer for it. 42 U.S.C. 1395cc-4 is the shape of it: the walk
+      // had stopped at (a)(2)(B) for the previous sub-instruction, so the pane
+      // marked "the term 'applicable condition' means 1 or more of 10
+      // conditions" as rewritten by a block about expanding the pilot program,
+      // and left (c)(1)(B) — which reads that block back at 0.90 — unmarked.
+      const stated =
+        re === RE_STRIKE_AND_INSERT
+          ? [m[0], m[1], m[2]]
+          : text.slice(Math.max(0, m.index - 90), m.index).match(RE_AMENDING_UNIT);
       const existing = ops.find((o) => o.start != null && o.start < block.end && o.end > block.start);
       if (existing) {
         existing.type = 'replace';
@@ -3008,7 +3027,21 @@ function scopeReplacements(ops) {
     // better answer than reporting it lost. Measured cost of the guard: 2 of 54
     // on this corpus — free here, and insurance against the first bill that
     // writes an Act-relative address in the phrase over a codified parenthetical.
-    if (op.statedPath && UNIT_DEPTH[op.statedUnit] !== undefined) {
+    // …but only where the stated address AGREES with the block's own leading
+    // marker, which is the other independent signal for the same fact.
+    //
+    // "by striking <unit> <path> and inserting the following" names what is
+    // STRUCK, and the block is not always numbered the same: 12 U.S.C. 2160
+    // strikes paragraph (2) and inserts a block opening "(3)", and the law's
+    // (d)(3) reads that block back word for word. The Code is also flatter than
+    // the bill in places — 29 U.S.C. 1024 strikes "paragraph (2)(A)" where the
+    // shard has (a)(2) and no (A) under it. In both, the stated path names
+    // nothing, `reScope()` falls back and sets `scopeWidened`, and item 62's
+    // identity guard then refuses the mark — so a correct mark at containment
+    // 1.00 becomes no mark at all. Three of those against four repairs, until
+    // this test; with it, all four repairs stand and all three losses go.
+    const agrees = !lead || (op.statedPath || '').endsWith(lead[1]);
+    if (agrees && op.statedPath && UNIT_DEPTH[op.statedUnit] !== undefined) {
       const appended = lead && !scope.endsWith(lead[1]) ? scope + lead[1] : scope;
       const above = pathLevels(scope)
         .filter((l) => l.depth < UNIT_DEPTH[op.statedUnit])
