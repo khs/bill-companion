@@ -6407,3 +6407,56 @@ LVXXXVI--FEDERAL MARITIME
      distinct sections show the live section with no indication**, on 27 of 30
      bills. `cacheKey` omits `note` as well — 142 sections are cited both ways
      and key alike — so any fix is silently dead without that too.
+
+106. **A bill talking about its own subdivisions, in the wrap and in the
+   participle.** (2026-08-12, the second finding of the re-run citation lens.)
+   Item 66 established that "The amendment made by subsection (a) shall apply to
+   taxable years…" is a bill's own effective-date clause and must not be composed
+   onto the Code target. The guard was right and reached two thirds of its
+   population:
+
+   - **It was tested against `probe`, the two-line overlay.** `probe` starts at
+     the reference's own line, so when the 72-column wrap puts the reference at
+     the head of a line the 44-character window contains no "made by" and the
+     guard silently passes. That is item 24's own warning failing in the
+     direction it was checked and found safe in, and the same correction items
+     43 and 55 made to `quotedRefs` and `stealsMarker`. Asked of the TEXT at the
+     absolute offset now.
+   - **It knew one verb.** A bill says the same thing with participles far more
+     often: "in subparagraph (C), **as redesignated by** paragraph (1)", "section
+     1899 …, **as added by** subsection (a)", "as so redesignated by". Those name
+     a subdivision OF THE BILL exactly as "the amendment made by" does.
+
+   The leading **"as" is what keeps the widening narrow**. A bare "made by" or
+   "designated by" is ordinary English about all sorts of things; "as added by",
+   "as so redesignated by" is a fixed drafting formula and is only ever about the
+   bill's own work.
+
+   Corpus: **`refs` -575 and `relative` -343 across 20 bills, and nothing else** —
+   not citations, amendments, targeted, steps, opSpans, diffSpans, overlaps or
+   badOffsets. The two differ because a suppressed reference on an amendment with
+   no resolved usc/cfr target never became a composed citation in the first place.
+
+   **Audited by reading what it withdraws, in two passes so each half is
+   attributable.** The window fix alone withdrew 39 composed addresses and added
+   0; every one read is an effective-date or rule-of-construction clause ("The
+   amendment made by subsection (a) shall apply", "Nothing in the amendments made
+   by subsection (a) shall be construed", "Implementation of the amendment made
+   by subsection (a)"). The participle widening withdrew a further 304 and added
+   0; every one of the twenty read is the drafting formula, and several were
+   landing on a real provision — "…(42 U.S.C. 1395jjj), as added by subsection
+   (a)" was composing 42 U.S.C. 1320a-7b(a).
+
+   **And the reader is left better off, not merely less wrong.** 317 of the
+   suppressed references become bare internal citations and `locateInternal`
+   places **309 of them (98%)** — in the bill, where they belong. **0 references
+   that already had an answer moved.** Inline marks are unchanged at 3,171.
+
+   selftest 786 → 791; the two new positives fail against the old build while the
+   one-line case and "a plain reference still composes" pass either way, which is
+   what a guard test should do. rendertest 513, proptest clean, paneltest clean.
+
+   One process note, for the third time in this file: the first draft of the test
+   wrote a govinfo quoted operand into a single-quoted JS literal and the `''`
+   closed the string early — the gotcha this file already documents twice. The
+   fixture did not need a quoted operand at all.

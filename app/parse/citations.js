@@ -2586,7 +2586,16 @@ function extractSteps(text, from, to, basePath) {
       // The amendment body over-reaches its bill section for a separate reason
       // (MAX_AMEND_BODY), and fixing that does NOT fix this — the effective-date
       // clause usually sits inside the same section as the instruction.
-      if (RE_AMENDMENT_MADE_BY.test(probe.slice(Math.max(0, s - 44), s))) continue;
+      //
+      // Asked of the TEXT at the absolute offset, not of `probe`. The probe is
+      // the two-line overlay, and it starts at this line — so when the wrap puts
+      // the reference at the head of a line the window sits in a string that
+      // does not contain "made by", and the guard silently lets it through. 24
+      // of the 32 leaks are exactly that. This is item 24's own warning failing
+      // in the direction it was checked and found safe in, and the same
+      // correction items 43 and 55 made to `quotedRefs` and `stealsMarker`.
+      // Wide enough for the phrase plus a continuation indent.
+      if (RE_AMENDMENT_MADE_BY.test(text.slice(Math.max(0, rel(s) - 64), rel(s)))) continue;
       const resolved = resolvePhrase(unitPairs(rm[1]), current);
       if (!resolved) continue;
       emit(refs, resolved, probe, lineStart, s, rm[1], text, curSec);
@@ -2771,7 +2780,16 @@ const RE_ANAPHOR_PREFIX = /\b(?:such|that|said)\s+$/i;
 
 // "The amendment made by subsection (a)" / "the amendments made by paragraphs
 // (1) and (2)" — a bill talking about its own subdivisions. See extractSteps.
-const RE_AMENDMENT_MADE_BY = /\bamendments?\s+made\s+by\s+$/i;
+// …and the participle forms of the same thing. "Section 1234, as added by
+// subsection (a)" names subsection (a) OF THIS BILL — the part of the bill that
+// did the adding — exactly as "the amendment made by subsection (a)" does.
+//
+// The leading "as" is what keeps this narrow. A bare "made by" or "designated
+// by" is ordinary English and appears about all sorts of things; "as added by",
+// "as so redesignated by" is a fixed drafting formula and is only ever about the
+// bill's own work.
+const RE_AMENDMENT_MADE_BY =
+  /\b(?:amendments?\s+made\s+by|as\s+(?:so\s+)?(?:added|amended|redesignated|inserted|designated|transferred|made)\s+by)\s+$/i;
 
 function styleDisagrees(marker, unitDepth) {
   const s = marker.slice(1, -1);

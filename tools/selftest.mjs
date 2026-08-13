@@ -3382,6 +3382,42 @@ section('a note suffix that wrapped is still a note');
   eq('  and a "note" behind other words is not one', Boolean(other && other.note), false);
 }
 
+// Item 66's guard, which was tested against the line-local overlay probe and so
+// leaked whenever the 72-column wrap put the reference at the head of a line.
+section('a bill talking about its own subdivisions');
+{
+  const compose = (body) => {
+    const t = normalizeText(
+      'SEC. 1. SHORT TITLE.\n\nSEC. 2. X.\n' +
+      '    (a) In General.--Section 172 of the Internal Revenue Code of 1986\n' +
+      '(26 U.S.C. 172) is amended by striking the second sentence.\n' + body
+    );
+    const raw = extractCitations(t);
+    return expandRelativeRefs(raw, extractAmendments(t, raw)).filter((c) => c.relative);
+  };
+  // One line: caught. Wrapped: the probe starts at the reference's own line, so
+  // "made by" is not in the window and the guard never fired.
+  eq('an effective-date clause is not a Code address',
+     compose('    (b) Effective Date.--The amendment made by subsection (a) shall apply.\n').length, 0);
+  eq('  and still is not when the phrase wraps',
+     compose('    (b) Effective Date.--The amendment made by\nsubsection (a) shall apply.\n').length, 0);
+  // The participle forms are the same formula. "as redesignated by paragraph (1)"
+  // names a paragraph of the BILL, not of title 26 — while the "In subparagraph
+  // (C)" beside it is real navigation and must still compose, so this asserts
+  // the one reference rather than the count.
+  const both = compose(
+    '    (b) Conforming.--In subparagraph (C), as redesignated by paragraph (1), by\nstriking the heading.\n'
+  );
+  eq('  nor is "as redesignated by paragraph (1)"',
+     both.filter((c) => /paragraph \(1\)/i.test(c.text)).length, 0);
+  ok('  though the navigation beside it still composes',
+     both.some((c) => /subparagraph \(C\)/i.test(c.text)), both.map((c) => c.text).join(' | '));
+  // …but a bare reference with no such phrase in front of it still composes, or
+  // the guard would be swallowing the feature it guards.
+  ok('  while a plain reference still composes',
+     compose('    (b) More.--In subsection (b), by striking the first sentence.\n').length > 0, '');
+}
+
 // A whole-provision replacement has TWO spellings and `quotedRefs()` scanned
 // one. 274 of the 4,584 declined cross-references sat inside the other, and all
 // 274 were that shape — the asymmetry is the tell.
