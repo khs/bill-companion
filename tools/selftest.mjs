@@ -3355,6 +3355,33 @@ section('internal cross-references');
   }
 }
 
+// "note" is four characters and the window was eight, so a 72-column wrap
+// between the section number and the word defeated the flag — and with it BOTH
+// guards that depend on it: item 14 (a note is skipped in the target chain) and
+// item 27 (a note ranks below an address that spans it).
+section('a note suffix that wrapped is still a note');
+{
+  const wrapped = normalizeText(
+    'SEC. 1. SHORT TITLE.\n\nSEC. 2. REPEAL.\n' +
+    '    Section 6020 of the FAST Act (23 U.S.C. 503\n' +
+    '            note; Public Law 114-94) is repealed.\n'
+  );
+  const cs = extractCitations(wrapped);
+  const usc = cs.find((c) => c.kind === 'usc' && c.section === '503');
+  ok('the flag survives the wrap', Boolean(usc) && usc.note === true,
+     usc ? String(usc.note) : 'no 23 U.S.C. 503 citation');
+  // …so the bill repeals an uncodified section of the FAST Act, not the live
+  // FHWA research programme at 23 U.S.C. 503.
+  const am = extractAmendments(wrapped, cs)[0];
+  ok('  so the note is not taken as the amendment target',
+     Boolean(am) && Boolean(am.target) && am.target.kind !== 'usc',
+     am && am.target ? `${am.target.kind} ${am.target.title || ''} ${am.target.section || ''}` : 'no target');
+  // Only whitespace may sit in the window, which is what makes widening it safe.
+  const notANote = normalizeText('SEC. 1. X.\n    See 23 U.S.C. 503 and the note thereto.\n');
+  const other = extractCitations(notANote).find((c) => c.kind === 'usc');
+  eq('  and a "note" behind other words is not one', Boolean(other && other.note), false);
+}
+
 // A whole-provision replacement has TWO spellings and `quotedRefs()` scanned
 // one. 274 of the 4,584 declined cross-references sat inside the other, and all
 // 274 were that shape — the asymmetry is the tell.

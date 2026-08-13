@@ -22,7 +22,24 @@ const SUBSEC = '(?:\\([A-Za-z0-9]{1,8}\\))*';
 
 // 42 U.S.C. 7401 / 42 USC § 7401(a)(1) / 26 U.S.C. §§ 501-505 / 15 U.S.C. 78a et seq.
 // The word that turns a section citation into a citation of something else.
+//
+// The window has to clear a WRAP. `note` is four characters, so an 8-character
+// slice left room for four of whitespace — and a bill hard-wraps at 72 columns,
+// putting a newline plus a continuation indent between the section number and
+// the word. The flag was then simply false, which defeats BOTH guards that
+// depend on it: item 14 (a note is skipped in the target chain, because
+// "8 U.S.C. 1101 note" is not section 1101) and item 27 (a note ranks below an
+// address that spans it). 39 suffixes were missed that way, 6 of them becoming
+// an amendment TARGET and 5 of those resolving to a live section with
+// operations, so the redline drew on it: "Section 6020 of the FAST Act
+// (23 U.S.C. 503 note; Public Law 114-94) is repealed" told the reader the bill
+// repeals 23 U.S.C. 503, the FHWA research programme, rather than an uncodified
+// section of the FAST Act.
+//
+// Widening is safe because the pattern is anchored and admits only whitespace
+// before the word: 40 characters of anything else still cannot match.
 const RE_NOTE_SUFFIX = /^\s*note\b/i;
+const NOTE_WINDOW = 40;
 
 const RE_USC = new RegExp(
   '\\b(\\d{1,2}[A-Z]?)\\s*U\\.?\\s?S\\.?\\s?C\\.?' +
@@ -3550,14 +3567,14 @@ export function extractCitations(text) {
   // Agricultural Act of 2014 (16 U.S.C. 1642 note; Public Law 113-79)" was being
   // reduced to "16 U.S.C. 1642", the one provision the note rule says it is not.
   for (const c of out) {
-    if (c.kind === 'usc') c.note = RE_NOTE_SUFFIX.test(text.slice(c.end, c.end + 8));
+    if (c.kind === 'usc') c.note = RE_NOTE_SUFFIX.test(text.slice(c.end, c.end + NOTE_WINDOW));
   }
   const cites = dedupe(out);
   // …and again against each survivor's own `end`, which push() may have moved
   // for a boundary group. Testing from the wrong offset reads as working while
   // flagging nothing at all.
   for (const c of cites) {
-    if (c.kind === 'usc') c.note = RE_NOTE_SUFFIX.test(text.slice(c.end, c.end + 8));
+    if (c.kind === 'usc') c.note = RE_NOTE_SUFFIX.test(text.slice(c.end, c.end + NOTE_WINDOW));
     // Which of these sit inside law the bill is writing rather than inside the
     // bill's own sentences. Only internal refs need it — a U.S.C. cite states
     // its own address and does not care where it is written — and what it buys

@@ -538,8 +538,8 @@
   "targeted": 120,
   "distributed": 0,
   "steps": 116,
-  "refs": 161,
-  "relative": 145,
+  "refs": 160,
+  "relative": 143,
   "ops": {
    "insert": 168,
    "strike": 132,
@@ -597,11 +597,11 @@
    "cfr": 25
   },
   "amendments": 843,
-  "targeted": 759,
+  "targeted": 758,
   "distributed": 0,
   "steps": 685,
-  "refs": 1181,
-  "relative": 1630,
+  "refs": 1179,
+  "relative": 1628,
   "ops": {
    "strike": 845,
    "insert": 1100,
@@ -853,7 +853,7 @@
    "stat": 6
   },
   "amendments": 394,
-  "targeted": 372,
+  "targeted": 371,
   "distributed": 0,
   "steps": 264,
   "refs": 570,

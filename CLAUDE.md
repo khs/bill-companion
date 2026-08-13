@@ -6341,3 +6341,69 @@ LVXXXVI--FEDERAL MARITIME
    **All three findings from the one lens that finished are now shipped** (items
    101, 103, 104), each with the audit that found a regression the counts hid.
    The other nine lenses were killed mid-run and their conclusions are lost.
+
+105. **"note" is four characters and the window was eight, so a wrap hid it.**
+   (2026-08-12, from a re-run of the citation-resolution lens.) `RE_NOTE_SUFFIX`
+   is tested against `text.slice(c.end, c.end + 8)` — four characters for the
+   word and four for whatever precedes it. A bill hard-wraps at 72 columns, so
+   the newline and the continuation indent between the section number and the
+   word overflow that:
+
+   ```
+   Section 6020 of the FAST Act (23 U.S.C. 503
+               note; Public Law 114-94) is repealed.
+   ```
+
+   The flag was then false, which defeats BOTH guards resting on it — item 14
+   (a note is skipped in the target chain, because "8 U.S.C. 1101 note" is not
+   section 1101) and item 27 (a note ranks below an address that spans it). **39
+   suffixes missed, 6 of them becoming an amendment TARGET.** The pane told the
+   reader that bill repeals 23 U.S.C. 503, the FHWA research and technology
+   programme, when what it repeals is an uncodified section of the FAST Act.
+
+   Widening to 40 is safe for a reason that is worth stating rather than
+   assuming: the pattern is `^\s*note`, so everything between the citation
+   and the word must be WHITESPACE. Forty characters of anything else still
+   cannot match, and the selftest asserts that directly with "and the note
+   thereto".
+
+   Corpus, accounted per bill: `targeted` -1 on hr3684 and -1 on hr3734 (two
+   amendments stop claiming a section they never named), with `refs` -3 and
+   `relative` -4 across three bills — the composed addresses that hung off those
+   targets. **Marks 3,171 → 3,171: not one changed**, because those instructions
+   were repeals and clerical amendments that drew nothing. What moves is the
+   provision the pane NAMES, which no mark diff can see; verified by rendering
+   the target before and after.
+
+   selftest 783 → 786, rendertest 513, proptest clean, paneltest clean.
+
+   The lens that found this read 55 seeded-random resolutions across every kind
+   and every assembled-address flag and judged **54 of 55 correct**, and two
+   mechanical checks came back clean and are recorded so nobody re-derives them:
+   Act-relative resolution agrees with the drafter's own parenthetical in 2,393
+   of 2,648 one-line cases, and of the 32 that disagree with a real different
+   section nearly all are the BILL being stale (25:450b→25:5304,
+   15:1681u→15:1681s-3), not the app; and all 150 popular-name entries with a
+   checkable `enactedAs` have an anchor whose own source credit names the Act —
+   **zero disagree**, closing item 78's family.
+
+   Two further findings from the same lens are recorded unbuilt:
+
+   - **Item 66's guard is tested against the line-local overlay probe.** "The
+     amendment made by subsection (a)" is caught on one line and leaks when the
+     wrap puts the reference at the head of the next, because `probe` starts
+     there and "made by" is not in the window — item 24's own warning, failing
+     in the direction it was checked and found safe in. 24 of the 32 `made by`
+     leaks are the wrap, and the guard never covered the other verbs at all:
+     over `added|amended|redesignated|inserted|made|designated|transferred`,
+     **361 references, 226 landing on a real subsection** of a live unrelated
+     provision ("as added by subsection (a)" → 10 U.S.C. 3372(a),
+     *Undefinitized contractual actions*). The fix is to test at the absolute
+     offset rather than the probe, and to widen the verb set.
+   - **`cite.note` is read by no consumer at resolution or render.** Item 33's
+     rule on the family item 14 was written for: the flag reaches `rankOfCite`,
+     the target chain and `impliedSuch`, but `resolveUsc`, `resolve` and
+     `render-context.js` never look at it, so **601 note citations over 262
+     distinct sections show the live section with no indication**, on 27 of 30
+     bills. `cacheKey` omits `note` as well — 142 sections are cited both ways
+     and key alike — so any fix is silently dead without that too.
