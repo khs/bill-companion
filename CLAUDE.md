@@ -6622,3 +6622,85 @@ LVXXXVI--FEDERAL MARITIME
    unchanged — a placement is invisible to `opSpans`, which keys on
    `type:start-end`, so the mark diff was the measurement here as it has been
    throughout.
+
+110. **The scope population is mostly not ours, and the one defect in it was in
+   item 91.** (2026-08-12, from a re-run of the scope-composition lens.)
+   `coverage.mjs` reports ~1,072 operations addressing a level the provision does
+   not have, and that number has sat there since item 34 without anyone
+   classifying all of it. Classified mechanically, with the dump reproducing the
+   report exactly:
+
+   ```
+     179  the Code carries the level as TEXT INSIDE ITS PARENT, not as a node
+     893  the level is genuinely absent from the current Code
+            889 of those in an ENROLLED bill — the Code has moved on
+            453 on an amendment the redline itself judges stale
+              4 in a PENDING bill, all one bill, all its own redesignation
+       0  sitting past a later recognised amendment head
+   ```
+
+   **The four is the decisive number.** Where the Code should still match the
+   bill — a bill that has not been enacted and applied — composition gets the
+   address right essentially always; the population is dominated by an enacted
+   bill's amendment having already been made and the Code having been renumbered
+   since. Items 70 and 91's bounds are holding at 0. Three further shapes were
+   measured and declined, with the numbers, so nobody re-derives them:
+   `reScope`'s drop-from-front branch (82 repairs, the only 6 that draw marks all
+   correct — 42 U.S.C. 1869c and 33 U.S.C. 3701 genuinely flatten their top
+   level); lowercase `Sec. N.` blocks past `RE_SECTION_BLOCK`'s case-sensitivity
+   (13 corpus-wide, 1 drawn, and that one is the defect below); and scopes
+   disagreeing with a unit phrase in the sub-instruction (209 candidates, the
+   phrase nearly always inside a quoted operand — the probe, not the app).
+
+   **The defect is item 91's own docstring example, still wrong after item 91
+   shipped.** `RE_LOOSE_HEAD` could not cross two shapes:
+
+   ```
+   Paragraph (8) of section 72(t) is amended by adding at the end the following
+   new subparagraph: ``(F) Recontributions.-- … ''.
+       (2) Qualified plans.--Subsection (c) of section 402, as amended by this
+   Act, is further amended by adding at the end the following new paragraph:
+   ``(13) Recontributions of withdrawals for home purchases.-- …''
+   ```
+
+   `[^.;]{0,200}?` cannot pass the full stop in the RUN-IN HEADING "Qualified
+   plans.--", so the head was never seen and 26 U.S.C. 402(c)(13) — which the
+   shard holds verbatim — was drawn at the end of 26 U.S.C. 72(t). The other
+   miss is a PARTICIPIAL chain: "Section 2431b … is transferred to chapter 322 …,
+   redesignated as section 4231, and amended--" never says "is amended". 156
+   instructions over-reach between them.
+
+   **The guard is what makes the widening safe, and my first cut got it wrong in
+   a way only the fixture caught.** Cutting requires the new head to name a
+   DIFFERENT provision — a table or analysis (tested FIRST, because a clerical
+   amendment names no section of its own and would otherwise fall through), a
+   different section number, a different unit-and-marker path, or a chapter or
+   title. An anaphor with no address of its own — "Such section is further
+   amended" — continues the same provision, and cutting there strands its
+   operations for good. Testing only the section number broke item 91's own
+   fixture, where "Subsection (c) of such section" names a different provision in
+   the SAME section; adding the unit-path test fixed it and, on the corpus, also
+   recovered 10 U.S.C. 4201(b)'s `was` mark, which the section-only version lost.
+
+   Marks 3,224 → 3,217: **9 withdrawn and 2 added, and all nine withdrawals were
+   read against the shards — every one is a mark on a provision the bill does not
+   name.** 26 U.S.C. 127(c)(1) was carrying a conforming amendment to § 221;
+   37 U.S.C. 501 a technical amendment two sentences later; 10 U.S.C. 3221(b) and
+   3531 the operations of §§ 3222 and 2306c; 26 U.S.C. 401(a)(9)(C)(v)(I) had
+   "age 72" struck for an instruction naming § 408(b). **0 losses.**
+
+   Corpus, accounted: `opSpans` -234 with 246 ops removed (the difference is the
+   12 spanless redesignations), `refs` -298, `relative` -147, `steps` -36, and
+   **`uncoveredVerbs` +31** — the honest cost, exactly as in items 70 and 91:
+   those verbs were never covered, they were attributed to the wrong
+   instruction, and the counter exists so a gap is visible instead of hiding as a
+   wrong answer.
+
+   Rendered per item 60, on the case item 91 named and did not fix: the block is
+   now claimed by NO instruction, where before it was owned by the instruction
+   targeting 26 U.S.C. 72(t) and scoped to `(t)`. Blank beats wrong.
+
+   selftest 797 → 800, and all three new fixtures fail against the old build —
+   the two positives in one direction and the anaphoric negative in the other,
+   which is what pins a guard rather than just a widening. rendertest 521,
+   proptest clean, paneltest clean.

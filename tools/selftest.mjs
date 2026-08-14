@@ -949,6 +949,37 @@ section('relative navigation inside amendments');
   const ams = extractAmendments(t, extractCitations(t), bill.divisions, bill.sections);
   const blocks = ams[0].ops.filter((o) => o.type === 'add-at-end').map((o) => String(o.text).slice(0, 12));
   eq('an instruction reads its own added block and no other', blocks.join(' | '), '(F) Mine.--T');
+
+  // …and two shapes the head pattern could not cross, both of which left the
+  // previous instruction claiming the next one's block. The first is this
+  // item's own docstring example as the bill actually writes it — with a RUN-IN
+  // HEADING, whose full stop `[^.;]{0,200}?` cannot pass.
+  const heads = (second) => {
+    const t2 = normalizeText(
+      'SEC. 101. BOTH.\n' +
+      '    (1) Paragraph (8) of section 72(t) is amended by adding at the end the ' +
+      "following new subparagraph:\n``(F) Mine.--This is the first block.''.\n" +
+      `        ${second}\n` +
+      "``(13) Theirs.--This is the second block.''.\n"
+    );
+    const b2 = parseBill(t2);
+    return extractAmendments(t2, extractCitations(t2), b2.divisions, b2.sections)[0]
+      .ops.filter((o) => o.type === 'add-at-end').map((o) => String(o.text).slice(0, 12)).join(' | ');
+  };
+  eq('a run-in heading does not hide the next instruction',
+     heads('(2) Qualified plans.--Subsection (c) of section 402, as amended by this ' +
+           'Act, is further amended by adding at the end the following new paragraph:'),
+     '(F) Mine.--T');
+  eq('  nor does a participial verb chain',
+     heads('(2) Section 402 of such title is transferred to chapter 322, redesignated ' +
+           'as section 4231, and amended by adding at the end the following new paragraph:'),
+     '(F) Mine.--T');
+  // …but an anaphor with no address of its own CONTINUES the same provision, and
+  // cutting there strands its operations for good. Measured: the widening
+  // without this test is 21 right and 13 wrong; with it, 18 and 1.
+  eq('  while "such section" with no address of its own does not cut',
+     heads('Such section is further amended by adding at the end the following new paragraph:'),
+     '(F) Mine.--T | (13) Theirs.');
   // The bound must be the sentence, not the block: everything the FIRST
   // instruction writes still belongs to it.
   ok('  and its own block is whole',

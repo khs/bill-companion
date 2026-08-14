@@ -1440,11 +1440,62 @@ const QC = '(?:\'\'|’’|[”"])';
 // this Act…" is a subordinate clause and not a head. And anything inside quoted
 // new law is skipped: inserted law says "is amended" constantly, and cutting
 // there would end an instruction in the middle of the block it is adding.
+// …and two shapes it could not cross, both of which left the previous
+// instruction claiming the next one's block. This is item 91's own docstring
+// example, still wrong after item 91 shipped:
+//
+//   Paragraph (8) of section 72(t) is amended by adding at the end the following
+//   new subparagraph: ``(F) Recontributions.-- … ''.
+//       (2) Qualified plans.--Subsection (c) of section 402, as amended by this
+//   Act, is further amended by adding at the end the following new paragraph:
+//   ``(13) Recontributions of withdrawals for home purchases.-- …''
+//
+// `[^.;]{0,200}?` cannot cross the period in the RUN-IN HEADING "Qualified
+// plans.--", so the head was never seen and 26 U.S.C. 402(c)(13) — which the
+// shard holds verbatim — was drawn at the end of 26 U.S.C. 72(t). The other is a
+// PARTICIPIAL chain: "Section 2431b … is transferred to chapter 322 …,
+// redesignated as section 4231, and amended--" never says "is amended".
+// 156 instructions over-reach between them.
 const RE_LOOSE_HEAD = new RegExp(
-  `(?:${QC})?\\s*[.;]\\s+((?:\\([A-Za-z0-9]{1,4}\\)\\s*)*[A-Z][^.;]{0,200}?` +
-    '\\b(?:is|are)\\s+(?:further\\s+|also\\s+|hereby\\s+)?(?:amended|repealed)\\b)',
+  `(?:${QC})?\\s*[.;]\\s+((?:\\([A-Za-z0-9]{1,4}\\)\\s*)*(?:[A-Z][^.;\\n]{0,70}?\\.--\\s*)?` +
+    '[A-Z][^.;]{0,200}?' +
+    '(?:\\b(?:is|are)\\s+(?:further\\s+|also\\s+|hereby\\s+)?(?:amended|repealed)\\b' +
+    '|,\\s+and\\s+(?:is\\s+)?amended\\b))',
   'g'
 );
+
+/**
+ * Does this head name a DIFFERENT provision from the instruction it would end?
+ *
+ * The guard that makes the widening safe, and it is not optional: an anaphoric
+ * "Such section is further amended" continues the SAME provision, and cutting
+ * there strands its operations for good. Measured, the naive widening is 21
+ * right and 13 wrong; with this test, 18 right and 1 wrong.
+ *
+ * The table test runs FIRST. A clerical amendment — "the table of sections for
+ * chapter 5 is amended" — names no section of its own, so a section-number test
+ * would fall through to "same provision" and keep the over-reach; 26 U.S.C.
+ * 7508A loses a correct addition when the two are the other way round.
+ */
+let RE_HEAD_UNIT;
+function namesOther(head, section, subsection) {
+  if (/\b(?:table\s+of\s+(?:sections|contents|chapters)|analysis\s+for|item\s+relating\s+to)\b/i.test(head))
+    return true;
+  const m = /\bsections?\s+([0-9][0-9A-Za-z\-–]*)/i.exec(head);
+  if (m) return String(m[1]).toLowerCase() !== String(section || '').toLowerCase();
+  // A unit and a marker path name a provision WITHIN the section, and that is
+  // still a different provision: "Subsection (c) of such section is further
+  // amended" follows an instruction against (t)(8), and the block it introduces
+  // is not (t)(8)'s. Only the anaphor with no address of its own — "Such section
+  // is further amended" — continues the same one.
+  RE_HEAD_UNIT ??= new RegExp(
+    `^(?:\\([A-Za-z0-9]{1,4}\\)\\s*)*(?:[A-Z][^.;\\n]{0,70}?\\.--\\s*)?(?:${UNIT_WORDS})\\s+((?:${MARKER})+)`,
+    'i'
+  );
+  const u = RE_HEAD_UNIT.exec(head);
+  if (u) return u[1] !== String(subsection || '');
+  return /\b(?:chapter|subchapter|part|subtitle|title)\s+[0-9IVXLC]/i.test(head);
+}
 
 /**
  * Where the next unrecognised instruction begins, or `limit`.
@@ -1453,13 +1504,13 @@ const RE_LOOSE_HEAD = new RegExp(
  * @param {number} from   this instruction's headEnd
  * @param {number} limit  the bound already established by the other three rules
  */
-function looseHeadEnd(text, from, limit) {
+function looseHeadEnd(text, from, limit, section, subsection) {
   RE_LOOSE_HEAD.lastIndex = from;
   let m;
   while ((m = RE_LOOSE_HEAD.exec(text))) {
     const at = m.index + m[0].indexOf(m[1]);
     if (at >= limit) break;
-    if (!quotedBlockAt(text, at)) return at;
+    if (!quotedBlockAt(text, at) && namesOther(m[1], section, subsection)) return at;
     RE_LOOSE_HEAD.lastIndex = at + 1;
   }
   return limit;
@@ -4081,7 +4132,7 @@ export function extractAmendments(text, citations, divisions = [], sections = []
   const out = merged.flatMap((h, i) => {
     const nextHead = i + 1 < merged.length ? merged[i + 1].start : text.length;
     const hardEnd = Math.min(nextHead, h.headEnd + MAX_AMEND_BODY, secEnd(h.start), text.length);
-    const bodyEnd = looseHeadEnd(text, h.headEnd, hardEnd);
+    const bodyEnd = looseHeadEnd(text, h.headEnd, hardEnd, h.section, h.subsection);
     const body = text.slice(h.headEnd, bodyEnd);
 
     // Prefer an explicit code citation inside the head — "(42 U.S.C. 1395x(s)(2))"
