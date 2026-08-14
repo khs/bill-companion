@@ -411,8 +411,40 @@ const AMEND_MIDDLE =
   '(?:(?!\\n[ \\t]*\\n)(?!\\.\\s*--)(?!\\.\\s+SEC\\.)(?!\\.\\s*\\([A-Za-z0-9]{1,8}\\)\\s)' +
   `(?:[^;]|${SEMI_IN_PAREN}))`;
 
+// "is FURTHER amended" is an amendatory verb, and the qualifier is part of it.
+//
+// A bill that touches one provision twice writes the second instruction
+// "Section 2(a) of the Securities Act of 1933 (15 U.S.C. 77b(a)), as amended by
+// section 101, is further amended--", and requiring the verb to follow "is"
+// immediately made every one of them invisible: not mis-targeted, not
+// ambiguous, simply never seen. The House-passed CLARITY Act has three, one of
+// which adds a whole paragraph (19) to 12 U.S.C. 411.
+//
+// Measured rather than guessed, which is the only way to write an alternation
+// like this: across the corpus the qualifier is `further` 361 times, `each` 62,
+// `hereby` 11 and `both` once, and nothing else occurs at all. "are each
+// amended" is the distributed form, so RE_DISTRIBUTED claims it first and this
+// sees only what that leaves.
+const AMEND_QUALIFIER = '(?:further\\s+|each\\s+|hereby\\s+|both\\s+)?';
+
+// "…as amended by section 202, is further amended" — the section named there is
+// a subdivision of THIS BILL, not the target, and an instruction head may not
+// begin inside the phrase.
+//
+// Item 106 establishes this for citations; here it arrives through the `m` flag.
+// AMEND_BOUNDARY admits `^`, which under `m` is the start of any LINE, so
+// whether the phrase is read as a head depends on where the 72-column wrap
+// happens to fall. The House-passed CLARITY Act proves it: govinfo breaks the
+// line right before "section 202" and the typeset print does not, so the same
+// sentence made an extra targetless instruction in one rendition and not the
+// other — and it carried the whole of new SEC. 4C with it. A line break is
+// typography, not a boundary between instructions.
+const RE_NOT_AFTER_AS_AMENDED =
+  '(?<!\\bas\\s{0,40}(?:so\\s{0,40})?(?:amended|added|redesignated|inserted|revised)\\s{0,40}by\\s{0,40})';
+
 const RE_AMEND_HEAD = new RegExp(
   AMEND_BOUNDARY +
+    RE_NOT_AFTER_AS_AMENDED +
     // "Subsection (b)(1)(B) of such section 119, as so amended, is amended" —
     // "such" is how a bill refers back to a section it named a paragraph ago,
     // and without it the inner unit stopped matching and the instruction was
@@ -422,7 +454,7 @@ const RE_AMEND_HEAD = new RegExp(
     '([0-9]+[A-Za-z]*)' +
     `(${SUBSEC})` +
     `(${AMEND_MIDDLE}{0,240}?)` +
-    '\\s+(is|are)\\s+(amended|repealed|redesignated)',
+    `\\s+(is|are)\\s+${AMEND_QUALIFIER}(amended|repealed|redesignated)`,
   'gm'
 );
 

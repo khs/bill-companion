@@ -6833,3 +6833,111 @@ LVXXXVI--FEDERAL MARITIME
    truncated body must leave no strike without its replacement. All four fail
    against the old build. selftest 800 -> 808, rendertest 521, proptest clean,
    paneltest clean at 170 sentences, corpus updated.
+
+112. **"is FURTHER amended" is an amendatory verb, and neither the parser nor
+   the counter that watches it could see one.** (2026-08-13, the second finding
+   of the pdf-path lens, and it came out of item 111's own fixture.) A bill that
+   touches one provision twice writes the second instruction
+
+   ```
+   Section 738 of the Federal Food, Drug, and Cosmetic Act (21 U.S.C. 379j),
+   as amended by section 3309, is further amended--
+   ```
+
+   and `RE_AMEND_HEAD` ends `(is|are)\s+(amended|repealed|redesignated)`, with
+   nothing admitted between. So the head was never seen — not mis-targeted, not
+   ambiguous, simply invisible — and its ten operations fell inside the PREVIOUS
+   instruction's body and were drawn on **21 U.S.C. 379j-42, a different section
+   of the same Act**. That is the worst category this file has: a real provision,
+   wrongly named.
+
+   **`uncoveredVerbs` could not see it either, which is why it lasted.** The
+   counter exists so a gap stays visible instead of hiding as a wrong answer, and
+   its pattern is the same one — so the 435 qualified verbs across the corpus were
+   not a tracked shortfall, they were nothing at all. Verbs sitting outside every
+   parsed instruction: **285 by the old count, 580 by an honest one.** The tail
+   this file has tracked since item 2 as "a hundred-odd one-off phrasings with a
+   largest cluster of 4" was undercounted by half, and the largest cluster in it
+   was 140.
+
+   The alternation is measured, not guessed, which is the only way to write one:
+   across the corpus the qualifier is `further` 361 times, `each` 62, `hereby` 11
+   and `both` once, and **nothing else occurs at all**. "are each amended" is the
+   distributed form, so `RE_DISTRIBUTED` claims it first and this sees what is
+   left.
+
+   **And `selftest` kept its own copy of the counter**, which is how the drift
+   showed itself: `measure.mjs` learned the qualifier, the corpus reported 435
+   more verbs, and the suite could not see one. It is imported now. The standing
+   rule about a metric meaning something slightly different in two reports, broken
+   in the one place nobody looks — the test. It earned itself on the first run,
+   reporting 3 uncovered verbs in a fixture that had asserted 0 for the life of
+   the project, and all three were this shape.
+
+   **A line break is typography, not a boundary between instructions.** Admitting
+   the qualifier made the two extraction paths disagree again, and item 111's new
+   differential caught it within a minute of the change:
+
+   ```
+   The Securities Act of 1933 (15 U.S.C. 77a et seq.), as amended by
+   section 202, is further amended by inserting after section 4B the following:
+   ```
+
+   `AMEND_BOUNDARY` admits `^`, and `RE_AMEND_HEAD` carries the `m` flag, so `^`
+   is the start of any LINE — govinfo breaks this one right before "section 202"
+   and the typeset print does not. The plain text therefore made an extra
+   instruction out of a back-reference to the bill's own section 202, targeting
+   nothing and carrying the whole of new SEC. 4C with it; the print made none.
+   `RE_NOT_AFTER_AS_AMENDED` refuses a head that begins inside the phrase, which
+   is item 106's rule arriving in the amendment head. Guarded, the two paths agree
+   again at 65 instructions and 74 inserts.
+
+   The corpus decomposes exactly, all three measured against the same baseline:
+
+   ```
+                            amendments   opSpans   uncoveredVerbs
+     the counter alone            0          0          +299
+     + the qualifier           +214       +415          +135
+     + the as-amended guard    +209       +410          +140
+   ```
+
+   — so the guard costs 5 instructions and 5 spans and hands those 5 verbs back
+   to the counter rather than letting them hide as a wrong attribution, and the
+   qualifier covers 164 verbs that were outside every instruction. `targeted
+   +143`, `refs +240`, `relative +189`, `steps +116`, `ops.strike +143`,
+   `ops.insert +172`, `ops.add-at-end +80`, `ops.repeal +7` (which is
+   "is hereby repealed", also never matched before). **Nothing fell anywhere**,
+   on any bill, and `overlaps`, `badOffsets` and `badOpOffsets` stay 0.
+
+   Audited three ways, because a change that MAKES instructions is the risky
+   direction:
+
+   - **Where the head names a bare Code section — no Act, no title, no
+     parenthetical — it agrees with the resolved target 60 times and disagrees
+     0.** The first two cuts of that check were wrong and not the app: one took
+     the LAST "section N" in the head, which is the cross-reference inside the
+     body or the bill's own section in "as amended by", and one compared an
+     Act-relative number against a Code one, so SBA § 7 "disagreed" with
+     15 U.S.C. 636. Check the instrument before the product.
+   - **Spans claimed by two instructions: 22 before and 22 after** — the
+     pre-existing distributed shape, unmoved — and 0 operations past their
+     instruction's bill section.
+   - **Marks 3,302 -> 3,355, 60 added and 7 withdrawn.** All 45 added `was` marks
+     are on `-enr` bills, which is the signature an in-force claim needs. The 7
+     withdrawals are the 21 U.S.C. 379j case above and three like it: the same
+     operations moving off the neighbouring instruction's target and onto their
+     own. Not one is a loss.
+
+   selftest 808 (the house print gains 2 amendments and 3 additions, one of them
+   SEC. 603's paragraph (19) for 12 U.S.C. 411), rendertest 521, proptest clean,
+   paneltest clean, corpus updated.
+
+   **The one verb still outside an instruction in that print is the counter doing
+   its job.** "The Securities Act of 1933 (15 U.S.C. 77a et seq.), as amended by
+   section 202, is further amended" names no section of its own, so there is
+   nothing for `RE_AMEND_HEAD` to match, and a whole new SEC. 4C of the
+   Securities Act reaches no instruction. Blank beats wrong; the assertion is
+   1 rather than 0 so the gap stays visible. That is TODO 2's work — one
+   phrasing at a time — and the shape is "<Act name> (<cite> et seq.) is
+   amended", which item 33's `distributed` machinery is the nearest thing to
+   already having.

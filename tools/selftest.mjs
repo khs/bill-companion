@@ -4198,17 +4198,16 @@ section('CLARITY Act (H.R. 3633)');
  * above the list of provisions it applies to, and each resulting amendment is
  * anchored on its own list item further down. `viaInstruction` points back at
  * that head, so the verb still counts as covered — by four amendments at once.
+ *
+ * IMPORTED, not re-spelled. This file kept its own copy for the life of the
+ * project, and the two drifted the moment measure.mjs learned that "is FURTHER
+ * amended" is an amendatory verb: the corpus reported 435 more of them and this
+ * suite could not see one, so a fixture full of them would have asserted zero
+ * uncovered and been right about nothing. That is the standing rule about a
+ * metric meaning something slightly different in two reports, broken in the one
+ * place nobody looks — the test.
  */
-function uncoveredAmendVerbs(text, ams) {
-  const re = /\b(is|are)\s+(amended|repealed)\b/g;
-  let m;
-  let n = 0;
-  while ((m = re.exec(text))) {
-    const i = m.index;
-    if (!ams.some((a) => i >= (a.viaInstruction ?? a.start) && i <= a.end)) n++;
-  }
-  return n;
-}
+const { uncoveredAmendVerbs } = await imp('tools/measure.mjs');
 
 function opCounts(ams) {
   const by = {};
@@ -4447,9 +4446,23 @@ if (existsSync(clarityPdfPath)) {
   ok('  and stops at the first of the three names it gives itself',
      !/CLARITY Act of 2025|Anti-CBDC/.test(bill.meta.shortTitle || ''), bill.meta.shortTitle);
 
-  eq('house print: finds the amendments', ams.length, 63);
-  eq('  all but one resolve a target', ams.filter((a) => a.target).length, 62);
-  eq('  every amendatory verb is inside one', uncoveredAmendVerbs(text, ams), 0);
+  // 65, not 63: two of this print's three "is FURTHER amended" instructions are
+  // now seen. Both were invisible rather than mis-targeted — the verb pattern
+  // required the participle to follow "is" immediately — and one of them adds a
+  // whole paragraph (19) to 12 U.S.C. 411.
+  eq('house print: finds the amendments', ams.length, 65);
+  eq('  all but one resolve a target', ams.filter((a) => a.target).length, 64);
+  // The third is left, and this is the counter doing its job rather than
+  // failing: "The Securities Act of 1933 (15 U.S.C. 77a et seq.), as amended by
+  // section 202, is further amended by inserting after section 4B the
+  // following:" names no section of its own, so RE_AMEND_HEAD has nothing to
+  // match. It used to be "covered" in the plain-text rendition only, because
+  // the 72-column wrap put "section 202" at the head of a line and `^` under
+  // the `m` flag took it for an instruction boundary — a targetless instruction
+  // carrying the whole of new SEC. 4C, in one rendition and not the other.
+  // Blank beats wrong, and an uncovered verb is how the gap stays visible.
+  eq('  and the one still outside is the shape nothing can target',
+     uncoveredAmendVerbs(text, ams), 1);
 
   // Two "Each of the following … is amended by …:" instructions, four listed
   // provisions each. Both were invisible: the phrase names no provision, so
@@ -4507,7 +4520,7 @@ if (existsSync(clarityPdfPath)) {
      // as amended by section 2, is further amended by adding at the end", makes
      // no instruction at all: RE_AMEND_HEAD cannot cross the interposed
      // ", as amended by section N,". 170 heads across the corpus are that shape.
-     JSON.stringify({ 'add-at-end': 26, insert: 74, redesignate: 8, strike: 44, replace: 2 }));
+     JSON.stringify({ 'add-at-end': 29, insert: 74, redesignate: 8, strike: 44, replace: 2 }));
   // Counted against the source: 17 quoted insert operands in this print run
   // past the budget, 7 of which the after-unit reader already claimed.
   {
@@ -4527,7 +4540,7 @@ if (existsSync(clarityPdfPath)) {
     // 26 of the 31, not 27: one of the five unparsed is SEC. 603's, whose head
     // carries an interposed ", as amended by section 2,". It used to be counted
     // here because the two-argument call let SEC. 602 reach across the heading.
-    eq('  additions parsed out of them', adds.length, 26);
+    eq('  additions parsed out of them', adds.length, 29);
     eq('  every one carries the language it adds', adds.filter((o) => o.text).length, adds.length);
 
     // THE scoping guard, and the reason this whole path needed rewriting.
@@ -4570,7 +4583,7 @@ if (existsSync(clarityPdfPath)) {
   // +10 for the over-budget blocks with no anchor phrase the after-unit reader
   // can read, and this is again the assertion that makes them trustworthy: ten
   // new ops producing ten new DISTINCT spans is what proves none was read twice.
-  eq('  which collapse to distinct spans', spans.size, 134);
+  eq('  which collapse to distinct spans', spans.size, 137);
   const quoted = ams.flatMap((a) => a.ops).filter((o) => o.text);
   ok('  and they are real quoted language', quoted.some((o) => /digital commodity/i.test(o.text)),
      JSON.stringify(quoted.slice(0, 3).map((o) => o.text)));

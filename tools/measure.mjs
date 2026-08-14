@@ -51,9 +51,22 @@ export function unwrapPre(html) {
     .replace(/&amp;/g, '&');
 }
 
-/** Every "is amended" must fall inside a parsed amendment. See selftest.mjs. */
+/**
+ * Every "is amended" must fall inside a parsed amendment. See selftest.mjs.
+ *
+ * The qualifier is part of the verb, and leaving it out made this instrument
+ * blind to 435 amendatory verbs across the corpus — "is FURTHER amended" is one
+ * of the commonest phrasings there is, and "are each amended" is the whole
+ * distributed form. Verbs sitting outside every parsed instruction were 285 by
+ * the old count and 580 by this one, so the tail this project tracks as a
+ * hundred-odd one-off phrasings was undercounted by half.
+ *
+ * The four are measured, not guessed: further 361, each 62, hereby 11, both 1,
+ * and nothing else occurs. An alternation with a dead branch is a claim about
+ * the corpus that nobody checked.
+ */
 export function uncoveredAmendVerbs(text, ams) {
-  const re = /\b(is|are)\s+(amended|repealed)\b/g;
+  const re = /\b(is|are)\s+(?:further\s+|each\s+|hereby\s+|both\s+)?(amended|repealed)\b/g;
   let m;
   let n = 0;
   while ((m = re.exec(text))) {
