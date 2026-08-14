@@ -18,6 +18,7 @@ node tools/declines.mjs <mode> <seed> <n> # not a test - the cases the app REFUS
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 node tools/coverage.mjs                   # not a test — what the redline actually draws
+node tools/marks.mjs --save f.txt         # not a test — every mark, to diff after a change
 python tools/ingest_usc.py --titles all   # ~5 min; writes per-section shards
 node tools/ingest_plaw.mjs                # 26 Public Laws; skips those present
 node tools/bundle.mjs --prune             # shards -> 159 bundles, verified, then deleted
@@ -1913,7 +1914,7 @@ app/resolve/bundle.js one shard out of a bundle, by HTTP Range
 tools/                ingest_usc.py · ingest_plaw.mjs · bundle.mjs · make-library.mjs ·
                       serve.py · selftest.mjs · rendertest.mjs · paneltest.mjs ·
                       measure.mjs (shared metrics) · impact.mjs · corpus.mjs ·
-                      marksample.mjs · dupes.mjs · declines.mjs
+                      marksample.mjs · marks.mjs · dupes.mjs · declines.mjs
 corpus/               corpus.json + baseline.json · files/ — all tracked
 data/usc/             tN.idx.json + tN.N.jsonl — 60,436 sections in 54 parts
 data/plaw/            26 Public Laws, same shape; both tracked — the data IS the site
