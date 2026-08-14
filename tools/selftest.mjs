@@ -1579,6 +1579,26 @@ section('resolving the target');
   ok('  and another Code is not read as the IRC', !oc || !oc.target || oc.target.title !== '26',
      JSON.stringify(oc?.target && [oc.target.title, oc.target.section]));
 
+  // 3c. The SUBJECT of the sentence can be a part of a section rather than a
+  // provision of it. The head needs "section <number>" right after the
+  // boundary, so a noun phrase in front of it made the whole instruction
+  // invisible — 34 across the corpus and the pending sample, every one naming a
+  // real section and every one reporting that the bill changes nothing. Both
+  // already had op-level consumers (markHeadingOps since item 88,
+  // markSentenceOps since item 89); only the head was missing.
+  const subj = p(
+    'SEC. 2. X.\nThe heading of section 2358 of title 10, United States Code, is amended by striking ``a\'\'.\n' +
+    'SEC. 3. Y.\nThe second sentence of section 9203 of title 10, United States Code, is amended by striking ``b\'\'.\n'
+  );
+  eq('a heading and a sentence are each an instruction', subj.length, 2);
+  eq('  the heading names its own section', subj[0]?.target?.section, '2358');
+  eq('  and the sentence names its own', subj[1]?.target?.section, '9203');
+  // The phrase contributes no MARKER, and that is what keeps it safe: innerSub
+  // composes the path out of the parenthesised markers in this group, and there
+  // are none, so the target is the section named and nothing is appended.
+  eq('  neither appends anything to the path',
+     `${subj[0]?.target?.subsection ?? '?'}|${subj[1]?.target?.subsection ?? '?'}`, '|');
+
   // 4. Head forms that were invisible.
   const anal = p('SEC. 2. X.\nThe table of sections at the beginning of chapter 1407 of title 10, United States Code, is amended by adding at the end the following.\n');
   eq('"table of sections at the beginning of" is an instruction', anal.length, 1);

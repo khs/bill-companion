@@ -442,14 +442,42 @@ const AMEND_QUALIFIER = '(?:further\\s+|each\\s+|hereby\\s+|both\\s+)?';
 const RE_NOT_AFTER_AS_AMENDED =
   '(?<!\\bas\\s{0,40}(?:so\\s{0,40})?(?:amended|added|redesignated|inserted|revised)\\s{0,40}by\\s{0,40})';
 
+// "Subsection (b)(1)(B) of such section 119, as so amended, is amended" —
+// "such" is how a bill refers back to a section it named a paragraph ago, and
+// without it the inner unit stopped matching and the instruction was lost.
+// Multiple markers too: the group took one, so "(b)(1)(B)" failed.
+const AMEND_INNER =
+  '(?:[Ss]ubsections?|[Pp]aragraphs?|[Ss]ubparagraphs?|[Cc]lauses?)\\s*' +
+  '(?:\\([A-Za-z0-9]{1,8}\\))+\\s+of\\s+(?:such\\s+)?';
+
+// …and the subject of the sentence can be a PART of a section rather than a
+// provision of it: "The heading of section 3402(f) is amended by striking",
+// "The second sentence of section 807(c) is amended to read as follows".
+//
+// Neither could be seen at all — the head needs "section <number>" to sit right
+// after the boundary, and here a noun phrase is in front of it. 34 instructions
+// across the corpus and the pending sample, every one naming a real section,
+// every one reporting that the bill changes nothing.
+//
+// Both already have op-level consumers and only the head was missing, which is
+// what makes this cheap: `markSentenceOps` has scoped an operation to "the
+// third sentence" since item 89, and `markHeadingOps` has refused to draw a
+// heading operation in the body since item 88. They read the phrase where it
+// qualifies an operation; nothing read it where it IS the subject.
+//
+// It contributes no marker, and that matters: `innerSub` composes the path from
+// the parenthesised markers in this group, and a heading has none — so the
+// target is the section the phrase names and nothing is appended to it.
+const SENTENCE_ORD =
+  'first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|' +
+  '1st|2d|2nd|3d|3rd|4th|5th|6th|7th';
+const AMEND_SUBJECT =
+  `[Tt]he\\s+(?:heading|(?:${SENTENCE_ORD})\\s+sentence)\\s+(?:of|for)\\s+(?:such\\s+)?`;
+
 const RE_AMEND_HEAD = new RegExp(
   AMEND_BOUNDARY +
     RE_NOT_AFTER_AS_AMENDED +
-    // "Subsection (b)(1)(B) of such section 119, as so amended, is amended" —
-    // "such" is how a bill refers back to a section it named a paragraph ago,
-    // and without it the inner unit stopped matching and the instruction was
-    // lost. Multiple markers too: the group took one, so "(b)(1)(B)" failed.
-    '((?:[Ss]ubsections?|[Pp]aragraphs?|[Ss]ubparagraphs?|[Cc]lauses?)\\s*(?:\\([A-Za-z0-9]{1,8}\\))+\\s+of\\s+(?:such\\s+)?)?' +
+    `(${AMEND_INNER}|${AMEND_SUBJECT})?` +
     '([Ss]ection|[Cc]hapter|[Pp]art|[Tt]itle)\\s+' +
     '([0-9]+[A-Za-z]*)' +
     `(${SUBSEC})` +

@@ -7074,3 +7074,92 @@ LVXXXVI--FEDERAL MARITIME
    reports the whole corpus as churn.
 
    `--dir` points it at any folder of bills, so it works on `pending/files` too.
+
+115. **TODO 2's clustering, re-run with an honest counter — and it is not a
+   tail.** (2026-08-13.) That item has said since 2026-08-02 that the uncovered
+   amendatory verbs are "134 distinct shapes with a largest cluster of 4 … there
+   is nothing systematic left in it. Stop looking for one." That conclusion was
+   reached with a counter blind to 435 verbs (item 112), so it was a statement
+   about a sample, not about the population.
+
+   Re-clustered over the 30 corpus bills and the 20 pending ones, **439
+   amendatory verbs sit outside every parsed instruction**, and they are not
+   evenly spread:
+
+   ```
+     61  subpart / subchapter / subtitle as the unit
+     31  the table of <sections|subchapters|contents> for …
+     22  the Nth sentence of section N
+     19  an Act named with no unit word
+     15  plural "Sections N"
+     12  the heading of section N
+      8  a marker LIST in the inner unit — "Paragraphs (1) and (2) of section N"
+      2  so much of X as precedes …
+   ```
+
+   Largest cluster 61, not 4. The instrument was the reason.
+
+   **Two are built here, and they are the two that name a real SECTION.** The
+   subject of the sentence can be a PART of a section rather than a provision of
+   it:
+
+   ```
+   The heading of section 3402(f) is amended by striking ``allowances''
+   The second sentence of section 807(c) is amended to read as follows:
+   The first sentence of section 470 of such Act (42 U.S.C. 670) is amended--
+   ```
+
+   `RE_AMEND_HEAD` needs "section <number>" immediately after the boundary, so a
+   noun phrase in front of it made the whole instruction invisible — not
+   mis-targeted, not ambiguous, absent. 34 across the two samples, every one
+   naming a real section, every one reporting that the bill changes nothing.
+
+   **Cheap because both already had op-level consumers and only the head was
+   missing.** `markSentenceOps` has scoped an operation to "the third sentence"
+   since item 89 and `markHeadingOps` has refused to draw a heading operation in
+   the body since item 88; both read the phrase where it QUALIFIES an operation,
+   and nothing read it where it IS the subject. The phrase contributes no marker,
+   which is what keeps it safe: `innerSub` composes the path out of the
+   parenthesised markers in that capture group and a heading has none, so the
+   target is the section named and nothing is appended to it. Asserted directly.
+
+   Corpus, accounted to the unit: `amendments +73` of which `targeted +69`
+   (95%); `opSpans +69` = strike 26 + insert 31 + replace 11 + add-at-end 1,
+   exactly; `steps +2`, `relative +2`; and **`uncoveredVerbs -33`**. The 73 new
+   instructions against 33 newly-covered verbs is the interesting ratio: the
+   other 40 verbs were already "covered" by sitting inside a NEIGHBOURING
+   instruction's over-reaching body, so those operations move off the wrong
+   target rather than appearing from nothing. Nothing fell anywhere else.
+
+   Marks **3,398 -> 3,414: 17 added, 1 withdrawn**, and the withdrawal is not a
+   loss — same mark, same path, same text, with the target moving from
+   26 U.S.C. 403(b)(12) to 403(b)(12)(A) because "The last sentence of section
+   403(b)(12)(A) … is amended" now names its own provision instead of its
+   parent. All 17 added marks are on enrolled bills and 13 are `was`.
+
+   Read end to end, bill against shard: the 2018 farm bill writes "The second
+   sentence of section 520 of the Housing Act of 1949 (42 U.S.C. 1490) is
+   amended-- (1) by striking ``or 2010 decennial census'' and inserting ``2010,
+   or 2020 decennial census''", and 42 U.S.C. 1490 reads "…data received from or
+   after the 1990, 2000, **2010, or 2020 decennial census**". The pane now says
+   the language is already in the law where it used to say nothing at all.
+
+   **The other six shapes are measured and left, with reasons.** The largest,
+   61 subpart/subchapter/subtitle heads, is not a blank the way the others were:
+   "Subpart D of part IV of subchapter A of chapter 1 of the Internal Revenue
+   Code of 1986 is amended by inserting after section 45X the following new
+   section" is how a tax bill ADDS a section, and a subpart is not addressable
+   in shards keyed by section — so an instruction would gain op chips in the
+   bill pane and no provision, which is a feature rather than a fix. It is also
+   already safe: `looseHeadEnd` cuts the previous body at these heads, so
+   nothing steals their operations. The 31 table-of-X and the 15 plural
+   "Sections N" both risk real harm — a clerical amendment names no provision,
+   and "Sections 3 and 4 are amended by striking X" taking only section 3 would
+   draw section 4's operations on section 3. The 8-strong marker list
+   ("Paragraphs (1) and (2) of section N are amended") is the one worth doing
+   next: the inner-unit group requires ADJACENT parens, so a list with "and" in
+   it fails, and item 55's `sameStyle`/`stealsMarker` already exist for exactly
+   that question.
+
+   selftest 811 -> 815 (all four fail against the old build), rendertest 521,
+   proptest clean, paneltest clean on both samples, corpus updated.
