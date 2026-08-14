@@ -6704,3 +6704,132 @@ LVXXXVI--FEDERAL MARITIME
    the two positives in one direction and the anaphoric negative in the other,
    which is what pins a guard rather than just a widening. rendertest 521,
    proptest clean, paneltest clean.
+
+111. **The two extraction paths had never once agreed, and the body budget was
+   measured in the wrong units.** (2026-08-13, the pdf-path lens.) `corpus.json`
+   has said since the fixture was added that the House-passed CLARITY Act's
+   typeset print and its govinfo plain text are "the only direct check that the
+   two extraction paths agree on one document". Nothing ever asked them. They
+   did not agree:
+
+   ```
+                    PDF   TEXT
+     ops.redesignate  8      6
+     ops.insert      74     72
+     opSpans        134    132
+     steps           46     44
+   ```
+
+   Same bill, same instructions, and every one of the four missing operations is
+   plainly present in both renditions. `MAX_AMEND_BODY` is a budget in SOURCE
+   characters, and govinfo indents its continuation lines where a typeset PDF
+   does not — the text rendition is **37% longer for the same bill** (353,798
+   characters against 259,001), so the same 2,500 bought less of it. "Section 1a
+   of the Commodity Exchange Act is amended" parsed to 12 operations from the
+   print and 8 from the text, both bodies stopping at ~2,565 characters.
+
+   **The correction is already written into this file, one instrument along.**
+   Item 83's L8 makes exactly this argument about the sixty-character window
+   that reads "each place it appears": a fixed slice of the raw string sees a
+   different amount of the sentence at every nesting depth. Nobody applied it to
+   the body. Measured over the corpus, **1,496 of 8,413 instructions sit at this
+   bound and the wrap takes up to 47% of what they were allowed to read** — so a
+   sub-instruction nested four deep got half the bill a flush one got, which is
+   backwards, since the deeply nested instruction is the one with the most
+   sub-parts. `budgetEnd()` counts a run of whitespace as one character. Only
+   the END is decided from the folded measure; every offset is still an index
+   into the original text.
+
+   **And a budget must not stop BETWEEN a strike and the insert that replaces
+   it**, which is the second half and was found by auditing the first. The bound
+   always falls inside some sub-instruction, and
+
+   ```
+   (D) in paragraphs (1) and (2), by striking ``acidification'' each place it
+   appears and inserting ``acidification and coastal acidification'';
+   ```
+
+   is one act. Cut between its halves, the strike is drawn alone: 33 U.S.C. 3705
+   took **22 strikethroughs through a word the bill is KEEPING**, in a provision
+   that already reads "ocean acidification and coastal acidification", with no
+   replacement beside them. Blank beats wrong, and half a substitution is the
+   wrong half. The tell is the pairing phrase `RE_REPLACES` itself looks for, so
+   the guard reaches the 11 instructions cut that way and leaves the other
+   ~1,485 at the bound alone. Bodies ending mid-substitution: **11 -> 4**, and
+   the 4 left are the probe matching a FOLLOWING instruction's "and inserting".
+
+   `balancedQuotes` is the wrong instrument for the extension and the first cut
+   used it, which refused all 11: a body legitimately holds an unclosed
+   quotation, because a multi-paragraph added block opens every paragraph and
+   closes only once at the very end. Counting openers against closers can never
+   balance inside one. The operand's OWN pair is local and says exactly where
+   the substitution stops — `QUOTE_PAIRS`, so a block opened with two backticks
+   is closed by two apostrophes and not by a curly double inside it.
+
+   Audited by where every mark LANDS: **3,217 -> 3,302, 91 added and 6
+   withdrawn.** All 66 of the added `was` marks are on `-enr` bills, which is the
+   signature an in-force claim needs, and the 22 wrong strikethroughs are gone.
+   The additions read correctly against the bill: the CLARITY Act's "Section 741
+   of title 11" writes seven sub-instructions (A) through (G) and the app was
+   reading five; hr4346's instruction on 33 U.S.C. 3705 writes (A) through (D)
+   and the app was reading (A) and (B).
+
+   **All 6 withdrawals are one cause, and it is item 67's documented hazard
+   rather than this change's.** Staleness is NEGATIVE evidence — "not one thing
+   this amendment strikes is still here" — asked of the whole provision, so a
+   single coincidental hit destroys it. An instruction that gains a real
+   operation whose operand is short and boilerplate flips it: 34 U.S.C. 20503
+   gains a strike of "In this section" from subsection (g), and the provision
+   contains "in this section" in subsection (a) — inside
+   "(referred to in this section as the `Secretary')", language THIS BILL
+   INSERTS. `stale` goes true -> false and four correct "already in the law"
+   marks go with it. s1177's is the same shape on "under this section". Both
+   provisions still net a mark or hold level; the loss is real but small.
+
+   **Measured and deliberately NOT built: scope-aware staleness.** Ignoring hits
+   that lie inside the amendment's own inserted language would rescue these, and
+   it would also flip **504 of the 981 non-stale amendments** to "already
+   happened" — because the commonest such hit is item 75's rewrite pattern,
+   where the operand surviving INSIDE the new phrase is exactly how the
+   amendment worked ("The Secretary", "with respect to", "For purposes"). That
+   is the most dangerous direction this app has and it wants its own measured
+   pass with a full mark audit, not a rider on a parse fix.
+
+   Two more found on the way and recorded rather than fixed:
+
+   - **`selftest` called `extractAmendments` with TWO arguments** in the whole
+     PDF block, so it asserted a parse the app does not produce: without the
+     sections, SEC. 602's instruction reached across the heading of SEC. 603 and
+     claimed the paragraph (19) that section adds to 12 U.S.C. 411, asserted as
+     `add-at-end: 27`. The same measuring-a-parse-nobody-sees mistake
+     `coverage.mjs` has made twice and two measurement scripts once each — this
+     time inside the test suite. Fixed; 27 -> 26.
+   - **`uncoveredVerbs` cannot see 434 amendatory verbs.** Its pattern is
+     `(is|are)\s+(amended|repealed)`, so "is FURTHER amended" — one of the
+     commonest phrasings there is — matches nothing. Verbs outside every parsed
+     instruction are **285 by the narrow count and 580 by the wide one**, so the
+     tail this file tracks is undercounted by half. And the largest single
+     uncovered shape is systematic by item 2's own double-digit test:
+     **`, as amended by section N of this Act, is further amended` — 140
+     occurrences**, plus 30 more with a different participle. `RE_AMEND_HEAD`
+     cannot cross the interposed clause. That is what orphans SEC. 603's
+     paragraph (19) once the section bound stops SEC. 602 stealing it.
+
+   Corpus, accounted to the unit: `opSpans +677` = strike 263 + insert 342 +
+   add-at-end 56 + replace 16, with `redesignate +34` carrying no span (item
+   39); `refs +346`, `relative +548`, `steps +312`; and **`uncoveredVerbs -2`**,
+   which is the mirror of items 70, 91 and 110, where contracting a body pushed
+   it up. **Nothing fell anywhere** — no metric decreased on any bill — and no
+   citation, amendment, targeted, section, division, overlap or offset count
+   moved at all. **7 bills are unchanged, including both PDF fixtures**, which
+   is the signature the theory predicts: a PDF has no wrap indentation to
+   reclaim. Spans claimed by two instructions: 22 before and 22 after, the
+   pre-existing distributed shape. Ops past their instruction's bill section: 0.
+
+   The differential is asserted now, as an IDENTITY rather than as numbers, so
+   it keeps its meaning when the parser changes: whatever the two paths produce,
+   they must produce the same. Two synthetic fixtures cover the units directly —
+   the same instruction flush and indented must parse identically, and a
+   truncated body must leave no strike without its replacement. All four fail
+   against the old build. selftest 800 -> 808, rendertest 521, proptest clean,
+   paneltest clean at 170 sentences, corpus updated.

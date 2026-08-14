@@ -929,6 +929,72 @@ section('relative navigation inside amendments');
   eq('a bill with no parsed sections is bounded as before', noSecs[0].end, loose[0].end);
 }
 {
+  // ---- …and the budget counts TEXT, not source ----------------------------
+  //
+  // A bill hard-wraps at ~72 columns and INDENTS its continuation lines, so a
+  // sub-instruction nested four deep carries 24 spaces on every line and a
+  // budget in source characters bought half as much of it as of a flush one —
+  // backwards, since the deeply nested instruction is the one with the most
+  // sub-parts. The corpus holds the House-passed CLARITY Act in both a typeset
+  // print and govinfo plain text, and they disagreed: 8 redesignations from the
+  // print against 6 from the text, 74 inserts against 72.
+  //
+  // Here the two typographies are written out directly, which is that
+  // differential in miniature: whatever the parser makes of one it must make of
+  // the other. Note the govinfo quote convention lives in DOUBLE-quoted JS
+  // strings — in a single-quoted one the '' closes the literal early, and in a
+  // template literal the `` closes the template.
+  const subs = (indent, n) =>
+    Array.from({ length: n }, (_, i) =>
+      indent + '(' + (i + 1) + ') in paragraph (' + (i + 1) +
+      "), by striking ``old" + i + "'' and inserting ``new" + i + "'';"
+    ).join('\n');
+  const head = 'SEC. 1. TEST.\n    Section 2 of the Widget Act (15 U.S.C. 2601) is amended--\n';
+  const mk = (indent, n) => {
+    const t2 = normalizeText(head + subs(indent, n) + '\n');
+    const b2 = parseBill(t2);
+    return extractAmendments(t2, extractCitations(t2), b2.divisions, b2.sections);
+  };
+  // 35 pairs: ~2,240 characters flush and ~2,800 indented, so the old budget
+  // reached the end of one and not of the other.
+  const flush = mk('', 35);
+  const deep = mk('                ', 35);
+  eq('the flush instruction parses every sub-instruction', opCounts(flush).strike, 35);
+  eq('  and the same instruction indented parses identically',
+     JSON.stringify(opCounts(deep)), JSON.stringify(opCounts(flush)));
+}
+{
+  // ---- …and it never stops between a strike and its replacement -----------
+  //
+  // Wherever the bound falls it falls inside some sub-instruction, and
+  // "by striking ``X'' and inserting ``Y''" is one act. Cut between its halves,
+  // the strike is drawn with nothing beside it: 33 U.S.C. 3705 took 22
+  // strikethroughs through a word the bill is KEEPING — the law already reads
+  // "ocean acidification and coastal acidification" — because the budget landed
+  // between "each place it appears" and "and inserting". Blank beats wrong, and
+  // half a substitution is the wrong half.
+  // "each place it appears" between the two halves is what widens the gap
+  // enough for the bound to land in it — which is exactly how the real case
+  // was written. Without the phrase the cut falls outside the pair and the
+  // fixture cannot fail at the thing it is here to cover.
+  const subs = Array.from({ length: 40 }, (_, i) =>
+    '                (' + (i + 1) + ') in paragraph (' + (i + 1) +
+    "), by striking ``alpha" + i + "'' each place it appears and inserting ``beta" + i + "'';"
+  ).join('\n');
+  const t2 = normalizeText(
+    'SEC. 1. TEST.\n    Section 2 of the Widget Act (15 U.S.C. 2601) is amended--\n' + subs + '\n'
+  );
+  const b2 = parseBill(t2);
+  const ams = extractAmendments(t2, extractCitations(t2), b2.divisions, b2.sections);
+  const ops = ams[0].ops;
+  const strikes = ops.filter((o) => o.type === 'strike').length;
+  const inserts = ops.filter((o) => o.type === 'insert').length;
+  // Bounded on both sides: the budget must really have truncated this, or the
+  // equality below is satisfied by an instruction that was never cut at all.
+  ok('the budget truncates a 40-pair instruction', strikes < 40, `${strikes} strikes`);
+  eq('  and leaves no strike without the insert that replaces it', strikes, inserts);
+}
+{
   // ---- …and at the next instruction, even one nothing can target -----------
   //
   // The three bounds above are the next RE_AMEND_HEAD match, 2,500 characters
@@ -4202,8 +4268,16 @@ if (existsSync(substitutePath)) {
   // whole new SECTION into the Securities Act and the Exchange Act — 969 and
   // 10,490 characters — after an anchor RE_INSERT_AFTER_UNIT cannot read,
   // because "section" is not one of the levels within a provision.
+  // +2 inserts when the body budget started counting TEXT rather than source:
+  // "Section 741 of title 11, United States Code, is amended--" writes seven
+  // sub-instructions (A) through (G) and its last two sat past 2,500 raw
+  // characters only because the wrap indents them. Both were read against the
+  // bill: (F) inserts the definition of `digital commodity' after paragraph (5)
+  // and (G) inserts ", ancillary asset positions, and digital commodities
+  // positions" in paragraph (8). Neither reaches "(b) Extent of Customer
+  // Claims", the next subsection of the bill's own section.
   eq('substitute: extracts the operations', JSON.stringify(opCounts(ams)),
-     JSON.stringify({ strike: 16, insert: 33, 'add-at-end': 10, redesignate: 4 }));
+     JSON.stringify({ strike: 16, insert: 35, 'add-at-end': 10, redesignate: 4 }));
   // Counted against the source rather than asserted at: five quoted insert
   // operands in this bill run past the 400-character budget, and all five now
   // have an op whose span round-trips. Two were already read by the after-unit
@@ -4260,7 +4334,8 @@ if (existsSync(substitutePath)) {
   // et seq. target. Unlike the two above this trades nothing: they carry
   // `noCite`, because the bill has written the address out and composing a chip
   // for it would displace the real one.
-  eq('substitute: composes the navigation steps', ams.reduce((n, a) => n + a.steps.length, 0), 28);
+  // 29, not 28: sub-instruction (G) above navigates to "paragraph (8)".
+  eq('substitute: composes the navigation steps', ams.reduce((n, a) => n + a.steps.length, 0), 29);
   eq('  three of which step into another section and compose no chip of their own',
      ams.reduce((n, a) => n + a.steps.filter((s) => s.noCite).length, 0), 3);
   // 29, not 34. Five unit phrases sit inside quoted law the bill is *inserting*
@@ -4277,8 +4352,8 @@ if (existsSync(substitutePath)) {
   // "(L)" is matched on the NEXT line's iteration, by which time the claim is
   // gone. So the phrase both scoped the operation AND pointed the reader at (L)
   // — the one provision it identifies itself by staying outside of.
-  eq('  and the in-place references', ams.reduce((n, a) => n + a.refs.length, 0), 25);
-  eq('  into relative addresses', expandRelativeRefs(cs, ams).filter((c) => c.relative).length, 47);
+  eq('  and the in-place references', ams.reduce((n, a) => n + a.refs.length, 0), 27);
+  eq('  into relative addresses', expandRelativeRefs(cs, ams).filter((c) => c.relative).length, 50);
   // The invariant behind those two, asserted rather than counted: a navigation
   // phrase absorbs the markers inside it, however the line happens to break.
   {
@@ -4323,7 +4398,15 @@ if (existsSync(clarityPdfPath)) {
   const text = normalizeText(raw);
   const bill = parseBill(text);
   const cs = extractCitations(text);
-  const ams = extractAmendments(text, cs);
+  // The four-argument call, because that is the one every real consumer makes.
+  // This block passed two for the life of the project and so asserted against a
+  // parse the app does not produce: without the sections, the instruction in
+  // SEC. 602 reached across the heading of SEC. 603 and claimed the paragraph
+  // (19) that section adds to 12 U.S.C. 411 — the over-reach the section bound
+  // exists to prevent, asserted as `add-at-end: 27`. Same mistake coverage.mjs
+  // has made twice and two measurement scripts once each: a test that calls the
+  // parser differently from the app is measuring a parse nobody sees.
+  const ams = extractAmendments(text, cs, bill.divisions, bill.sections);
 
   eq('house print: reads every page', pages, 258);
   eq('house print: finds every section', bill.sections.length, 66);
@@ -4418,7 +4501,13 @@ if (existsSync(clarityPdfPath)) {
      // Commodity Exchange Act, up to 32,716 characters, which the generic
      // scan's 400-character budget could not reach and RE_INSERT_AFTER_UNIT
      // does not claim because a section is not a level within a provision.
-     JSON.stringify({ 'add-at-end': 27, insert: 74, redesignate: 8, strike: 44, replace: 2 }));
+     // 26 add-at-ends, not 27 — see the four-argument call above. The 27th was
+     // SEC. 603's paragraph (19), claimed by SEC. 602's instruction. Its real
+     // owner, "Section 16 of the Federal Reserve Act (12 U.S.C. 411 et seq.),
+     // as amended by section 2, is further amended by adding at the end", makes
+     // no instruction at all: RE_AMEND_HEAD cannot cross the interposed
+     // ", as amended by section N,". 170 heads across the corpus are that shape.
+     JSON.stringify({ 'add-at-end': 26, insert: 74, redesignate: 8, strike: 44, replace: 2 }));
   // Counted against the source: 17 quoted insert operands in this print run
   // past the budget, 7 of which the after-unit reader already claimed.
   {
@@ -4435,7 +4524,10 @@ if (existsSync(clarityPdfPath)) {
     const phrases = text.match(/adding\s+at\s+the\s+end\s+the\s+following/gi) || [];
     const adds = ams.flatMap((a) => a.ops.filter((o) => o.type === 'add-at-end'));
     eq('house print: phrases in the bill', phrases.length, 31);
-    eq('  additions parsed out of them', adds.length, 27);
+    // 26 of the 31, not 27: one of the five unparsed is SEC. 603's, whose head
+    // carries an interposed ", as amended by section 2,". It used to be counted
+    // here because the two-argument call let SEC. 602 reach across the heading.
+    eq('  additions parsed out of them', adds.length, 26);
     eq('  every one carries the language it adds', adds.filter((o) => o.text).length, adds.length);
 
     // THE scoping guard, and the reason this whole path needed rewriting.
@@ -4478,7 +4570,7 @@ if (existsSync(clarityPdfPath)) {
   // +10 for the over-budget blocks with no anchor phrase the after-unit reader
   // can read, and this is again the assertion that makes them trustworthy: ten
   // new ops producing ten new DISTINCT spans is what proves none was read twice.
-  eq('  which collapse to distinct spans', spans.size, 135);
+  eq('  which collapse to distinct spans', spans.size, 134);
   const quoted = ams.flatMap((a) => a.ops).filter((o) => o.text);
   ok('  and they are real quoted language', quoted.some((o) => /digital commodity/i.test(o.text)),
      JSON.stringify(quoted.slice(0, 3).map((o) => o.text)));
@@ -4506,6 +4598,48 @@ if (existsSync(clarityPdfPath)) {
   eq('house print: all offsets round-trip', badPdf.length, 0);
 
   console.log(`  · house print: ${pages} pages, ${bill.sections.length} sections, ${cs.length} citations, ${ams.length} amendments`);
+  // ------------------------------------------------ the two paths, one bill
+  //
+  // corpus.json has said for the life of this fixture that the House-passed
+  // print and the govinfo plain text of the SAME bill are "the only direct
+  // check that the two extraction paths agree on one document", and nothing
+  // ever asked them. They did not agree: the text rendition produced 6
+  // redesignations against the print's 8 and 72 inserts against 74, because it
+  // is 37% longer for the same bill — govinfo indents its continuation lines
+  // and a typeset PDF does not — so the body budget bought less of it. Both
+  // renditions plainly contain all four missing operations.
+  //
+  // Asserted as an IDENTITY rather than as numbers, so it keeps its meaning
+  // when the parser changes: whatever the two paths produce, they must produce
+  // the same. The counts above pin the value; this pins the agreement.
+  const clarityTextPath = join(ROOT, 'corpus/files/hr3633-119-eh-text.htm');
+  if (existsSync(clarityTextPath)) {
+    const html = readFileSync(clarityTextPath, 'utf8');
+    const m = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
+    const t2 = normalizeText(
+      (m ? m[1] : html)
+        .replace(/<[^>]+>/g, '')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+    );
+    const b2 = parseBill(t2);
+    const c2 = extractCitations(t2);
+    const a2 = extractAmendments(t2, c2, b2.divisions, b2.sections);
+    eq('house print vs plain text: the same bill has the same operations',
+       JSON.stringify(opCounts(a2)), JSON.stringify(ops));
+    eq('  the same number of instructions', a2.length, ams.length);
+    eq('  the same sections', b2.sections.length, bill.sections.length);
+    eq('  and the same navigation steps',
+       a2.reduce((n, a) => n + a.steps.length, 0),
+       ams.reduce((n, a) => n + a.steps.length, 0));
+  } else {
+    console.log('  (corpus/files/hr3633-119-eh-text.htm missing — differential skipped)');
+  }
+
   console.log(`  · ops: ${JSON.stringify(ops)}`);
 } else {
   console.log('  (samples/hr3633eh-clarity-act-house-passed.pdf missing — skipped)');

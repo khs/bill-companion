@@ -1387,6 +1387,78 @@ function placeOps(text, ops) {
 // unrelated bill text and swallow everything in between.
 const MAX_AMEND_BODY = 2500;
 
+/**
+ * …and the budget is 2,500 characters of TEXT, not of source.
+ *
+ * A bill hard-wraps at ~72 columns and INDENTS its continuation lines, so a
+ * sub-instruction nested four deep carries 24 spaces on every line of itself
+ * and the same budget covers half as much of it as it covers of a flush one.
+ * That is exactly backwards: a deeply nested instruction is the one with the
+ * most sub-parts to read. Measured over the corpus, 1,496 of 8,413 instructions
+ * sit at this bound and the wrap takes up to 47% of what they were allowed to
+ * read.
+ *
+ * The identical correction is already made for the "each place it appears"
+ * window, and the evidence here is a differential one: the House-passed CLARITY
+ * Act is in the corpus twice, once as a typeset PDF and once as govinfo plain
+ * text, and its "Section 1a of the Commodity Exchange Act is amended"
+ * instruction yielded 12 operations from the PDF and 8 from the text — same
+ * bill, same 2,500 characters, and the text rendition spent a third of them on
+ * indentation. All four missing operations are plainly in both renditions.
+ *
+ * Only the END is decided here. Every offset the parsers use is an index into
+ * the original text; nothing is computed against a folded copy, which is what
+ * keeps this on the safe side of the offsets invariant.
+ */
+function budgetEnd(text, from, max) {
+  let spent = 0;
+  let wasSpace = false;
+  let i = from;
+  for (; i < text.length && spent < max; i++) {
+    const space = text.charCodeAt(i) <= 32;
+    if (!space || !wasSpace) spent++;
+    wasSpace = space;
+  }
+  // …and it must not stop BETWEEN a strike and the insert that replaces it.
+  //
+  // "by striking ``acidification'' each place it appears and inserting
+  // ``acidification and coastal acidification''" is one act, and a bound
+  // falling between its halves leaves the strike drawn with nothing beside it:
+  // 33 U.S.C. 3705 took 22 strikethroughs through a word the bill is KEEPING —
+  // the law already reads "ocean acidification and coastal acidification" — and
+  // the reader was shown a deletion where the bill wrote a substitution. Blank
+  // beats wrong, and half a substitution is the wrong half.
+  //
+  // Narrow on purpose: the tell is the pairing phrase RE_REPLACES itself looks
+  // for, so this reaches the 11 instructions cut that way and leaves the other
+  // ~1,485 at the bound alone. The quote test is what stops it running on — the
+  // extension ends at the first sub-instruction boundary outside a quotation,
+  // so it takes the operand and nothing after it.
+  const m = RE_CUT_MID_REPLACE.exec(text.slice(i, i + REPL_TAIL_WINDOW));
+  if (!m) return i;
+  // Just past the replacement's own operand, and not one character further.
+  //
+  // NOT balancedQuotes: a body legitimately holds an unclosed quotation, since
+  // a multi-paragraph added block opens every paragraph and closes only once at
+  // the very end. Counting openers against closers can never balance inside one,
+  // which is why the first cut of this refused all 11. The operand's OWN pair is
+  // local and says exactly where the substitution stops.
+  const openAt = i + m[0].length - m[1].length;
+  const pair = QUOTE_PAIRS.find(([open]) => text.startsWith(open, openAt));
+  if (!pair) return i;
+  const close = text.indexOf(pair[1], openAt + pair[0].length);
+  if (close < 0 || close > i + MAX_REPL_TAIL) return i;
+  return close + pair[1].length;
+}
+// The gap a strike leaves in front of its own replacement, and nothing wider:
+// no sub-instruction boundary may intervene, or the phrase belongs to the NEXT
+// instruction rather than to this one. The opener is captured so the operand's
+// closing convention is the matching one — a block opened with two backticks is
+// closed by two apostrophes and not by a curly double appearing inside it.
+const RE_CUT_MID_REPLACE = /^[^;.]{0,60}?\b(?:and|by)\s+inserting\b[^`‘“"]{0,40}?(``|‘‘|“|")/i;
+const REPL_TAIL_WINDOW = 120;
+const MAX_REPL_TAIL = 600;
+
 // The operative verbs inside an amendment, and the language they quote.
 //
 // Quote style varies by source and every one of these must work: govinfo plain
@@ -4131,7 +4203,12 @@ export function extractAmendments(text, citations, divisions = [], sections = []
 
   const out = merged.flatMap((h, i) => {
     const nextHead = i + 1 < merged.length ? merged[i + 1].start : text.length;
-    const hardEnd = Math.min(nextHead, h.headEnd + MAX_AMEND_BODY, secEnd(h.start), text.length);
+    const hardEnd = Math.min(
+      nextHead,
+      budgetEnd(text, h.headEnd, MAX_AMEND_BODY),
+      secEnd(h.start),
+      text.length
+    );
     const bodyEnd = looseHeadEnd(text, h.headEnd, hardEnd, h.section, h.subsection);
     const body = text.slice(h.headEnd, bodyEnd);
 
