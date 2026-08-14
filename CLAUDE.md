@@ -6566,3 +6566,59 @@ LVXXXVI--FEDERAL MARITIME
    period", 19 "at the end", 12 "before the semicolon at the end", and a tail.
    The fix wants the position captured at parse time, where the
    `PUNCT_UNIT_TAIL`/`RE_AT_THE_END` family already reads these words for strikes.
+
+109. **The bill says where the language goes, in words, and nothing read it.**
+   (2026-08-12, the third finding of the panel-truth lens.) "by inserting before
+   the period at the end the following:" states the position in five words. The
+   panel picks its sentence on `op.replaces != null || op.anchor` alone, so an
+   insert positioned in prose set neither, reached the redline with no anchor and
+   no paired strike, fell through both branches of `apply()` and drew nothing —
+   and the row read **"⚠ position not stated"**, with a note beneath whose own
+   parenthetical ("a position described in words rather than quoted")
+   contradicts the sentence it explains. **125 of that sentence's 1,327
+   occurrences.**
+
+   The position is computable, so it is captured rather than merely described.
+   `markEndInserts()` reads the phrase BACKWARD from the operand — unlike `atEnd`
+   on a strike, this one is written before the language it places — in all four
+   spellings the corpus uses:
+
+   ```
+   inserting before the period at the end the following:   66  .
+   inserting before the semicolon the following:           23  ;
+   inserting at the end the following:                     22  (end)
+   inserting the following before the comma:                3  ,
+   ```
+
+   114 operations. The window is bounded at the previous semicolon or full stop
+   so the phrase is the op's OWN insert verb rather than a neighbouring
+   sub-instruction's.
+
+   **Three guards, and two of them are item 100's, learned there the hard way.**
+   The scope must name THIS passage rather than an ancestor — every item in a
+   list ends with the same punctuation, so an ancestor scope places the language
+   in the first sibling — and a widened scope is not a position at all. The third
+   is new and is the honest half: **the punctuation the bill names has to BE
+   there.** Where it is not, the provision has been amended since and the position
+   cannot be trusted; that is a decline rather than a guess at the end of the
+   passage.
+
+   Marks 3,171 → 3,224: **3 withdrawn and 56 added.** All three withdrawals are a
+   `del` replaced by a `was` at the same node covering the whole inserted phrase —
+   item 75's mechanism, reachable at last. Of the 56 added, **39 are in-force
+   marks and all 39 are on enrolled bills**; 17 are green pending inserts, 3 of
+   them on the CLARITY substitute, which is a pending bill and where a proposed
+   change is exactly what should be drawn.
+
+   Sentence census, closing to the unit: **"⚠ position not stated" 1,327 →
+   1,225**, of which 39 became "already in the law — marked above", 17 "shown
+   above", 14 the held-back sentences of item 108, and **32 a new and true
+   sentence** — "⚠ the position the bill names is not in this provision" — for
+   the ops whose named punctuation the Code no longer carries. `endInsert` is set
+   at parse time on the op the panel itself holds, so unlike `heldFor` it needs
+   no accessor.
+
+   selftest 791 → 797, rendertest 521, proptest clean, paneltest clean, corpus
+   unchanged — a placement is invisible to `opSpans`, which keys on
+   `type:start-end`, so the mark diff was the measurement here as it has been
+   throughout.

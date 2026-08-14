@@ -134,6 +134,9 @@ const CLAIMS = [
   [/anchor found/i, false],
   [/not found verbatim/i, false],
   [/anchor text not found/i, false],
+  // The bill named a position the provision does not have — still not drawn,
+  // but a different and true reason from having named none.
+  [/the position the bill names is not in this provision/i, false],
   [/position not stated/i, false],
   [/which is not in this provision/i, false],
   [/not shown here/i, false],

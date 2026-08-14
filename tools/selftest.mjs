@@ -3418,6 +3418,51 @@ section('a bill talking about its own subdivisions');
      compose('    (b) More.--In subsection (b), by striking the first sentence.\n').length > 0, '');
 }
 
+// "by inserting before the period at the end the following:" states the
+// position in WORDS. Nothing read it, so the op reached the redline with neither
+// a paired strike nor an anchor, fell through both branches and drew nothing —
+// and the panel said "⚠ position not stated" about a bill that states it.
+section('a position stated in words');
+{
+  const O = '``';
+  const C = "''";
+  const { createRedline } = await imp('app/ui/redline.js');
+  const mk = (phrase) => {
+    const t = normalizeText(
+      'SEC. 1. SHORT TITLE.\n\nSEC. 2. X.\n' +
+      '    Section 5312(c)(1)(A) of title 31, United States Code, is amended by\n' +
+      `${phrase}\n${O}and any digital commodity exchange registered under this Act${C}.\n`
+    );
+    return (extractAmendments(t, extractCitations(t))[0]?.ops || []).find((o) => o.type === 'insert');
+  };
+  eq('the punctuation the bill names is captured',
+     mk('inserting before the period at the end the following:')?.endInsert?.punct, '.');
+  eq('  in the trailing spelling too',
+     mk('inserting the following before the semicolon:')?.endInsert?.punct, ';');
+  eq('  and a bare "at the end" names no punctuation',
+     mk('inserting at the end the following:')?.endInsert?.punct, null);
+
+  // Placed immediately before the trailing punctuation of the passage the
+  // instruction names — and NOT where that punctuation is absent, which means
+  // the provision has been amended since and the position cannot be trusted.
+  const op = { id: 'p1', type: 'insert', start: 0, end: 1, scope: '(c)(1)(A)',
+               text: 'and any digital commodity exchange', endInsert: { punct: '.' } };
+  const law = 'a futures commission merchant registered under the Commodity Exchange Act.';
+  const segs = createRedline([op], undefined, new Set(['', '(c)(1)(A)'])).apply(law, '(c)(1)(A)');
+  eq('the language lands before the final period',
+     segs.map((s) => (s.type === 'keep' ? s.text : `[${s.type}]`)).join(''),
+     'a futures commission merchant registered under the Commodity Exchange Act[ins].');
+  eq('  and nothing is drawn where that punctuation is gone',
+     createRedline([op], undefined, new Set(['', '(c)(1)(A)']))
+       .apply('a futures commission merchant registered under the Act;', '(c)(1)(A)')
+       .filter((s) => s.type !== 'keep').length, 0);
+  // …and not in a sibling that happens to end the same way, which is item 100's
+  // lesson: every item in a list closes with the same punctuation.
+  eq('  nor in a sibling of the passage the bill names',
+     createRedline([{ ...op, scope: '(c)(1)' }], undefined, new Set(['', '(c)(1)', '(c)(1)(B)']))
+       .apply(law, '(c)(1)(B)').filter((s) => s.type !== 'keep').length, 0);
+}
+
 // A whole-provision replacement has TWO spellings and `quotedRefs()` scanned
 // one. 274 of the 4,584 declined cross-references sat inside the other, and all
 // 274 were that shape — the asymmetry is the tell.

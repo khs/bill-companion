@@ -1118,6 +1118,35 @@ export function createRedline(ops, fullText, knownPaths) {
         if (stale && String(op.text).trim().length >= ENACTED_MIN) enact(op, null, undefined, hit);
         continue;
       }
+      // A position stated in WORDS — "by inserting before the period at the end
+      // the following:". The bill says exactly where the language goes and
+      // nothing read it, so the op reached here with neither a paired strike nor
+      // an anchor, fell through both branches and drew nothing, and the panel
+      // said "⚠ position not stated" about a bill that states it.
+      //
+      // The guards are item 100's, learned there the hard way. The scope must
+      // name THIS passage rather than an ancestor — every item in a list ends
+      // the same way, so an ancestor scope places the language in the first
+      // sibling — and a widened scope is not a position at all.
+      if (op.endInsert) {
+        if (op.scopeWidened || (op.scope ?? '') !== (path ?? '')) continue;
+        const trimmed = text.replace(/\s+$/, '');
+        const want = op.endInsert.punct;
+        // The punctuation the bill names has to BE there. Where it is not, the
+        // provision has been amended since and the position cannot be trusted;
+        // that is a decline, not a guess at the end of the passage.
+        if (want && trimmed.slice(-1) !== want) continue;
+        const at = want ? trimmed.length - 1 : trimmed.length;
+        const already = alreadyAt(folded, text, at, op.text);
+        if (already) { enact(op, at, already, hit); continue; }
+        if (stale || String(op.text).length > INLINE_MAX) {
+          op.heldFor = stale ? 'stale' : 'long';
+          continue;
+        }
+        inss.push({ at, text: op.text, op });
+        fired(op, hit);
+        continue;
+      }
       if (op.anchor) {
         const found = inSentence(op, occurrences(folded, op.anchor))[0];
         if (found) {

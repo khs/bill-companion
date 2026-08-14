@@ -1532,6 +1532,52 @@ function balancedQuotes(s) {
  * by the same composer, and the phrase nearest the verb is the one that means
  * this operation.
  */
+/**
+ * "by inserting before the period at the end the following:" — a position
+ * stated in WORDS rather than as a quoted anchor.
+ *
+ * The panel picks its sentence on `op.replaces != null || op.anchor` alone, so
+ * an insert positioned in prose set neither and the row read "⚠ position not
+ * stated" — about a bill that states the position in five words. 125 of the
+ * 1,327 occurrences of that sentence, and the note's own parenthetical ("a
+ * position described in words rather than quoted") contradicts the sentence it
+ * explains.
+ *
+ * The position is computable, so it is captured rather than merely described:
+ * `endInsert.punct` is the punctuation to go in front of, or null for a bare
+ * "at the end". Read BACKWARD from the operand, because unlike `atEnd` on a
+ * strike this phrase is written before the language it places.
+ *
+ * "the following" is required in the trailing form, and the phrase must be the
+ * op's OWN insert verb rather than a neighbouring sub-instruction's — the
+ * window is bounded at the previous semicolon or full stop for that reason,
+ * which cut a naive 238 matches to 125.
+ */
+const RE_END_INSERT = new RegExp(
+  '\\binsert(?:ing)?\\s+' +
+    '(?:(?:before|after)\\s+the\\s+(period|semicolon|comma|colon)' +
+    '(?:\\s+at\\s+the\\s+end)?(?:\\s+the\\s+following)?' +
+    '|at\\s+the\\s+end(?:\\s+the\\s+following)?' +
+    '|the\\s+following\\s+(?:before|after)\\s+the\\s+(period|semicolon|comma|colon))' +
+    '\\s*:?\\s*(?:``|‘‘|["“])?\\s*$',
+  'i'
+);
+const END_PUNCT = { period: '.', semicolon: ';', comma: ',', colon: ':' };
+function markEndInserts(text, ops) {
+  for (const op of ops) {
+    if (op.type !== 'insert' || op.start == null) continue;
+    // Only where no position is known: an anchor or a paired strike already
+    // places the language, and a second opinion could only disagree with it.
+    if (op.anchor || op.replaces != null || op.placement) continue;
+    const back = text.slice(Math.max(0, op.start - 120), op.start);
+    // The op's own verb, not the previous sub-instruction's.
+    const own = back.slice(back.search(/[;.](?=[^;.]*$)/) + 1);
+    const m = RE_END_INSERT.exec(own.replace(/\s+/g, ' '));
+    if (!m) continue;
+    op.endInsert = { punct: END_PUNCT[(m[1] || m[2] || '').toLowerCase()] || null };
+  }
+}
+
 function markTailScopes(text, ops) {
   const stated = new Map();
   for (const op of ops) {
@@ -4286,6 +4332,7 @@ export function extractAmendments(text, citations, divisions = [], sections = []
     dropRunawayOperands(ops);
     placeOps(text, ops);
     markHeadingOps(text, ops);
+    markEndInserts(text, ops);
     markTailScopes(text, ops);
     markSentenceOps(text, ops);
 

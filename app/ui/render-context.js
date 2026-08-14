@@ -1080,8 +1080,17 @@ function effect(eff, handlers) {
         f.textContent = '⚠ anchor found — new language not drawn here';
       } else {
         f.className = 'notfound';
+        // …and where the bill named a position in WORDS that the provision does
+        // not have — "before the period at the end", and this passage no longer
+        // ends with a period — saying "position not stated" is false about a
+        // bill that stated it. `endInsert` is set at parse time on the op the
+        // panel itself holds, so it needs no accessor.
         f.textContent =
-          op.replaces != null || op.anchor ? '⚠ anchor text not found' : '⚠ position not stated';
+          op.replaces != null || op.anchor
+            ? '⚠ anchor text not found'
+            : op.endInsert
+            ? '⚠ the position the bill names is not in this provision'
+            : '⚠ position not stated';
       }
       row.appendChild(f);
     } else if (op.type === 'replace') {
