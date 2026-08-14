@@ -583,10 +583,29 @@ const RE_AMEND_HEAD_UNIT = new RegExp(
 // four real changes to four different statutes — was simply absent from the bill
 // view. This is the standard shape of a conforming-amendments block, so in a
 // bill that renumbers a definition it is most of what the bill does.
+// …and the same act in the other word order, which is commoner:
+//
+//   The following provisions of the Social Security Act are each amended by
+//   striking ``2022'' and inserting ``2023'':
+//       (1) Section 436(a) (42 U.S.C. 629f(a)).
+//       (2) Section 436(b)(4)(A) (42 U.S.C. 629f(b)(4)(A)).
+//
+// 20 of these across the corpus and the pending sample against 0 written "Each
+// of the following" — the fixture that shape was built from is the only place
+// it occurs. 13 were seen by nothing at all.
+//
+// Most need no new machinery, because their list items carry their own full
+// citations exactly as the original form's do; the expansion below reads each
+// item's target and this simply hands it the same list. The two that do not —
+// "The following provisions of section 45(d) … : (1) Paragraph (2)(A)" — name
+// the target once in the head and leave the items as bare markers, and those
+// still fall through to the one-instruction fallback rather than being composed.
+// That is item 70's open note and it wants the head's address threaded into the
+// items, which is a separate change.
 const RE_AMEND_HEAD_EACH = new RegExp(
   AMEND_BOUNDARY +
-    `([Ee]ach\\s+of\\s+the\\s+following${AMEND_MIDDLE}{0,120}?)` +
-    '\\s+(is|are)\\s+(amended|repealed)',
+    `((?:[Ee]ach\\s+of\\s+the\\s+following|[Tt]he\\s+following)${AMEND_MIDDLE}{0,120}?)` +
+    `\\s+(is|are)\\s+${AMEND_QUALIFIER}(amended|repealed)`,
   'gm'
 );
 
@@ -602,8 +621,22 @@ const RE_LISTED_TARGET = new RegExp(
  * The provisions listed under an "Each of the following …:" instruction.
  *
  * Walks the outline markers after the colon and takes them while they run
- * consecutively from (A). The first marker that breaks the run ends the list —
- * in practice the next instruction's "(2)", which must not be swallowed.
+ * consecutively. The first marker that breaks the run ends the list — in
+ * practice the next instruction's marker, which must not be swallowed.
+ *
+ * The run may be LETTERED or NUMBERED, and reading only letters is why the 2022
+ * omnibus's "The following provisions of the Social Security Act are each
+ * amended by striking ``2022'' and inserting ``2023'': (1) Section 436(a)
+ * (42 U.S.C. 629f(a)). (2) Section 436(b)(4)(A) …" expanded into nothing. The
+ * two styles are the same list written by different drafters, and the run test
+ * is what does the real work in both.
+ *
+ * …and every item must NAME a provision, which is the guard that makes admitting
+ * numbers safe. A numbered list is followed by numbered sub-instructions far
+ * more often than a lettered one is, so the run test alone would let
+ * "(3) by striking ``X''" join a list of provisions as an item with no target.
+ * A positive test — does this item say which provision it is? — refuses that
+ * without needing to know what a sub-instruction looks like.
  */
 function listedProvisions(text, from, to) {
   RE_OUTLINE_ITEM.lastIndex = from;
@@ -613,9 +646,13 @@ function listedProvisions(text, from, to) {
     marks.push({ label: m[1].slice(1, -1), start: m.index + m[0].lastIndexOf('(') });
   }
   const items = [];
+  const style = marks.length && /^\d+$/.test(marks[0].label) ? 'n' : 'a';
   for (let i = 0; i < marks.length; i++) {
-    if (marks[i].label !== String.fromCharCode(65 + i)) break;
-    items.push({ start: marks[i].start, end: marks[i + 1] ? marks[i + 1].start : to });
+    const want = style === 'n' ? String(i + 1) : String.fromCharCode(65 + i);
+    if (marks[i].label !== want) break;
+    const end = marks[i + 1] ? marks[i + 1].start : to;
+    if (!RE_LISTED_TARGET.test(text.slice(marks[i].start, end))) break;
+    items.push({ start: marks[i].start, end });
   }
   return items;
 }
@@ -4684,6 +4721,11 @@ export function extractAmendments(text, citations, divisions = [], sections = []
       const items = listedProvisions(
         text, colon >= 0 && colon < bodyEnd ? colon + 1 : h.headEnd, bodyEnd
       );
+      // "…of the Internal Revenue Code of 1986" or "…of such Code", written
+      // once in the head for every provision listed under it.
+      const headNamesCode = /\b(?:Internal\s+Revenue\s+Code|such\s+Code)\b/i.test(
+        text.slice(h.start, h.headEnd)
+      );
       if (items.length) {
         return items.map((it) => {
           const itemText = text.slice(it.start, it.end);
@@ -4700,6 +4742,42 @@ export function extractAmendments(text, citations, divisions = [], sections = []
             target:
               citations.find((c) => (c.kind === 'usc' || c.kind === 'cfr') && inSpan(c)) ||
               citations.find((c) => c.kind === 'act' && inSpan(c)) ||
+              // …and the same implied chain the ordinary head gets. A listed
+              // item in a tax bill is a bare "Section 280C(c)(3)(B)(ii)(II)."
+              // with no citation to find — the Act is supplied by the
+              // division's 1986-Code declaration, which is the whole reason
+              // impliedIrc exists. Without this the Tax Cuts and Jobs Act's 29
+              // listed provisions all resolved to nothing and reported that the
+              // bill changes nothing, which is what the instruction reported
+              // before it was read at all.
+              //
+              // Ordering does the guarding: an item that carries its own
+              // citation never reaches here, so "Section 211 (7 U.S.C. 6911)."
+              // cannot be re-read as 26 U.S.C. 211.
+              impliedIrc(
+                { start: it.start, headEnd: it.end, unit: lt[1] || '', section: lt[2] || '',
+                  subsection: lt[3] || '', middle: itemText.slice((lt.index ?? 0) + (lt[0] || '').length),
+                  inner: '' },
+                ircRanges
+              ) ||
+              // …and where the HEAD names the Code, it says so once for the
+              // whole list: "Each of the following provisions of the Internal
+              // Revenue Code of 1986 is amended by striking ``September 30,
+              // 2022'': (A) Section 4041(a)(1)(C)(iii)(I)." The item is "of
+              // such Code" by construction, and the Infrastructure Investment
+              // and Jobs Act's nine listed provisions resolved to nothing
+              // without it — that bill carries no "whenever in this Act"
+              // declaration for impliedIrc to stand on.
+              //
+              // Gated on the HEAD naming the Code, not on the last Code named
+              // anywhere before it: a list under "the Social Security Act"
+              // would otherwise inherit an Internal Revenue Code mentioned
+              // pages earlier, which is a real but unrelated provision.
+              impliedSuchCode(
+                { start: it.start, headEnd: it.end, unit: lt[1] || '', section: lt[2] || '',
+                  subsection: lt[3] || '', middle: headNamesCode ? ' of such Code' : '', inner: '' },
+                codeSaid
+              ) ||
               null,
             actName: (itemText.match(/of\s+the\s+([A-Z][^(]{2,80}?Act(?:\s+of\s+\d{4})?)/) || [])[1] || null,
             // Copied, not shared: main.js rebuilds ops when it attaches the

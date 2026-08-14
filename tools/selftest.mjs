@@ -896,10 +896,15 @@ section('relative navigation inside amendments');
     '    Section 2 of the Widget Act (15 U.S.C. 2601) is amended in subsection (a) ' +
     "by striking ``old''.\n" +
     '\n' +
+    // SEC. 102 must contain NO recognised instruction head, or `nextHead`
+    // bounds SEC. 101 on its own and the section bound is untestable. It used
+    // to say "The following are each amended by striking ``x''", which was
+    // filler precisely because nothing read it — and then item 117 taught
+    // RE_AMEND_HEAD_EACH that shape and this assertion started passing for the
+    // wrong reason. Prose, so no future widening can claim it.
     'SEC. 102. SECOND.\n' +
-    "    (a) In general.--The following are each amended by striking ``x'':\n" +
-    '        (1) Subsection (b)(3).\n' +
-    "        (2) Paragraph (c)(4), by striking ``y''.\n"
+    '    (a) In general.--In carrying out subsection (b)(3), and paragraph (c)(4)\n' +
+    '        thereof, the Secretary shall submit a report.\n'
   );
   const bill = parseBill(t);
   const cites = extractCitations(t);
@@ -1605,6 +1610,33 @@ section('resolving the target');
   const sub = p('SEC. 2. X.\nSubtitle A of title XXII of the Homeland Security Act of 2002 (6 U.S.C. 651 et seq.) is amended by adding at the end the following.\n');
   eq('a lettered subtitle is an instruction', sub.length, 1);
   eq('  and resolves through its parenthetical cite', sub[0].target?.section, '651');
+
+  // …and the same act in the other word order, which is the commoner one: 20
+  // across the corpus and the pending sample against 0 written "Each of the
+  // following". This print is the only place the original phrasing occurs.
+  {
+    const each = (head, items) => p(`SEC. 2. X.\n    ${head}\n${items}\n`);
+    const two = each(
+      "The following provisions of the Widget Act are each amended by striking ``old'':",
+      '        (1) Section 5 (15 U.S.C. 2605).\n        (2) Section 6 (15 U.S.C. 2606).'
+    ).filter((a) => a.distributed);
+    eq('"The following … are each amended" expands too', two.length, 2);
+    eq('  each listed provision keeping its own target',
+       two.map((a) => a.target && `${a.target.title}:${a.target.section}`).join(','), '15:2605,15:2606');
+    // A listed item in a tax division is a bare "Section 280C(c)(3)(B)(ii)(II)."
+    // with no citation to find, and the Act is supplied by the 1986-Code
+    // declaration. Without the implied chain the Tax Cuts and Jobs Act's 29
+    // listed provisions all resolved to nothing.
+    const irc = p(
+      'SEC. 2. X.\n    Whenever in this Act an amendment is expressed in terms of an amendment to a ' +
+      'section, the reference shall be considered to be made to a section of the Internal Revenue Code of 1986.\n' +
+      "    The following sections are each amended by striking ``old'':\n" +
+      '        (A) Section 23(h)(2).\n        (B) Section 25B(b)(3)(B).\n'
+    ).filter((a) => a.distributed);
+    eq('  and a bare listed section takes the division\'s implied Act',
+       irc.map((a) => a.target && `${a.target.title}:${a.target.section}${a.target.subsection}`).join(','),
+       '26:23(h)(2),26:25B(b)(3)(B)');
+  }
 }
 
 // ------------------------------------------------------- operand placement

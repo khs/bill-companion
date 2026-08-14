@@ -7237,3 +7237,130 @@ LVXXXVI--FEDERAL MARITIME
 
    selftest 815 -> 817, rendertest 521, proptest clean, paneltest clean on both
    samples, corpus unchanged.
+
+117. **"The following provisions … are each amended" is the commoner word order,
+   and it was read by nothing.** (2026-08-13, from item 115's clustering, and it
+   is the shape item 70 recorded as left open.) The distributed form — one
+   instruction over a list of provisions — has been handled since the CLARITY
+   print was added, matching `Each of the following …`. Across the 30 corpus
+   bills and the 20 pending ones that phrasing occurs **0 times outside that one
+   fixture**, and the other order occurs 20:
+
+   ```
+   The following provisions of the Social Security Act are each amended by
+   striking ``2022'' and inserting ``2023'':
+       (1) Section 436(a) (42 U.S.C. 629f(a)).
+       (2) Section 436(b)(4)(A) (42 U.S.C. 629f(b)(4)(A)).
+   ```
+
+   13 were seen by nothing at all. **The fixture the feature was built from was
+   the only place its phrasing occurs** — which is this file's own rule about a
+   fixture that cannot fail at the thing it covers, arriving from the other side:
+   the feature worked perfectly on the one bill it was written for and reached
+   almost nothing else.
+
+   Three things were needed and each was found by the next measurement.
+
+   - **The head.** `RE_AMEND_HEAD_EACH` now admits `The following` as well as
+     `Each of the following`, and the qualifier with it, since "are each
+     amended" puts a word between the verb and the participle (item 112).
+   - **A numbered list is a list.** `listedProvisions` walked markers "while they
+     run consecutively from (A)" — literally from `A` — so a list numbered
+     (1), (2), (3) expanded into nothing, and the 2022 omnibus's two Social
+     Security Act lists were among them. Distributed amendments **+65 -> +117**
+     when numbers were admitted. The run test does the real work in both styles;
+     what letters were carrying was an accident.
+     The guard that makes numbers safe is a POSITIVE test rather than a
+     tighter run: every item must NAME a provision. A numbered list is followed
+     by numbered sub-instructions far more often than a lettered one is, so the
+     run alone would let "(3) by striking ``X''" join a list of provisions as an
+     item with no target — asking "does this item say which provision it is?"
+     refuses that without needing to know what a sub-instruction looks like.
+   - **A listed item needs the implied-target chain too.** The expansion read
+     each item's own citation and stopped there, so a bare
+     "(A) Section 280C(c)(3)(B)(ii)(II)." resolved to nothing — and the Tax Cuts
+     and Jobs Act's 29 listed provisions all reported that the bill changes
+     nothing, which is exactly what the instruction reported before it was read
+     at all. `impliedIrc` covers the division-declaration case; where the HEAD
+     names the Code ("Each of the following provisions of the Internal Revenue
+     Code of 1986 is amended"), it says so once for the whole list, which is the
+     Infrastructure Investment and Jobs Act's nine. `targeted` went **+38 ->
+     +66 -> +104** as each was added, ending with **0 bills down**.
+     Both are gated: an item carrying its own citation never reaches the implied
+     chain, so "Section 211 (7 U.S.C. 6911)." cannot be re-read as 26 U.S.C. 211;
+     and the head must name the Code itself, or a list under "the Social
+     Security Act" would inherit an Internal Revenue Code mentioned pages
+     earlier.
+
+   Corpus, accounted to the unit: `amendments +120` of which `distributed +117`;
+   `targeted +104`; `ops.strike +127`, `ops.insert +127`, `ops.repeal +39` — the
+   shared operations copied once per listed provision — against `opSpans +20`,
+   because those copies point at the same quoted language in the head and
+   collapse, which is the design the expansion has always had. `uncoveredVerbs
+   -13`.
+
+   `relative -13` on two bills is the one decrease and it is not a loss: all of
+   it is the Tax Cuts and Jobs Act, where 12 references used to be composed
+   against the single wrong target of an over-reaching neighbouring instruction,
+   and are now replaced by 29 distributed amendments of which 28 name a real
+   provision.
+
+   Marks **3,414 -> 3,448: 36 added, and the only 2 withdrawn are item 116's
+   heading refusals.** All 36 are on enrolled bills and 22 are `was`. They read
+   correctly end to end — the TCJA's inflation sweep, `for "calendar year 2016"
+   in subparagraph (A)(ii)`, is now marked already-in-law across 26 U.S.C. 125,
+   135, 137, 146, 147 and 151, and 151(d)(4)(B) on disk reads "…by substituting
+   "calendar year 1988" for "calendar year 2016" in subparagraph (A)(ii)
+   thereof". 26 U.S.C. 1(i), the mark item 111's staleness collapse withdrew, is
+   back.
+
+   **And a fixture that had started passing for the wrong reason.** The section
+   bound test of item 70 used "The following are each amended by striking ``x''"
+   as filler in SEC. 102 *precisely because nothing read it* — the test needs
+   SEC. 102 to contain no recognised head, or `nextHead` bounds SEC. 101 on its
+   own and the section bound is untestable. This change taught the parser that
+   shape and the assertion went green while measuring nothing. It is prose now,
+   which no future widening can claim.
+
+   selftest 817 -> 820, rendertest 521, proptest clean, paneltest clean on both
+   samples, corpus updated.
+
+118. **Two more measured and NOT built, with the numbers.** Both came out of the
+   pending sample's strike-presence oracle (item 116) and both fail on
+   measurement rather than taste.
+
+   - **An `et seq.` target does not need a guard.** The worry was that a range
+     resolves to the section it begins at, so operations meant for the whole Act
+     get searched in one section and drawn wherever the words happen to occur.
+     Measured: **402 instructions across both samples have a range target and
+     1,180 operations hang off them, and 29 marks are drawn.** The sampled marks
+     are right, and for a structural reason worth keeping — an Act's own § 2 is
+     usually the first codified section, so "The Bank Holding Company Act of 1956
+     (12 U.S.C. 1841 et seq.) is amended-- (1) in section 2(o)(4)(E) (12 U.S.C.
+     1841(o)(4)(E))" navigates into the very section the range begins at. The
+     other 97.5% already draw nothing.
+   - **Widening the strike matcher to `looseOccurrences` buys 4 operations.**
+     A strike operand containing an Act-relative cross-reference can never be
+     found strictly, because the codifier renumbers it (item 96). Of **623 such
+     operands, 13 are found strictly, 4 more would be found loosely, and 0 of
+     those 4 are ambiguous** — the remaining 606 are enacted bills whose
+     amendments have already been made, where absence is the amendment having
+     worked. Four operations is not worth pointing a section-number wildcard at
+     a strike: `looseOccurrences` keeps the subsection PATH exact but abstracts
+     the section number, so it can match a different section with the same path,
+     and striking the wrong words is a visible error where failing to find them
+     is a blank.
+
+   Also recorded, because it is the largest cluster left and it is a FEATURE
+   rather than a fix: **61 uncovered verbs whose unit is a subpart, subchapter
+   or subtitle.** "Subpart D of part IV of subchapter A of chapter 1 of the
+   Internal Revenue Code of 1986 is amended by inserting after section 45X the
+   following new section" is how a tax bill ADDS a section, and a subpart is not
+   addressable in shards keyed by section — so an instruction would gain op chips
+   in the bill pane and no provision. It is already safe: `looseHeadEnd` cuts the
+   previous body at these heads, so nothing steals their operations.
+
+   **The browser tooling was unavailable this session** — the pane would not
+   execute JavaScript after the first bill, and a restart did not recover it — so
+   nothing here was rendered, and no pending bill has ever been looked at in this
+   app. Say so rather than implying otherwise.
