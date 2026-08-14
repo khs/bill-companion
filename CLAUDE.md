@@ -6499,3 +6499,70 @@ LVXXXVI--FEDERAL MARITIME
    the card, the heading and the cache behaviour read correctly — but the dev
    server was unreachable from the browser tooling in this session, so no one has
    looked at this card on screen. Worth a glance next time someone has the app up.
+
+108. **Two of the panel's sentences were false, and `paneltest` cannot see a
+   false sentence.** (2026-08-12, from a re-run of the panel-truth lens.)
+   `tools/paneltest.mjs` checks that a status sentence agrees with the marks the
+   same render produced. It is a CONSISTENCY check, it passes over 19,032 rows,
+   and it is structurally incapable of noticing that a sentence which agrees with
+   the marks is nevertheless false about the provision. The lens read all 289
+   distinct sentences and measured falsity on nine families.
+
+   - **"⚠ anchor text not found", said 147 times about text the app had just
+     found.** The `op.anchor` branch matches the anchor, then skips on `stale` or
+     `INLINE_MAX` with a bare `continue` — never calling `fired()`, so `placed()`
+     is false and the panel falls through to the "not found" arm. The paragraph
+     beneath compounds it: "usually because the law has been amended since, or
+     because the instruction targets a different subsection than the one shown".
+     Both are false. 10 U.S.C. 9020(a) is the shape of it — the shard reads
+     "…from the general officers of the Air Force or the Space Force" and the row
+     said the anchor could not be found. Composition of the 147, from the app's
+     own verdict: 112 where the language is already in the law, 35 where the
+     strike is a run or the block is too long to weave in.
+   - **"✓ already struck from the law", said 188 times about words on the same
+     screen.** `enacted` is computed per AMENDMENT — `appliedAdditions().length >
+     0 || isStale()` — so one op's evidence vouches for every other, while the
+     operand was searched only inside its own scope. 18 U.S.C. 921(a): the
+     Bipartisan Safer Communities Act strikes "with the principal objective of
+     livelihood and profit" from (a)(21)(C), and the phrase is on screen **eight
+     times** in (a)(21)(D) and (E) under a tick saying it is gone.
+
+   Both fixes are wording rather than drawing, and not one mark moves (3,171
+   before and after). The strike sentence NAMES the passage it searched, which
+   turns the same evidence into a true statement; the insert gets a third arm for
+   the outcome the two "not found" arms were swallowing — the position was found
+   and the language withheld.
+
+   **`heldFor` had to be read through an accessor, and finding out why is the
+   reusable part.** Setting the flag on the op and reading it in the panel did
+   nothing at all: `reScope()` SHALLOW-COPIES every op, so the redline mutates
+   its own objects while the panel holds the originals. That is why every other
+   flag here is exposed as an accessor and matched on `start` — `placed()`,
+   `enactedInserts()`, `lostScope()` — and `heldBack()` now joins them. The
+   sentence census is what caught it: the first cut moved 3,695 rows and the two
+   new sentences appeared 0 times.
+
+   Sentence census, exact: `⚠ anchor text not found` 3,800 → 3,653 (**-147**,
+   split 112 + 35 as measured), and `✓ already struck from the law` 3,972 → 277
+   with 3,695 gaining the named scope. Rendered on both cases the lens named.
+
+   **`paneltest` needed two changes and one of them is a real gap.** Its CLAIMS
+   table needs an entry per sentence, so a new wording fails as UNCLASSIFIED —
+   which is the design working. But its distinct-sentence collapse folded quoted
+   operands and not marker PATHS, so a parameterised sentence exploded the count
+   293 → 1,274 and the number stopped being a signal; it folds both now, and
+   reads 170.
+
+   selftest 791, rendertest 513 → 521, proptest clean, paneltest clean at 170
+   sentences, corpus unchanged, marks unchanged.
+
+   **Left, measured and not built:** "⚠ position not stated", 1,327 occurrences
+   of which **125 are false** — the bill states the position in words rather than
+   as a quoted anchor ("by inserting before the period at the end the following"),
+   and `render-context.js` picks the sentence on `op.replaces != null ||
+   op.anchor` alone, so a position described in prose reports as no position at
+   all. The note's own parenthetical contradicts the sentence it explains. Grouped
+   by the bill's exact words: 26 "before the period at the end", 25 "before the
+   period", 19 "at the end", 12 "before the semicolon at the end", and a tail.
+   The fix wants the position captured at parse time, where the
+   `PUNCT_UNIT_TAIL`/`RE_AT_THE_END` family already reads these words for strikes.

@@ -2236,8 +2236,15 @@ section('additions at the end');
 
     // And the panel says so, positively, in both rows.
     ok('the panel reports the addition as done', /already in the law as it stands/.test(txtE), txtE.slice(-260));
+    // The sentence NAMES the passage it searched. `enacted` is amendment-level —
+    // one op's evidence vouches for the rest — and the operand was looked for
+    // only inside this op's own scope, so the unqualified "from the law" claimed
+    // something the screen could contradict: 18 U.S.C. 921(a) carried the struck
+    // phrase eight times in (a)(21)(D) and (E) under a tick saying it was gone.
     ok('  and the strike as done, not as a failure',
-       /already struck from the law/.test(txtE) && !/not found verbatim/.test(txtE), txtE.slice(-260));
+       /already struck from \([^)]+\)/.test(txtE) && !/not found verbatim/.test(txtE), txtE.slice(-260));
+    ok('    naming the passage it was struck from, not the whole law',
+       !/already struck from the law/.test(txtE), txtE.slice(-260));
     ok('  with no "position not stated"', !/position not stated/.test(txtE), txtE.slice(-260));
     ok('  and no claim that something was left undrawn',
        !/not drawn into the text/.test(txtE), txtE.slice(-260));

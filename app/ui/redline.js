@@ -1056,11 +1056,15 @@ export function createRedline(ops, fullText, knownPaths) {
           // the run's end is the thing that cannot be confirmed. Drawing it
           // would put a green paragraph in the middle of text that may already
           // read that way. The panel prints the new language instead.
-          if (isRun) continue;
+          // The POSITION was located either way — `where` is the span the strike
+          // landed on — so a skip here must not leave the panel saying the
+          // anchor could not be found. It said exactly that 147 times, about
+          // text the app had just matched. See `heldFor` below.
+          if (isRun) { op.heldFor = 'run'; continue; }
           if (!stale && String(op.text).length <= INLINE_MAX) {
             inss.push({ at: where.end, text: op.text, op });
             fired(op, hit);
-          }
+          } else op.heldFor = stale ? 'stale' : 'long';
           continue;
         }
         // A punctuation strike AT THE END whose replacement now sits at the end.
@@ -1124,7 +1128,17 @@ export function createRedline(ops, fullText, knownPaths) {
           // anchor could not be found when the truth was the opposite.
           const already = alreadyAt(folded, text, at, op.text);
           if (already) { enact(op, at, already, hit); continue; }
-          if (stale || String(op.text).length > INLINE_MAX) continue;
+          // The ANCHOR was found — `occurrences()` returned this hit — so a skip
+          // here must not leave the panel saying it could not be. That is what
+          // it said 147 times: "⚠ anchor text not found" about text the app had
+          // just matched, with a paragraph beneath blaming the law having been
+          // amended or the instruction naming a different subsection. What is
+          // absent is the INSERTED language, and where `stale` is the reason
+          // that absence is the amendment having already been made.
+          if (stale || String(op.text).length > INLINE_MAX) {
+            op.heldFor = stale ? 'stale' : 'long';
+            continue;
+          }
           inss.push({ at, text: op.text, op });
           fired(op, hit);
         }
@@ -1369,6 +1383,23 @@ export function createRedline(ops, fullText, knownPaths) {
      * words in front of them are not a proposal.
      */
     enactedInserts: () => work.filter((o) => o.enacted),
+    /**
+     * Inserts whose POSITION was located and whose language was withheld.
+     *
+     * A third outcome the panel's two "not found" arms were swallowing. The
+     * anchor is there — `occurrences()` matched it — or the strike it replaces
+     * landed; what is absent is the inserted language, because the amendment
+     * looks already made (`stale`), because the strike is a run whose end
+     * cannot be confirmed, or because the block is too long to weave inline.
+     * Without this the row said "⚠ anchor text not found" about text the app
+     * had just matched, 147 times, with a paragraph beneath blaming the law
+     * having changed or the instruction naming a different subsection.
+     *
+     * Exposed as an accessor and matched on `start`, like every other flag
+     * here, because `reScope()` shallow-copies: the redline mutates its own
+     * objects and the panel holds the originals.
+     */
+    heldBack: () => work.filter((o) => o.heldFor && !o.done && !o.enacted),
     /**
      * Operations whose two halves are the same words in different case.
      *

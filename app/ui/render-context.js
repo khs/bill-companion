@@ -1042,17 +1042,47 @@ function effect(eff, handlers) {
         ((eff.redline.appliedAdditions && eff.redline.appliedAdditions().length > 0) ||
           (eff.redline.isStale && eff.redline.isStale()));
       if (op.found) { f.className = 'found'; f.textContent = '✓ found in current text'; }
-      else if (enacted) { f.className = 'found'; f.textContent = '✓ already struck from the law'; }
-      else { f.className = 'notfound'; f.textContent = '⚠ not found verbatim'; }
+      else if (enacted) {
+        f.className = 'found';
+        // NAME the passage. `enacted` is amendment-level — one op's evidence
+        // vouches for all of them — and the operand was searched only inside
+        // THIS op's scope, so the unqualified sentence claims something about
+        // the whole law that the screen can contradict. 18 U.S.C. 921(a) is the
+        // shape of it: the bill strikes "with the principal objective of
+        // livelihood and profit" from (a)(21)(C), the tick said "already struck
+        // from the law", and the phrase is on screen 8 times in (a)(21)(D) and
+        // (E). Naming the scope makes the same evidence a true statement.
+        f.textContent = op.scope
+          ? `✓ already struck from ${op.scope}`
+          : '✓ already struck from the law';
+      } else { f.className = 'notfound'; f.textContent = '⚠ not found verbatim'; }
       row.appendChild(f);
     } else if (op.type === 'insert' && op.placement !== 'after-unit') {
       // Two different reasons, and saying the wrong one is worse than saying
       // nothing: the bill may not have stated a position at all, or it may have
       // stated one whose anchor text is no longer in the provision.
       const f = document.createElement('span');
-      f.className = 'notfound';
-      f.textContent =
-        op.replaces != null || op.anchor ? '⚠ anchor text not found' : '⚠ position not stated';
+      // …and a THIRD reason, which the two above were swallowing: the position
+      // was found and the language was deliberately withheld. `heldFor` is set
+      // by the redline at each point where a located anchor — or a located
+      // strike, for a pair — is skipped for staleness, for a run, or for being
+      // too long to weave in. Without it the row said "anchor text not found"
+      // about text the app had just matched, 147 times.
+      const held =
+        eff.redline && eff.redline.heldBack
+          ? (eff.redline.heldBack().find((p) => p.start === op.start) || {}).heldFor
+          : null;
+      if (held === 'stale') {
+        f.className = 'found';
+        f.textContent = '✓ anchor found — this language is already in the law';
+      } else if (held) {
+        f.className = 'notfound';
+        f.textContent = '⚠ anchor found — new language not drawn here';
+      } else {
+        f.className = 'notfound';
+        f.textContent =
+          op.replaces != null || op.anchor ? '⚠ anchor text not found' : '⚠ position not stated';
+      }
       row.appendChild(f);
     } else if (op.type === 'replace') {
       // A replacement matched NONE of the arms above, so it printed its language

@@ -124,7 +124,14 @@ const CLAIMS = [
   [/changes capitalisation only/i, false],
   [/heading, not its text/i, false],
   [/removes a run of text/i, false],
-  [/already struck from the law/i, false],
+  // Parameterised since item 108: the sentence NAMES the passage searched,
+  // because `enacted` is amendment-level and the unqualified claim was
+  // contradicted by the screen.
+  [/already struck from/i, false],
+  // The position was found and the language deliberately withheld — a third
+  // reason the two "not found" arms used to swallow. Nothing is drawn either
+  // way, so both variants claim false.
+  [/anchor found/i, false],
   [/not found verbatim/i, false],
   [/anchor text not found/i, false],
   [/position not stated/i, false],
@@ -224,7 +231,17 @@ for (const bill of bills) {
       const op = a.ops[i];
       if (!op) continue;
       checked++;
-      bump(seen, status.replace(/[“”][^“”]*[“”]/g, '“…”').slice(0, 90));
+      bump(
+        seen,
+        status
+          .replace(/[“”][^“”]*[“”]/g, '“…”')
+          // …and a marker PATH, for the same reason: "already struck from
+          // (a)(21)(C)" is one sentence, not one per provision in the corpus.
+          // Without this the distinct-sentence count went 293 -> 1,274 and
+          // stopped being a signal.
+          .replace(/(?:\([A-Za-z0-9]{1,8}\))+/g, '(…)')
+          .slice(0, 90)
+      );
       const claim = claimOf(status);
       if (claim === undefined) {
         unknown++;
