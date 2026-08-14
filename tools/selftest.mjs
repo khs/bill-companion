@@ -1992,6 +1992,15 @@ section('operand placement');
        JSON.stringify(b.map((o) => `${o.type}:${o.headingOnly}`)));
     eq('  and it reads the unit the phrase names',
        both(head("in the heading of paragraph (4), by striking ``Fees'' and inserting ``Charges''.")), 2);
+    // "header" is the same thing, and a bill writes it as readily: 22 across the
+    // corpus and the pending sample, in the American Rescue Plan, the 2020
+    // appropriations act and the 2022 omnibus. Found by the pending sample,
+    // where a strike whose operand is absent from the law is a real signal
+    // rather than the amendment having worked.
+    eq('  and "header" is the same word',
+       both(head("in the paragraph header, by striking ``Fees'' and inserting ``Charges''.")), 2);
+    eq('  behind the operand too',
+       both(head("by striking ``Fees'' in the subsection header and inserting ``Charges''.")), 2);
     // The negative, and it is what keeps this narrow: a sub-instruction after a
     // semicolon is a different operation and must not inherit the flag.
     const c = head(

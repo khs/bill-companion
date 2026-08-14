@@ -1075,12 +1075,28 @@ const RE_PART_BLOCK =
 // see markSectionAdditions().
 const RE_SECTION_HEAD_ANY = /^\s*(?:``|‘‘|["“])?\s*SEC(?:TION)?\.?\s+[0-9]+[A-Za-z0-9\-–]*\./i;
 
+// A bill writes "header" as readily as "heading", and it is the same thing.
+//
+// "in the paragraph header, by striking ``for fy 2019''" — the American Rescue
+// Plan, the 2020 appropriations act and the 2022 omnibus all use it: 22 across
+// the corpus and the pending sample, against 370 of "heading". Read as body
+// text, those operations search a provision the words are not in and land
+// wherever the operand happens to occur — which is item 88's defect exactly,
+// reached through a synonym. Found by the pending sample, where a strike whose
+// operand is absent from the law is a real signal rather than the amendment
+// having worked.
+//
+// One spelling, used by all four patterns. "caption" and "the header of" are
+// 0 across both samples — an alternation with a dead branch is a claim about
+// the corpus that nobody checked.
+const HEAD_WORD = 'head(?:ing|er)';
+
 // "…the heading of such section is amended to read as follows" and "…by amending
 // the section heading to read as follows" — the two shapes the corpus writes, 34
 // occurrences. Matched against the text ENDING at the phrase, so the `$` anchors
 // it to the instruction that introduces this block and not to a heading amended
 // somewhere earlier. `[^.;]` forbids crossing a sentence boundary.
-const RE_HEADING_REWRITE = /\bheading\b[^.;]{0,110}$/i;
+const RE_HEADING_REWRITE = new RegExp('\\b' + HEAD_WORD + '\\b[^.;]{0,110}$', 'i');
 
 
 /**
@@ -1220,7 +1236,7 @@ function dropRunawayOperands(ops) {
 const RE_HEADING_OP = new RegExp(
   '\\b(?:in|amend(?:ing)?)\\s+the\\s+' +
     '(?:(?:sub)?(?:section|paragraph|clause|item|part|chapter|title|division|subpart)\\s+)?' +
-    'heading\\b' +
+    HEAD_WORD + '\\b' +
     '(?:\\s+(?:of|for)\\s+(?:such\\s+)?(?:the\\s+)?(?:[a-z]+\\s+)?(?:\\([A-Za-z0-9]{1,8}\\))*)?' +
     '\\s*,?\\s*(?:as\\s+so\\s+(?:re)?designated\\s*,?\\s*)?(?:by\\s+)?[^;.]{0,40}$',
   'i'
@@ -1243,7 +1259,7 @@ const RE_HEADING_OP = new RegExp(
 const RE_HEADING_AFTER = new RegExp(
   '^(?:\'\'|’’|["”])?[^;.,(]{0,40}?\\b(?:in|of)\\s+the\\s+' +
     '(?:(?:sub)?(?:section|paragraph|clause|item|part|chapter|title|division|subpart)\\s+)?' +
-    'heading\\b',
+    HEAD_WORD + '\\b',
   'i'
 );
 
@@ -1257,7 +1273,11 @@ const RE_HEADING_AFTER = new RegExp(
 // two carry, so "…is amended. Paragraph (2) is amended by striking" is not read
 // as a heading instruction.
 const RE_HEADING_SUBJECT =
-  /\bheadings?\s+(?:of|for)\s+[^;.]{0,90}?\b(?:is|are)\s+(?:further\s+|so\s+)?amended\b[^;.]{0,60}$/i;
+  new RegExp(
+    '\\b' + HEAD_WORD + 's?\\s+(?:of|for)\\s+[^;.]{0,90}?' +
+      '\\b(?:is|are)\\s+(?:further\\s+|so\\s+)?amended\\b[^;.]{0,60}$',
+    'i'
+  );
 
 /**
  * Flag every operation an instruction aims at a provision's HEADING.

@@ -7163,3 +7163,77 @@ LVXXXVI--FEDERAL MARITIME
 
    selftest 811 -> 815 (all four fail against the old build), rendertest 521,
    proptest clean, paneltest clean on both samples, corpus updated.
+
+116. **The oracle only a pending bill gives you, and the synonym it found.**
+   (2026-08-13.) The Code is current, so a bill that has NOT passed has not been
+   applied to it: every phrase such a bill proposes to strike should still be
+   there. On an enacted bill absence is the amendment having worked and says
+   nothing at all — which is why 28-of-30 enrolled corpus could never ask this
+   question. Over `pending/files`, **89 of 106 distinctive strike operands with
+   a resolved target are still present (84%)**, and the 17 that are not are a
+   list worth reading rather than a statistic.
+
+   Reading them found one defect and confirmed several correct refusals.
+
+   **A bill writes "header" as readily as "heading", and it is the same thing.**
+
+   ```
+   Title IV of the Personal Responsibility and Work Opportunity Reconciliation
+   Act of 1996 (8 U.S.C. 1601 et seq.) is amended--
+       (A) in the header, by striking ``ALIENS'' and inserting ``NONCITIZENS'';
+   ```
+
+   Item 88 established that an operation aimed at a heading must be refused,
+   because the Code stores a heading apart from its body so the operand can only
+   ever match somewhere it does not belong. All four patterns that carry that
+   rule — before the verb, after the operand, the heading as subject, and the
+   whole-provision rewrite — spelled the word "heading". **22 occurrences of
+   "header" across the corpus and the pending sample**, against 370 of
+   "heading": the American Rescue Plan writes "in the paragraph header", the
+   2022 omnibus writes "in the header" and "in the subsection header". One
+   spelling now, `HEAD_WORD`, used by all four. "caption" and "the header of"
+   are 0 in both samples and are deliberately not in the alternation — a dead
+   branch is a claim about the corpus that nobody checked.
+
+   Marks: **5 withdrawn and 0 added** — 2 on the corpus and 3 on the pending
+   sample, every one a green `ins` of heading language drawn into a body.
+   42 U.S.C. 1395x(ff)(1) was having "; Intensive Outpatient Services" inserted
+   into its text for an instruction amending the heading, and 8 U.S.C. 1601 was
+   having "NONCITIZENS" inserted for the instruction above. Pure withdrawal is
+   the right direction here: blank beats wrong.
+
+   Corpus does not move at all — `headingOnly` is a flag and `opSpans` keys on
+   `type:start-end`, which is exactly why this needed the mark diff.
+
+   **The other 16 absences were read and are not defects**, which is worth
+   recording because they are what the oracle looks like when it is working. Most
+   are an `et seq.` target: "8 U.S.C. 1601 et seq." resolves to the first section
+   of the range (item 38) and the struck words live in later sections of the Act,
+   so the redline searches a provision that genuinely does not contain them and
+   correctly draws nothing. Two are 8 U.S.C. 1611, whose plural "aliens" is in
+   the section heading rather than the body — the very case the fix above now
+   flags.
+
+   One is left open and measured: **a strike operand containing an Act-relative
+   cross-reference can never be found.** H.R. 856 strikes "section 102(a)(1)(A)
+   or (B)" from 29 U.S.C. 2612, where the codifier writes the section number its
+   own way. Item 96 built `looseOccurrences` for exactly this respelling and
+   wired it only into the already-happened tests; `occurrences()`, which is what
+   finds a strike, stays strict. Widening it is not obviously safe — the loose
+   matcher leaves the subsection PATH exact but wildcards the section number, so
+   "section 102(a)(1)(A)" would match any section with that path — and striking
+   the wrong words is a visible error where failing to find them is a blank.
+   Wants its own measured pass.
+
+   **And a fourteenth instance of the environment gotcha**, recorded because I
+   walked into it again: a bash heredoc ate half the backslashes in a Python
+   patch script, so `'heading\\b'` arrived as `'heading\b'` and matched nothing.
+   The file's own note has said "write the script with the Write tool and run the
+   file" since item 65. Two further self-inflicted rounds followed: two of the
+   four patterns are regex LITERALS (single backslashes) and two are JS STRINGS
+   (doubled), and `const` is not hoisted — putting `HEAD_WORD` next to three of
+   its uses left the fourth, 140 lines earlier, throwing
+   "Cannot access before initialization" at module load.
+
+   selftest 815 -> 817, rendertest 521, proptest clean, paneltest clean on both
+   samples, corpus unchanged.
