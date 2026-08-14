@@ -16,6 +16,7 @@ node tools/marksample.mjs <seed> <n>      # not a test - a seeded draw of marks 
 node tools/dupes.mjs                      # not a test - green inserts the law already has
 node tools/declines.mjs <mode> <seed> <n> # not a test - the cases the app REFUSES, to read
 node tools/corpus.mjs                     # 30 real bills, diffed against a baseline
+node tools/pending.mjs                    # 20 bills that are NOT law; a different sample
 node tools/impact.mjs                     # not a test — prints what one bill parses to
 node tools/coverage.mjs                   # not a test — what the redline actually draws
 node tools/marks.mjs --save f.txt         # not a test — every mark, to diff after a change
@@ -1914,8 +1915,10 @@ app/resolve/bundle.js one shard out of a bundle, by HTTP Range
 tools/                ingest_usc.py · ingest_plaw.mjs · bundle.mjs · make-library.mjs ·
                       serve.py · selftest.mjs · rendertest.mjs · paneltest.mjs ·
                       measure.mjs (shared metrics) · impact.mjs · corpus.mjs ·
-                      marksample.mjs · marks.mjs · dupes.mjs · declines.mjs
+                      marksample.mjs · marks.mjs · pending.mjs · dupes.mjs ·
+                      declines.mjs
 corpus/               corpus.json + baseline.json · files/ — all tracked
+pending/              pending.json + files/ — 20 bills that never became law
 data/usc/             tN.idx.json + tN.N.jsonl — 60,436 sections in 54 parts
 data/plaw/            26 Public Laws, same shape; both tracked — the data IS the site
 ```
@@ -6942,3 +6945,132 @@ LVXXXVI--FEDERAL MARITIME
    phrasing at a time — and the shape is "<Act name> (<cite> et seq.) is
    amended", which item 33's `distributed` machinery is the nearest thing to
    already having.
+
+113. **A sample of bills that are NOT law, tracked this time — and the first
+   thing it found.** (2026-08-13.) Items 84 and 98 both identified the same
+   structural blind spot: 28 of the corpus's 30 runs are enrolled, so every
+   guard that tells an amendment already made from one still pending —
+   "already in the law", staleness, `.node.was-added`, `rewriteInForce` — is
+   measured almost entirely against bills where the claim is true. A guard that
+   fired on every bill in the world would look perfect there. Both items built a
+   sample; both samples lived in a scratch directory and **evaporated with the
+   session**, so the check had to be rebuilt from nothing each time.
+
+   `tools/pending.mjs` draws one and `pending/` is tracked, for exactly the
+   reason `corpus/files/` is: an untracked sample is one a fresh machine
+   silently runs zero bills against.
+
+   The draw is by BILL NUMBER and seeded, which is the point rather than a
+   convenience — a hand-picked set is a draw on what I expect bills to look
+   like, a random number is a draw on what Congress writes. Enacted versions are
+   excluded by construction. Two tuning findings worth keeping, both measured:
+   drawing the number and the version independently returned **3 bills from 600
+   requests**, because most bills never get past `ih` and nearly every (number,
+   version) pair is a 404 — so the version is tried in order per number. And a
+   40 KB size floor rejects about 99% of bills: six random 119th-Congress
+   introduced bills measured 2 to 12 KB. Substance is amendatory DENSITY, not
+   size.
+
+   **What the sample says, which the corpus structurally cannot.** 20 bills,
+   1,392 citations, 199 amendments, 176 targeted, 555 op spans, and
+   `overlaps`/`badOffsets`/`badOpOffsets` all 0 on text the parser had never
+   seen. `paneltest --dir pending/files`: 460 op rows, 19 distinct sentences,
+   **0 contradictions**. And the number this exists for:
+
+   ```
+                             was     del     ins
+     30 enacted corpus bills  2326    565     464
+     20 pending bills            0    114      93
+   ```
+
+   **Not one in-force claim on a bill that never passed.** That is the strongest
+   evidence available that the enacted/pending machinery is keyed on real
+   evidence rather than firing indiscriminately, and no run of the corpus could
+   have produced it.
+
+   **And it found a defect on its first run: "of such Code".** One bill,
+   H.R. 4589, reported 10 amendments and **0 targets** — a whole bill about port
+   crane tax credits saying it changes nothing. The shape is
+
+   ```
+   Section 6417(b) of such Code is amended by adding at the end the following
+   ```
+
+   and it fell between the two handlers either side of it. `impliedIrc` covers a
+   BARE "Section 403(b) is amended" inside a division carrying the "whenever in
+   this division…" declaration, and it declines outright on any middle holding
+   "of such" — correctly, since "Section 5 of the Widget Act" inside a tax
+   division is still the Widget Act. `impliedSuch` covers "of such TITLE".
+   Neither claims "of such Code", so **113 of 119 such instructions across 50
+   bills resolved to nothing at all**. Nor does the declaration machinery help:
+   H.R. 4589 carries no "whenever in this Act" sentence, it simply names the
+   Internal Revenue Code in its long title and in section 2 and says "such Code"
+   thereafter.
+
+   So the referent is the last Code NAMED, which is impliedSuch()'s own
+   anaphoric rule with a different noun. **Measured before building, and this is
+   the safety argument: of all 119 occurrences the Code last named is the
+   Internal Revenue Code of 1986 in every single one.** It is read anyway rather
+   than assumed — a bill that had last named the Bankruptcy Code or the UCMJ
+   gets nothing, because synthesising 26 U.S.C. § N from one of those names a
+   real but unrelated provision. That negative is asserted, and the assertion
+   FAILS when the check is removed, which is what makes it a guard test rather
+   than decoration.
+
+   Untargeted "of such Code" heads **113 -> 26**, and the 26 are dominated by
+   "the table of sections for … of chapter N of such Code" — a clerical
+   amendment whose unit is a chapter, declined by the sections-only rule that
+   also stops "Chapter 9 of such title" becoming 10 U.S.C. § 9.
+
+   Graded against the shipped shards: **118 targets synthesised, 117 reach a
+   real section and 109 reach the exact provision named** (99% and 92%,
+   comparable to the Act index). The misses are the renumbering family — 26
+   U.S.C. 1400C was repealed, and eight paths were restructured by later Acts.
+
+   Corpus, accounted to the unit: `targeted +108`, `refs +53`, `relative +128`
+   across 7 bills and **nothing else** — no citations, amendments, opSpans,
+   steps, overlaps or offsets. `refs` moves because `quotedRefs()` composes
+   cross-references inside quoted new law AGAINST THE TARGET (item 41), so an
+   instruction with no target could never produce one; 53 references inside
+   inserted law now have a section to be read against.
+
+   Marks **3,355 -> 3,398: 43 added and 0 withdrawn**, the signature of pure
+   addition. All 43 are on enrolled bills and all 25 `was` marks with them. Read
+   against the bill and the shard together: the American Rescue Plan's
+   "Section 86(b)(2)(A) of such Code is amended by inserting ``85(c),'' before
+   ``135''" against 26 U.S.C. 86(b)(2)(A), which reads "…without regard to this
+   section and sections 85(c), 135, 137, 221, 911, 931, and 933". The amendment
+   is in force and the pane now says so instead of saying the bill does nothing.
+
+   selftest 808 -> 811, rendertest 521, proptest clean, paneltest clean on both
+   samples, corpus updated.
+
+114. **`tools/marks.mjs` — the mark-level diff is a tool now.** (2026-08-13.)
+   Three changes in one week (items 100, 111, 112) were audited by a script
+   written from scratch for that change and thrown away afterwards, and each one
+   had to be debugged before its numbers could be believed. That is not a small
+   tax: item 100's first two cuts each moved about twenty correct marks one
+   paragraph early while every suite stayed green, and only reading the
+   withdrawal list caught them.
+
+   Nothing measured this. `corpus.mjs` is deliberately parse-only, because
+   resolution numbers move whenever the Code is re-ingested. `coverage.mjs`
+   counts per OPERATION — an op drawn in nine subsections is one op — and calls
+   itself a report rather than a score. So the individual mark on the individual
+   provision, which is the thing the reader actually looks at, was measured by
+   nobody.
+
+   A DIFF tool and not a baseline, for the same reason corpus.mjs is parse-only:
+   a checked-in mark file would rot on the next ingest and start reporting the
+   Code's own movement as a regression. `--save` before, `--diff` after, and
+   **read the withdrawals** — the tool prints them in full and samples the
+   additions, because that is the asymmetry the audits keep needing.
+
+   Two things it knows that a hand-rolled script kept having to relearn. The
+   redline is STATEFUL and single-use, so the walk it does must be the only one
+   — `additionsAt()` hands each addition out once, and a second pass reports
+   every addition as "not on screen". And offsets are deliberately NOT in the
+   key: a parse change moves every offset in the bill, and a diff keyed on them
+   reports the whole corpus as churn.
+
+   `--dir` points it at any folder of bills, so it works on `pending/files` too.

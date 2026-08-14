@@ -190,11 +190,11 @@
    "cfr": 1
   },
   "amendments": 606,
-  "targeted": 487,
+  "targeted": 501,
   "distributed": 7,
   "steps": 869,
-  "refs": 1011,
-  "relative": 1702,
+  "refs": 1015,
+  "relative": 1722,
   "ops": {
    "strike": 726,
    "insert": 917,
@@ -255,11 +255,11 @@
    "cfr": 2
   },
   "amendments": 189,
-  "targeted": 155,
+  "targeted": 169,
   "distributed": 0,
   "steps": 197,
-  "refs": 189,
-  "relative": 336,
+  "refs": 195,
+  "relative": 351,
   "ops": {
    "strike": 199,
    "insert": 258,
@@ -378,11 +378,11 @@
    "stat": 2
   },
   "amendments": 151,
-  "targeted": 130,
+  "targeted": 147,
   "distributed": 0,
   "steps": 63,
-  "refs": 198,
-  "relative": 221,
+  "refs": 201,
+  "relative": 229,
   "ops": {
    "strike": 99,
    "insert": 137,
@@ -442,11 +442,11 @@
    "stat": 12
   },
   "amendments": 143,
-  "targeted": 133,
+  "targeted": 137,
   "distributed": 0,
   "steps": 192,
   "refs": 233,
-  "relative": 415,
+  "relative": 417,
   "ops": {
    "insert": 218,
    "redesignate": 25,
@@ -475,11 +475,11 @@
    "cfr": 12
   },
   "amendments": 342,
-  "targeted": 310,
+  "targeted": 326,
   "distributed": 0,
   "steps": 222,
-  "refs": 421,
-  "relative": 571,
+  "refs": 445,
+  "relative": 602,
   "ops": {
    "strike": 384,
    "insert": 423,
@@ -629,11 +629,11 @@
    "stat": 15
   },
   "amendments": 865,
-  "targeted": 735,
+  "targeted": 770,
   "distributed": 0,
   "steps": 607,
-  "refs": 1033,
-  "relative": 1405,
+  "refs": 1041,
+  "relative": 1441,
   "ops": {
    "insert": 892,
    "add-at-end": 383,
@@ -853,11 +853,11 @@
    "stat": 6
   },
   "amendments": 396,
-  "targeted": 373,
+  "targeted": 381,
   "distributed": 0,
   "steps": 275,
-  "refs": 565,
-  "relative": 771,
+  "refs": 573,
+  "relative": 787,
   "ops": {
    "insert": 410,
    "redesignate": 48,

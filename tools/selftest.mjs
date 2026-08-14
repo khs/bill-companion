@@ -1554,6 +1554,31 @@ section('resolving the target');
   ok('a chapter is not carried as a section', !chapAm || !chapAm.target,
      JSON.stringify(chapAm?.target && [chapAm.target.title, chapAm.target.section]));
 
+  // 3b. "of such CODE" is the same anaphor with a different noun, and it fell
+  // between the two handlers either side of it: impliedIrc declines any middle
+  // holding "of such", and impliedSuch reads "of such title". 113 of 119 such
+  // instructions across 50 bills resolved to nothing — every one of H.R. 4589's
+  // ten among them, a whole bill about port crane credits reporting that it
+  // changes nothing.
+  const code = p(
+    'SEC. 2. X.\nSection 48 of the Internal Revenue Code of 1986 is amended by striking ``a\'\'.\n' +
+    'SEC. 3. Y.\nSection 6417(b) of such Code is amended by striking ``b\'\'.\n'
+  );
+  const sc = code.find((a) => a.section === '6417');
+  eq('"of such Code" carries the Internal Revenue Code', sc?.target?.title, '26');
+  eq('  onto its own section and subsection',
+     sc?.target ? `${sc.target.section}${sc.target.subsection}` : 'no target', '6417(b)');
+  // The referent is READ, not assumed, and this is the whole safety of it. All
+  // 119 occurrences measured name the IRC — but a bill that last named another
+  // Code must get nothing rather than a real-but-unrelated title 26 provision.
+  const other = p(
+    'SEC. 2. X.\nSection 362 of the Bankruptcy Code is amended by striking ``a\'\'.\n' +
+    'SEC. 3. Y.\nSection 6417(b) of such Code is amended by striking ``b\'\'.\n'
+  );
+  const oc = other.find((a) => a.section === '6417');
+  ok('  and another Code is not read as the IRC', !oc || !oc.target || oc.target.title !== '26',
+     JSON.stringify(oc?.target && [oc.target.title, oc.target.section]));
+
   // 4. Head forms that were invisible.
   const anal = p('SEC. 2. X.\nThe table of sections at the beginning of chapter 1407 of title 10, United States Code, is amended by adding at the end the following.\n');
   eq('"table of sections at the beginning of" is an instruction', anal.length, 1);

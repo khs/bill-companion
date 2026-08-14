@@ -3982,6 +3982,72 @@ function impliedSuch(h, citations) {
 }
 
 /**
+ * "Section 6417(b) of such Code is amended" — the Code is the one the bill last
+ * named, and the anaphor is READ rather than assumed.
+ *
+ * This shape fell between the two handlers either side of it. `impliedIrc`
+ * covers a BARE "Section 403(b) is amended" inside a division that carries the
+ * "whenever in this division…" declaration, and it declines outright on any
+ * middle containing "of such" — correctly, since "Section 5 of the Widget Act"
+ * inside a tax division is still the Widget Act. `impliedSuch` covers "of such
+ * TITLE". Neither claims "of such Code", so 113 of 119 such instructions across
+ * 50 bills resolved to nothing at all and reported that the bill changes
+ * nothing — including every one of H.R. 4589's ten, a whole bill about port
+ * crane tax credits with no target anywhere in it.
+ *
+ * A tax bill often carries no declaration sentence at all: H.R. 4589 names the
+ * Internal Revenue Code in its long title and in section 2, then says "such
+ * Code" for the rest of itself. So the referent is the last Code NAMED, which is
+ * the same anaphoric rule impliedSuch() applies to titles.
+ *
+ * Measured before it was built, and this is the safety argument: of 119
+ * occurrences across the 30 corpus bills and the 20 pending ones, the Code last
+ * named is the Internal Revenue Code of 1986 in **all 119**. It is checked
+ * anyway rather than assumed — a bill that had last named the Bankruptcy Code or
+ * the Uniform Code of Military Justice would get nothing, because synthesising
+ * 26 U.S.C. § N from one of those is a real but unrelated provision, which is
+ * the worst output this app has. The IRC is also the one Act whose own section
+ * numbers ARE the Code's, which is why `sectionsMatchCode` belongs to it and to
+ * nothing else.
+ */
+const RE_ANY_CODE = /\b((?:[A-Z][A-Za-z'’-]+\s+){1,6}Code\b(?:\s+of\s+\d{4})?)/g;
+const RE_MIDDLE_SUCH_CODE = /^\s*,?\s*of\s+such\s+Code\b/i;
+
+function codeMentions(text) {
+  RE_ANY_CODE.lastIndex = 0;
+  const out = [];
+  let m;
+  while ((m = RE_ANY_CODE.exec(text))) out.push({ at: m.index, name: m[1].replace(/\s+/g, ' ') });
+  return out;
+}
+
+function impliedSuchCode(h, mentions) {
+  if (!h.section || !mentions) return null;
+  // Sections only, for impliedSuch()'s reason: "Chapter 9 of such Code" would
+  // synthesise 26 U.S.C. § 9, a real provision about something else.
+  if (!/^[Ss]ection$/.test(h.unit)) return null;
+  if (!RE_MIDDLE_SUCH_CODE.test(h.middle || '')) return null;
+  let last = null;
+  for (const c of mentions) {
+    if (c.at >= h.start) break; // in document order
+    last = c;
+  }
+  if (!last || !/Internal Revenue Code(?: of 1986)?$/i.test(last.name)) return null;
+  return {
+    id: `c${h.start}`,
+    kind: 'usc',
+    text: `section ${h.section}${h.subsection} of such Code`,
+    start: h.start,
+    end: h.headEnd,
+    title: '26',
+    section: h.section,
+    subsection: h.subsection || '',
+    ladder: subsectionLadder(h.subsection || ''),
+    implied: 'the Internal Revenue Code of 1986, the last Code the bill named',
+  };
+}
+
+/**
  * "Subsection (c) of such section is amended" — the section is the one the
  * PREVIOUS INSTRUCTION was amending.
  *
@@ -4100,6 +4166,10 @@ function ircScopes(text, divisions) {
  */
 export function extractAmendments(text, citations, divisions = [], sections = []) {
   const ircRanges = ircScopes(text, divisions);
+  // Every "<Name> Code" the bill names, in document order, so the anaphor in
+  // "of such Code" is resolved by reading rather than assumed. Computed once
+  // per bill; scanning backwards per instruction is 60 KB a time.
+  const codeSaid = codeMentions(text);
   const heads = [];
   let m;
   RE_AMEND_HEAD.lastIndex = 0;
@@ -4268,6 +4338,7 @@ export function extractAmendments(text, citations, divisions = [], sections = []
       citations.find((c) => c.kind === 'act' && inHead(c)) ||
       publawTarget(h, citations.find((c) => (c.kind === 'publaw' || c.kind === 'stat') && inHead(c))) ||
       impliedIrc(h, ircRanges) ||
+      impliedSuchCode(h, codeSaid) ||
       impliedSuch(h, citations) ||
       impliedSuchUnit(h, lastTarget) ||
       null;
